@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-tanso}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -28,7 +28,7 @@ services:
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
-      - "8080:8080"
+      - "${API_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -40,7 +40,7 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
     ports:
-      - "3000:3000"
+      - "${DASHBOARD_PORT:-3000}:3000"
     depends_on:
       - api
 
