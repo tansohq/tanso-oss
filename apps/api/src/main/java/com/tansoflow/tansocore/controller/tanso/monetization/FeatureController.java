@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.feature.FeatureDto;
 import com.tansoflow.tansocore.model.feature.request.FeatureRequest;

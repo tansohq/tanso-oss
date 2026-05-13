@@ -1,50 +1,32 @@
 package com.tansoflow.tansocore.controller.tanso.onboarding;
 
 import com.tansoflow.tansocore.model.auth.response.JwtResponse;
-import com.tansoflow.tansocore.model.onboarding.request.SignupRequest;
-import com.tansoflow.tansocore.model.plan.PlanDto;
+import com.tansoflow.tansocore.model.customer.request.CustomerRequest;
 import com.tansoflow.tansocore.model.response.ApiResponse;
-import com.tansoflow.tansocore.property.AppProperty;
-import com.tansoflow.tansocore.service.internal.monetization.PlanService;
 import com.tansoflow.tansocore.service.internal.onboarding.OnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-
 @RestController
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/public/v1")
-@Tag(name = "Onboarding", description = "Public onboarding and signup operations")
+@Tag(name = "Signup", description = "Public signup")
 public class OnboardingController {
     private final OnboardingService onboardingService;
-    private final PlanService planService;
-    private final AppProperty appProperty;
-
-    @GetMapping("/onboarding/plans")
-    @Operation(summary = "List available plans", description = "Returns plans available for new signups")
-    public ResponseEntity<ApiResponse<List<PlanDto>>> getOnboardingPlans() {
-        List<PlanDto> plans = planService.getPlans(appProperty.getMasterAccountId());
-        return ResponseEntity.ok(ApiResponse.<List<PlanDto>>builder()
-                .success(true)
-                .data(plans)
-                .build());
-    }
 
     @PostMapping("/signup")
-    @Operation(summary = "Self-serve signup", description = "Creates a new organization, user, and subscription")
-    public ResponseEntity<ApiResponse<JwtResponse>> signup(@Valid @RequestBody SignupRequest request) {
+    @Operation(summary = "Self-serve signup", description = "Creates a new organization, user, and API key")
+    public ResponseEntity<ApiResponse<JwtResponse>> signup(@RequestBody SignupRequest request) {
         log.info("Received signup request");
         JwtResponse jwtResponse = onboardingService.onboardNewOrganization(
                 request.getCustomerDetails(),
@@ -58,5 +40,13 @@ public class OnboardingController {
                         .success(true)
                         .data(jwtResponse)
                         .build());
+    }
+
+    @Data
+    public static class SignupRequest {
+        private CustomerRequest customerDetails;
+        private String organizationName;
+        private String password;
+        private String planId;
     }
 }

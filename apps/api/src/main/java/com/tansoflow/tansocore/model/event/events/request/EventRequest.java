@@ -41,7 +41,7 @@ public class EventRequest {
     private String customerReferenceId;
 
     @Schema(description = "Stripe customer ID (cus_...). Creates a customer linked via Stripe bridge table " +
-            "without setting externalClientCustomerId. Preferred for Observe mode.",
+            "without setting externalClientCustomerId.",
             example = "cus_abc123")
     private String stripeCustomerId;
 
@@ -60,8 +60,7 @@ public class EventRequest {
     private BigDecimal costAmount;
 
     @Schema(description = "Revenue amount associated with the event. Optional - if omitted, Tanso will " +
-            "automatically calculate it based on usageUnits and the configured pricing rule. " +
-            "Use this to pass through your own revenue figures for observe-mode margin tracking.",
+            "automatically calculate it based on usageUnits and the configured pricing rule.",
             example = "0.10")
     private BigDecimal revenueAmount;
 

@@ -34,7 +34,6 @@ public class EntitlementAuthFilter extends OncePerRequestFilter {
         return p.startsWith("/public/")
                 || p.startsWith("/api/v1/account/subscribe")
                 || p.startsWith("/api/v1/account/subscription-status")
-                || p.startsWith("/api/v1/tanso/account/onboarding")
                 || p.startsWith("/actuator/")
                 || p.startsWith("/v3/api-docs")
                 || p.startsWith("/swagger-ui")

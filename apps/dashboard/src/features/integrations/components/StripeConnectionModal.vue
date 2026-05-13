@@ -1,7 +1,22 @@
 <template>
   <Dialog :open="visible" @update:open="emit('update:visible', $event)">
-    <component :is="step === 'MAPPING' || step === 'IMPORTING' || step === 'IMPORT_COMPLETE' || step === 'IMPORT_FAILED' ? DialogScrollContent : DialogContent"
-      :class="step === 'MAPPING' || step === 'IMPORTING' || step === 'IMPORT_COMPLETE' || step === 'IMPORT_FAILED' ? 'sm:max-w-2xl' : 'sm:max-w-[480px]'"
+    <component
+      :is="
+        step === 'MAPPING' ||
+        step === 'IMPORTING' ||
+        step === 'IMPORT_COMPLETE' ||
+        step === 'IMPORT_FAILED'
+          ? DialogScrollContent
+          : DialogContent
+      "
+      :class="
+        step === 'MAPPING' ||
+        step === 'IMPORTING' ||
+        step === 'IMPORT_COMPLETE' ||
+        step === 'IMPORT_FAILED'
+          ? 'sm:max-w-2xl'
+          : 'sm:max-w-[480px]'
+      "
     >
       <!-- ENTER_KEY -->
       <template v-if="step === 'ENTER_KEY'">
@@ -28,11 +43,7 @@
             :placeholder="placeholder"
           />
 
-          <Button
-            class="w-full"
-            :disabled="!stripeApiKeyInput.trim()"
-            @click="handleConnect"
-          >
+          <Button class="w-full" :disabled="!stripeApiKeyInput.trim()" @click="handleConnect">
             Connect
           </Button>
         </div>
@@ -53,7 +64,9 @@
       <template v-if="step === 'DISCOVERING'">
         <DialogHeader>
           <DialogTitle>Scanning Stripe</DialogTitle>
-          <DialogDescription>Looking for products, customers, and subscriptions...</DialogDescription>
+          <DialogDescription
+            >Looking for products, customers, and subscriptions...</DialogDescription
+          >
         </DialogHeader>
         <div class="flex items-center justify-center py-8">
           <Loader2 class="w-8 h-8 animate-spin text-primary" />
@@ -79,18 +92,38 @@
       <template v-if="step === 'MAPPING'">
         <DialogHeader>
           <DialogTitle>Import from Stripe</DialogTitle>
-          <DialogDescription>Map your Stripe data to Tanso, then start the import.</DialogDescription>
+          <DialogDescription
+            >Map your Stripe data to Tanso, then start the import.</DialogDescription
+          >
         </DialogHeader>
 
         <div class="space-y-6">
           <!-- Discovery summary -->
           <div class="flex items-center justify-between px-1">
             <div class="flex gap-4 text-sm">
-              <span><span class="font-semibold text-foreground">{{ discovery!.products.length }}</span> <span class="text-muted-foreground">products</span></span>
-              <span><span class="font-semibold text-foreground">{{ discovery!.customers.length }}</span> <span class="text-muted-foreground">customers</span></span>
-              <span><span class="font-semibold text-foreground">{{ discovery!.subscriptions.length }}</span> <span class="text-muted-foreground">subscriptions</span></span>
+              <span
+                ><span class="font-semibold text-foreground">{{ discovery!.products.length }}</span>
+                <span class="text-muted-foreground">products</span></span
+              >
+              <span
+                ><span class="font-semibold text-foreground">{{
+                  discovery!.customers.length
+                }}</span>
+                <span class="text-muted-foreground">customers</span></span
+              >
+              <span
+                ><span class="font-semibold text-foreground">{{
+                  discovery!.subscriptions.length
+                }}</span>
+                <span class="text-muted-foreground">subscriptions</span></span
+              >
             </div>
-            <Button variant="ghost" size="sm" @click="handleRescan" :disabled="discoverMutation.isPending.value">
+            <Button
+              variant="ghost"
+              size="sm"
+              @click="handleRescan"
+              :disabled="discoverMutation.isPending.value"
+            >
               <Search class="w-3 h-3 mr-1.5" />
               Re-scan
             </Button>
@@ -104,15 +137,32 @@
             </p>
 
             <div class="space-y-2">
-              <div v-for="product in discovery!.products" :key="product.stripeProductId"
+              <div
+                v-for="product in discovery!.products"
+                :key="product.stripeProductId"
                 class="flex items-center justify-between p-3 rounded-md border text-sm"
-                :class="{ 'border-amber-300 bg-amber-50/50': showUnmappedWarning && !product.alreadyMapped && !isMapped(product.stripeProductId) }">
+                :class="{
+                  'border-amber-300 bg-amber-50/50':
+                    showUnmappedWarning &&
+                    !product.alreadyMapped &&
+                    !isMapped(product.stripeProductId)
+                }"
+              >
                 <div>
                   <span class="font-medium">{{ product.name }}</span>
-                  <span class="text-muted-foreground ml-2 font-mono text-xs">{{ product.stripeProductId }}</span>
+                  <span class="text-muted-foreground ml-2 font-mono text-xs">{{
+                    product.stripeProductId
+                  }}</span>
                 </div>
-                <Badge v-if="product.alreadyMapped" variant="outline" class="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs">Already in Tanso</Badge>
-                <div v-else-if="plansError" class="text-xs text-destructive">Failed to load plans</div>
+                <Badge
+                  v-if="product.alreadyMapped"
+                  variant="outline"
+                  class="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs"
+                  >Already in Tanso</Badge
+                >
+                <div v-else-if="plansError" class="text-xs text-destructive">
+                  Failed to load plans
+                </div>
                 <Select v-else v-model="productMappings[product.stripeProductId]">
                   <SelectTrigger class="w-[200px]">
                     <SelectValue :placeholder="plansLoading ? 'Loading plans...' : 'Create new'" />
@@ -132,7 +182,11 @@
           <div>
             <div class="flex items-center justify-between mb-1">
               <h3 class="text-sm font-semibold">Customers ({{ discovery!.customers.length }})</h3>
-              <button v-if="discovery!.customers.length > 3" @click="showCustomers = !showCustomers" class="text-xs text-muted-foreground hover:text-foreground">
+              <button
+                v-if="discovery!.customers.length > 3"
+                @click="showCustomers = !showCustomers"
+                class="text-xs text-muted-foreground hover:text-foreground"
+              >
                 {{ showCustomers ? 'Collapse' : 'Show all' }}
               </button>
             </div>
@@ -142,28 +196,48 @@
 
             <div v-if="showCustomers || discovery!.customers.length <= 3" class="relative">
               <div class="space-y-1.5 max-h-48 overflow-y-auto">
-                <div v-for="customer in discovery!.customers" :key="customer.stripeCustomerId"
-                  class="flex items-center justify-between p-2.5 rounded-md border text-sm">
+                <div
+                  v-for="customer in discovery!.customers"
+                  :key="customer.stripeCustomerId"
+                  class="flex items-center justify-between p-2.5 rounded-md border text-sm"
+                >
                   <div>
-                    <span class="font-medium">{{ customer.name || customer.email || 'Unnamed' }}</span>
-                    <span class="text-muted-foreground ml-2 font-mono text-xs">{{ customer.stripeCustomerId }}</span>
+                    <span class="font-medium">{{
+                      customer.name || customer.email || 'Unnamed'
+                    }}</span>
+                    <span class="text-muted-foreground ml-2 font-mono text-xs">{{
+                      customer.stripeCustomerId
+                    }}</span>
                   </div>
-                  <Badge v-if="customer.alreadyMapped" variant="outline" class="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs">In Tanso</Badge>
-                  <Badge v-else variant="outline" class="text-muted-foreground text-xs">Will be created</Badge>
+                  <Badge
+                    v-if="customer.alreadyMapped"
+                    variant="outline"
+                    class="text-emerald-600 border-emerald-200 bg-emerald-50 text-xs"
+                    >In Tanso</Badge
+                  >
+                  <Badge v-else variant="outline" class="text-muted-foreground text-xs"
+                    >Will be created</Badge
+                  >
                 </div>
               </div>
             </div>
             <p v-else class="text-xs text-muted-foreground">
-              {{ discovery!.customers.filter(c => !c.alreadyMapped).length }} to create,
-              {{ discovery!.customers.filter(c => c.alreadyMapped).length }} already in Tanso
+              {{ discovery!.customers.filter((c) => !c.alreadyMapped).length }} to create,
+              {{ discovery!.customers.filter((c) => c.alreadyMapped).length }} already in Tanso
             </p>
           </div>
 
           <!-- Subscriptions -->
           <div>
             <div class="flex items-center justify-between mb-1">
-              <h3 class="text-sm font-semibold">Subscriptions ({{ discovery!.subscriptions.length }})</h3>
-              <button v-if="discovery!.subscriptions.length > 3" @click="showSubscriptions = !showSubscriptions" class="text-xs text-muted-foreground hover:text-foreground">
+              <h3 class="text-sm font-semibold">
+                Subscriptions ({{ discovery!.subscriptions.length }})
+              </h3>
+              <button
+                v-if="discovery!.subscriptions.length > 3"
+                @click="showSubscriptions = !showSubscriptions"
+                class="text-xs text-muted-foreground hover:text-foreground"
+              >
                 {{ showSubscriptions ? 'Collapse' : 'Show all' }}
               </button>
             </div>
@@ -173,25 +247,45 @@
 
             <div v-if="showSubscriptions || discovery!.subscriptions.length <= 3" class="relative">
               <div class="space-y-1.5 max-h-48 overflow-y-auto">
-                <div v-for="sub in discovery!.subscriptions" :key="sub.stripeSubscriptionId"
-                  class="flex items-center justify-between p-2.5 rounded-md border text-sm">
+                <div
+                  v-for="sub in discovery!.subscriptions"
+                  :key="sub.stripeSubscriptionId"
+                  class="flex items-center justify-between p-2.5 rounded-md border text-sm"
+                >
                   <div class="min-w-0 flex-1">
                     <span class="font-mono text-xs">{{ sub.stripeSubscriptionId }}</span>
-                    <Badge variant="outline" class="ml-2 text-xs" :class="sub.status === 'active' ? 'text-emerald-600 border-emerald-200 bg-emerald-50' : ''">
+                    <Badge
+                      variant="outline"
+                      class="ml-2 text-xs"
+                      :class="
+                        sub.status === 'active'
+                          ? 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                          : ''
+                      "
+                    >
                       {{ sub.status }}
                     </Badge>
                     <div class="text-xs text-muted-foreground mt-1">
-                      <span>{{ resolveCustomerName(sub.stripeCustomerId) ?? sub.stripeCustomerId }}</span>
-                      <span v-if="sub.stripeProductId" class="ml-2">· {{ resolveProductName(sub.stripeProductId) }}</span>
+                      <span>{{
+                        resolveCustomerName(sub.stripeCustomerId) ?? sub.stripeCustomerId
+                      }}</span>
+                      <span v-if="sub.stripeProductId" class="ml-2"
+                        >· {{ resolveProductName(sub.stripeProductId) }}</span
+                      >
                     </div>
                   </div>
-                  <Badge v-if="sub.alreadyMapped" variant="outline" class="text-emerald-600 border-emerald-200 bg-emerald-50 ml-2 shrink-0 text-xs">In Tanso</Badge>
+                  <Badge
+                    v-if="sub.alreadyMapped"
+                    variant="outline"
+                    class="text-emerald-600 border-emerald-200 bg-emerald-50 ml-2 shrink-0 text-xs"
+                    >In Tanso</Badge
+                  >
                 </div>
               </div>
             </div>
             <p v-else class="text-xs text-muted-foreground">
-              {{ discovery!.subscriptions.filter(s => s.status === 'active').length }} active,
-              {{ discovery!.subscriptions.filter(s => s.alreadyMapped).length }} already in Tanso
+              {{ discovery!.subscriptions.filter((s) => s.status === 'active').length }} active,
+              {{ discovery!.subscriptions.filter((s) => s.alreadyMapped).length }} already in Tanso
             </p>
           </div>
         </div>
@@ -200,7 +294,10 @@
           <p class="text-xs text-muted-foreground mr-auto">
             All products, customers, and subscriptions will be imported.
           </p>
-          <Button @click="handleStartImport" :disabled="importMutation.isPending.value || !canStartImport">
+          <Button
+            @click="handleStartImport"
+            :disabled="importMutation.isPending.value || !canStartImport"
+          >
             <Upload class="w-4 h-4 mr-2" />
             Start Import
           </Button>
@@ -215,11 +312,19 @@
         </DialogHeader>
         <div class="space-y-3 py-4">
           <div class="w-full bg-muted rounded-full h-2">
-            <div class="bg-primary h-2 rounded-full transition-all" :style="{ width: progressPercent + '%' }" />
+            <div
+              class="bg-primary h-2 rounded-full transition-all"
+              :style="{ width: progressPercent + '%' }"
+            />
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
-            <span>{{ importStatus?.processedItems ?? 0 }} / {{ importStatus?.totalItems ?? 0 }} items processed</span>
-            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive">{{ importStatus.failedItems }} failed</span>
+            <span
+              >{{ importStatus?.processedItems ?? 0 }} / {{ importStatus?.totalItems ?? 0 }} items
+              processed</span
+            >
+            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive"
+              >{{ importStatus.failedItems }} failed</span
+            >
           </div>
         </div>
       </template>
@@ -234,7 +339,9 @@
           <CheckCircle2 class="w-10 h-10 text-emerald-600" />
           <p class="text-sm text-muted-foreground">
             {{ importStatus?.processedItems ?? 0 }} items imported.
-            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive">{{ importStatus.failedItems }} failed.</span>
+            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive"
+              >{{ importStatus.failedItems }} failed.</span
+            >
           </p>
         </div>
         <DialogFooter>
@@ -254,8 +361,13 @@
             {{ importStatus?.errorDetails ?? 'An unknown error occurred.' }}
           </div>
           <div class="flex justify-between text-sm text-muted-foreground">
-            <span>{{ importStatus?.processedItems ?? 0 }} / {{ importStatus?.totalItems ?? 0 }} items processed</span>
-            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive">{{ importStatus.failedItems }} failed</span>
+            <span
+              >{{ importStatus?.processedItems ?? 0 }} / {{ importStatus?.totalItems ?? 0 }} items
+              processed</span
+            >
+            <span v-if="importStatus && importStatus.failedItems > 0" class="text-destructive"
+              >{{ importStatus.failedItems }} failed</span
+            >
           </div>
         </div>
         <DialogFooter>
@@ -290,8 +402,12 @@
         <AlertDialogDescription>
           This will create the following in Tanso:
           <ul class="mt-2 list-disc list-inside text-sm">
-            <li v-if="mappedProductCount > 0">{{ mappedProductCount }} product(s) mapped to existing plans</li>
-            <li v-if="unmappedProductCount > 0">{{ unmappedProductCount }} product(s) will create new plans</li>
+            <li v-if="mappedProductCount > 0">
+              {{ mappedProductCount }} product(s) mapped to existing plans
+            </li>
+            <li v-if="unmappedProductCount > 0">
+              {{ unmappedProductCount }} product(s) will create new plans
+            </li>
             <li>{{ unmappedCustomerCount }} customer(s) to be created</li>
             <li>{{ unmappedSubscriptionCount }} subscription(s)</li>
           </ul>
@@ -308,14 +424,34 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useQueryClient } from '@tanstack/vue-query'
-import { Dialog, DialogContent, DialogScrollContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogScrollContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter
+} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
 } from '@/components/ui/alert-dialog'
 import { ExternalLink, Loader2, CheckCircle2, Search, Upload } from 'lucide-vue-next'
 import { useEnvironmentStore } from '@/stores/environment'
@@ -326,14 +462,22 @@ import {
   useDiscoverStripeMutation,
   useStartAutoCreateStripeImportMutation
 } from '../mutations'
-import { useStripeImportStatusQuery, useAccountSettingsQuery } from '../queries'
+import { useStripeImportStatusQuery } from '../queries'
 import { usePlansQuery } from '@/features/plans/queries'
 import { toast } from '@/components/ui/toast/use-toast'
 import { parseApiError } from '@/lib/parseApiError'
 import { useTracking } from '@/lib/tracking'
 import type { StripeDiscoveryResponse } from '../api'
 
-type Step = 'ENTER_KEY' | 'CONNECTING' | 'DISCOVERING' | 'DISCOVERY_EMPTY' | 'MAPPING' | 'IMPORTING' | 'IMPORT_COMPLETE' | 'IMPORT_FAILED'
+type Step =
+  | 'ENTER_KEY'
+  | 'CONNECTING'
+  | 'DISCOVERING'
+  | 'DISCOVERY_EMPTY'
+  | 'MAPPING'
+  | 'IMPORTING'
+  | 'IMPORT_COMPLETE'
+  | 'IMPORT_FAILED'
 
 const props = defineProps<{
   visible: boolean
@@ -341,7 +485,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{
   'update:visible': [value: boolean]
-  'connected': []
+  connected: []
 }>()
 
 const { track } = useTracking()
@@ -355,8 +499,6 @@ const importMutation = useStartAutoCreateStripeImportMutation()
 const { data: plansData, isLoading: plansLoading, isError: plansError } = usePlansQuery()
 
 const plans = computed(() => plansData.value?.data ?? [])
-const { data: settingsData } = useAccountSettingsQuery()
-const isObserveMode = computed(() => settingsData.value?.data?.platformMode === 'OBSERVE')
 
 const step = ref<Step>('ENTER_KEY')
 const stripeApiKeyInput = ref('')
@@ -372,24 +514,27 @@ const showCustomers = ref(false)
 const showSubscriptions = ref(false)
 
 // Reset state when modal opens
-watch(() => props.visible, (isVisible) => {
-  if (isVisible) {
-    if (props.skipToDiscovery) {
-      step.value = 'DISCOVERING'
-      executeDiscover()
-    } else {
-      step.value = 'ENTER_KEY'
-      stripeApiKeyInput.value = ''
+watch(
+  () => props.visible,
+  (isVisible) => {
+    if (isVisible) {
+      if (props.skipToDiscovery) {
+        step.value = 'DISCOVERING'
+        executeDiscover()
+      } else {
+        step.value = 'ENTER_KEY'
+        stripeApiKeyInput.value = ''
+      }
+      discovery.value = null
+      productMappings.value = {}
+      importJobId.value = null
+      pollCount.value = 0
+      showUnmappedWarning.value = false
+      showCustomers.value = false
+      showSubscriptions.value = false
     }
-    discovery.value = null
-    productMappings.value = {}
-    importJobId.value = null
-    pollCount.value = 0
-    showUnmappedWarning.value = false
-    showCustomers.value = false
-    showSubscriptions.value = false
   }
-})
+)
 
 // Import status polling
 const shouldPollStatus = computed(() => {
@@ -425,15 +570,15 @@ const stripeKeysUrl = computed(() =>
     : 'https://dashboard.stripe.com/apikeys'
 )
 
-const placeholder = computed(() =>
-  environmentStore.isSandbox ? 'sk_test_...' : 'sk_live_...'
-)
+const placeholder = computed(() => (environmentStore.isSandbox ? 'sk_test_...' : 'sk_live_...'))
 
 const discoveryIsEmpty = computed(() => {
   if (!discovery.value) return false
-  return discovery.value.products.length === 0
-    && discovery.value.customers.length === 0
-    && discovery.value.subscriptions.length === 0
+  return (
+    discovery.value.products.length === 0 &&
+    discovery.value.customers.length === 0 &&
+    discovery.value.subscriptions.length === 0
+  )
 })
 
 function isMapped(stripeProductId: string): boolean {
@@ -441,20 +586,22 @@ function isMapped(stripeProductId: string): boolean {
   return !!val && val !== '__none__'
 }
 
-const mappedProductCount = computed(() =>
-  Object.values(productMappings.value).filter(v => v && v !== '__none__').length
+const mappedProductCount = computed(
+  () => Object.values(productMappings.value).filter((v) => v && v !== '__none__').length
 )
 
-const unmappedProductCount = computed(() =>
-  discovery.value?.products.filter(p => !p.alreadyMapped && !isMapped(p.stripeProductId)).length ?? 0
+const unmappedProductCount = computed(
+  () =>
+    discovery.value?.products.filter((p) => !p.alreadyMapped && !isMapped(p.stripeProductId))
+      .length ?? 0
 )
 
-const unmappedCustomerCount = computed(() =>
-  discovery.value?.customers.filter(c => !c.alreadyMapped).length ?? 0
+const unmappedCustomerCount = computed(
+  () => discovery.value?.customers.filter((c) => !c.alreadyMapped).length ?? 0
 )
 
-const unmappedSubscriptionCount = computed(() =>
-  discovery.value?.subscriptions.filter(s => !s.alreadyMapped).length ?? 0
+const unmappedSubscriptionCount = computed(
+  () => discovery.value?.subscriptions.filter((s) => !s.alreadyMapped).length ?? 0
 )
 
 const canStartImport = computed(() => {
@@ -467,13 +614,13 @@ watch(canStartImport, (canImport) => {
 })
 
 function resolveCustomerName(stripeCustomerId: string): string | null {
-  const customer = discovery.value?.customers.find(c => c.stripeCustomerId === stripeCustomerId)
+  const customer = discovery.value?.customers.find((c) => c.stripeCustomerId === stripeCustomerId)
   if (!customer) return null
   return customer.name || customer.email || null
 }
 
 function resolveProductName(stripeProductId: string): string {
-  const product = discovery.value?.products.find(p => p.stripeProductId === stripeProductId)
+  const product = discovery.value?.products.find((p) => p.stripeProductId === stripeProductId)
   return product?.name ?? stripeProductId
 }
 
@@ -488,14 +635,7 @@ async function handleConnect() {
     track('stripe_connected')
     emit('connected')
 
-    if (isObserveMode.value) {
-      // Observe mode: skip import wizard — analytics auto-syncs on page load
-      toast({ title: 'Stripe connected', description: 'Customer and revenue data will sync automatically on the Analytics page.' })
-      emit('update:visible', false)
-      return
-    }
-
-    // Platform mode: auto-discover after connecting
+    // Auto-discover after connecting
     step.value = 'DISCOVERING'
     await executeDiscover()
   } catch (error) {
@@ -540,7 +680,7 @@ async function executeDiscover() {
 }
 
 function handleRescan() {
-  const hasMappings = Object.values(productMappings.value).some(v => v && v !== '__none__')
+  const hasMappings = Object.values(productMappings.value).some((v) => v && v !== '__none__')
   if (hasMappings) {
     showRediscoverDialog.value = true
     return

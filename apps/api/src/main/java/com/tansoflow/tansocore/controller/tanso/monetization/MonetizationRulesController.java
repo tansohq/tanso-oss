@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.monetization.PlanFeatureRuleDto;
 import com.tansoflow.tansocore.model.monetization.request.PlanFeatureLinkedDiffRequest;
@@ -38,7 +37,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class MonetizationRulesController {
     private final PlanFeatureRuleService planFeatureRuleService;
 
-    @RequiresFullPlatformMode
     @PostMapping("/plan-features")
     @Operation(summary = "Create plan-feature rule", description = "Links a feature to a plan with specific rules", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -55,7 +53,6 @@ public class MonetizationRulesController {
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/plan-features/{planUuid}/{featureUuid}")
     @Operation(summary = "Delete plan-feature rule", description = "Unlinks a feature from a plan", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -88,7 +85,6 @@ public class MonetizationRulesController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PatchMapping("/plan-features")
     @Operation(summary = "Update plan-feature rule", description = "Updates rules for a plan-feature link", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -106,7 +102,6 @@ public class MonetizationRulesController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PatchMapping("plan-features/diff/{planUuid}")
     @Operation(summary = "Sync plan-feature links", description = "Links/Unlinks features for a plan based on a provided list (diff)", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {

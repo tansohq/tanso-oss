@@ -1,5 +1,4 @@
 import { useQueryClient } from '@tanstack/vue-query'
-import { useRoute } from 'vue-router'
 
 // ── Shared IDs ──────────────────────────────────────────────────────────────
 const PLAN_IDS = {
@@ -393,9 +392,15 @@ function buildSubscriptions() {
 function buildInvoices() {
   const subscriptions = buildSubscriptions()
   const invoices: Array<{
-    id: string; amount: number; dueDate: string; currency: string;
-    subscription: ReturnType<typeof buildSubscriptions>[0];
-    status: string; metadata: null; createdAt: string; modifiedAt: string
+    id: string
+    amount: number
+    dueDate: string
+    currency: string
+    subscription: ReturnType<typeof buildSubscriptions>[0]
+    status: string
+    metadata: null
+    createdAt: string
+    modifiedAt: string
   }> = []
 
   // Generate 12 months of invoices — all 3 plan types present early, each grows
@@ -423,9 +428,7 @@ function buildInvoices() {
       const sub = subscriptions[si]
       const idx = invoices.length
       const id = `${INVOICE_ID_PREFIX}-${String(idx).padStart(4, '0')}-4aaa-bbbb-cccccccccccc`
-      const status = isCurrentMonth
-        ? (si < 2 ? 'PAID' : 'PENDING')
-        : 'PAID'
+      const status = isCurrentMonth ? (si < 2 ? 'PAID' : 'PENDING') : 'PAID'
 
       // Compound growth — each customer's revenue grows exponentially
       const monthsActive = customerJoinMonth[si] - monthsAgo
@@ -452,18 +455,96 @@ function buildInvoices() {
 // ── Event Data ──────────────────────────────────────────────────────────────
 function buildEvents() {
   const eventDefs = [
-    { eventName: 'chat_completion', featureKey: 'api_access', featureId: FEATURE_IDS.apiAccess, model: 'gpt-4o', modelProvider: 'OpenAI', cost: 0.0282, revenue: 0.0845, usage: 1500 },
-    { eventName: 'chat_completion', featureKey: 'api_access', featureId: FEATURE_IDS.apiAccess, model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 0.0042, revenue: 0.0126, usage: 800 },
-    { eventName: 'email_generated', featureKey: 'email_sequences', featureId: FEATURE_IDS.emailSequences, model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 0.0450, revenue: 0.1200, usage: 2000 },
-    { eventName: 'email_generated', featureKey: 'email_sequences', featureId: FEATURE_IDS.emailSequences, model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 0.0060, revenue: 0.0180, usage: 600 },
-    { eventName: 'contact_enriched', featureKey: 'contact_enrichment', featureId: FEATURE_IDS.contactEnrichment, model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 0.0380, revenue: 0.1500, usage: 1200 },
-    { eventName: 'campaign_analyzed', featureKey: 'campaign_analytics', featureId: FEATURE_IDS.campaignAnalytics, model: 'gpt-4o', modelProvider: 'OpenAI', cost: 0.0150, revenue: 0.0500, usage: 800 },
-    { eventName: 'crm_synced', featureKey: 'crm_integrations', featureId: FEATURE_IDS.crmIntegrations, model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 0.0035, revenue: 0.0120, usage: 500 },
-    { eventName: 'embedding_generated', featureKey: 'api_access', featureId: FEATURE_IDS.apiAccess, model: 'embed-english-v3.0', modelProvider: 'Cohere', cost: 0.0010, revenue: 0.0050, usage: 5000 },
+    {
+      eventName: 'chat_completion',
+      featureKey: 'api_access',
+      featureId: FEATURE_IDS.apiAccess,
+      model: 'gpt-4o',
+      modelProvider: 'OpenAI',
+      cost: 0.0282,
+      revenue: 0.0845,
+      usage: 1500
+    },
+    {
+      eventName: 'chat_completion',
+      featureKey: 'api_access',
+      featureId: FEATURE_IDS.apiAccess,
+      model: 'gpt-4o-mini',
+      modelProvider: 'OpenAI',
+      cost: 0.0042,
+      revenue: 0.0126,
+      usage: 800
+    },
+    {
+      eventName: 'email_generated',
+      featureKey: 'email_sequences',
+      featureId: FEATURE_IDS.emailSequences,
+      model: 'claude-3-5-sonnet',
+      modelProvider: 'Anthropic',
+      cost: 0.045,
+      revenue: 0.12,
+      usage: 2000
+    },
+    {
+      eventName: 'email_generated',
+      featureKey: 'email_sequences',
+      featureId: FEATURE_IDS.emailSequences,
+      model: 'gpt-4o-mini',
+      modelProvider: 'OpenAI',
+      cost: 0.006,
+      revenue: 0.018,
+      usage: 600
+    },
+    {
+      eventName: 'contact_enriched',
+      featureKey: 'contact_enrichment',
+      featureId: FEATURE_IDS.contactEnrichment,
+      model: 'claude-3-5-sonnet',
+      modelProvider: 'Anthropic',
+      cost: 0.038,
+      revenue: 0.15,
+      usage: 1200
+    },
+    {
+      eventName: 'campaign_analyzed',
+      featureKey: 'campaign_analytics',
+      featureId: FEATURE_IDS.campaignAnalytics,
+      model: 'gpt-4o',
+      modelProvider: 'OpenAI',
+      cost: 0.015,
+      revenue: 0.05,
+      usage: 800
+    },
+    {
+      eventName: 'crm_synced',
+      featureKey: 'crm_integrations',
+      featureId: FEATURE_IDS.crmIntegrations,
+      model: 'gpt-4o-mini',
+      modelProvider: 'OpenAI',
+      cost: 0.0035,
+      revenue: 0.012,
+      usage: 500
+    },
+    {
+      eventName: 'embedding_generated',
+      featureKey: 'api_access',
+      featureId: FEATURE_IDS.apiAccess,
+      model: 'embed-english-v3.0',
+      modelProvider: 'Cohere',
+      cost: 0.001,
+      revenue: 0.005,
+      usage: 5000
+    }
   ]
 
   const customerIds = Object.values(CUSTOMER_IDS)
-  const customerRefIds = ['cus_outbound', 'cus_pipelineai', 'cus_prospectlab', 'cus_dealflow', 'cus_salesforge']
+  const customerRefIds = [
+    'cus_outbound',
+    'cus_pipelineai',
+    'cus_prospectlab',
+    'cus_dealflow',
+    'cus_salesforge'
+  ]
 
   const totalEvents = 1200
   const threeMonthsMs = 90 * 24 * 3600000
@@ -474,7 +555,11 @@ function buildEvents() {
     const hourJitter = Math.floor((i * 7 + i * i) % 24)
     const minuteJitter = (i * 13) % 60
     const timestamp = new Date(
-      Date.now() - threeMonthsMs + dayOffset * 24 * 3600000 + hourJitter * 3600000 + minuteJitter * 60000
+      Date.now() -
+        threeMonthsMs +
+        dayOffset * 24 * 3600000 +
+        hourJitter * 3600000 +
+        minuteJitter * 60000
     ).toISOString()
 
     const def = eventDefs[i % eventDefs.length]
@@ -504,9 +589,13 @@ function buildEvents() {
       properties: { isEntitled: true },
       meta: {
         inputTokens: Math.floor(def.usage * 0.6),
-        outputTokens: Math.floor(def.usage * 0.4),
+        outputTokens: Math.floor(def.usage * 0.4)
       },
-      context: { sys_cost_source: 'account_default', sys_model: def.model, sys_model_provider: def.modelProvider },
+      context: {
+        sys_cost_source: 'account_default',
+        sys_model: def.model,
+        sys_model_provider: def.modelProvider
+      },
       ingestError: null,
       createdAt: timestamp,
       modifiedAt: timestamp,
@@ -556,9 +645,27 @@ function buildAnalyticsPortfolio() {
       },
       topModelsByCost: [
         { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 195, revenue: 520, usageUnits: 42000 },
-        { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 108, revenue: 290, usageUnits: 18500 },
-        { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 90, revenue: 238, usageUnits: 28000 },
-        { model: 'embed-english-v3.0', modelProvider: 'Cohere', cost: 30, revenue: 80, usageUnits: 156000 }
+        {
+          model: 'claude-3-5-sonnet',
+          modelProvider: 'Anthropic',
+          cost: 108,
+          revenue: 290,
+          usageUnits: 18500
+        },
+        {
+          model: 'gpt-4o-mini',
+          modelProvider: 'OpenAI',
+          cost: 90,
+          revenue: 238,
+          usageUnits: 28000
+        },
+        {
+          model: 'embed-english-v3.0',
+          modelProvider: 'Cohere',
+          cost: 30,
+          revenue: 80,
+          usageUnits: 156000
+        }
       ]
     },
     customers: [
@@ -584,20 +691,80 @@ function buildAnalyticsPortfolio() {
           npsScore: 9
         },
         featureProfitability: [
-          { featureId: FEATURE_IDS.apiAccess, featureName: 'API Access', featureKey: 'api_access', revenue: 45, cost: 12, margin: 0.733, usageUnits: 8500, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 8, revenue: 30, usageUnits: 5500 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 4, revenue: 15, usageUnits: 3000 }
-          ] },
-          { featureId: FEATURE_IDS.emailSequences, featureName: 'Email Sequences', featureKey: 'email_sequences', revenue: 82, cost: 18, margin: 0.780, usageUnits: 3200, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 12, revenue: 55, usageUnits: 2100 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 6, revenue: 27, usageUnits: 1100 }
-          ] },
-          { featureId: FEATURE_IDS.campaignAnalytics, featureName: 'Campaign Analytics', featureKey: 'campaign_analytics', revenue: 38, cost: 10, margin: 0.737, usageUnits: 1400, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 38, usageUnits: 1400 }
-          ] },
-          { featureId: FEATURE_IDS.crmIntegrations, featureName: 'CRM Integrations', featureKey: 'crm_integrations', revenue: 34, cost: 12, margin: 0.647, usageUnits: 900, modelBreakdown: [
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 12, revenue: 34, usageUnits: 900 }
-          ] }
+          {
+            featureId: FEATURE_IDS.apiAccess,
+            featureName: 'API Access',
+            featureKey: 'api_access',
+            revenue: 45,
+            cost: 12,
+            margin: 0.733,
+            usageUnits: 8500,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 8, revenue: 30, usageUnits: 5500 },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 4,
+                revenue: 15,
+                usageUnits: 3000
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.emailSequences,
+            featureName: 'Email Sequences',
+            featureKey: 'email_sequences',
+            revenue: 82,
+            cost: 18,
+            margin: 0.78,
+            usageUnits: 3200,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 12,
+                revenue: 55,
+                usageUnits: 2100
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 6,
+                revenue: 27,
+                usageUnits: 1100
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.campaignAnalytics,
+            featureName: 'Campaign Analytics',
+            featureKey: 'campaign_analytics',
+            revenue: 38,
+            cost: 10,
+            margin: 0.737,
+            usageUnits: 1400,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 38, usageUnits: 1400 }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.crmIntegrations,
+            featureName: 'CRM Integrations',
+            featureKey: 'crm_integrations',
+            revenue: 34,
+            cost: 12,
+            margin: 0.647,
+            usageUnits: 900,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 12,
+                revenue: 34,
+                usageUnits: 900
+              }
+            ]
+          }
         ]
       },
       {
@@ -611,7 +778,7 @@ function buildAnalyticsPortfolio() {
         effectiveMrr: 699,
         projectedUsageRevenue: 85,
         totalCost: 154,
-        margin: 0.780,
+        margin: 0.78,
         marginStatus: 'healthy' as const,
         churnRisk: 'low',
         churnScoreDetails: {
@@ -622,23 +789,104 @@ function buildAnalyticsPortfolio() {
           npsScore: 10
         },
         featureProfitability: [
-          { featureId: FEATURE_IDS.apiAccess, featureName: 'API Access', featureKey: 'api_access', revenue: 180, cost: 42, margin: 0.767, usageUnits: 34000, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 28, revenue: 120, usageUnits: 22000 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 14, revenue: 60, usageUnits: 12000 }
-          ] },
-          { featureId: FEATURE_IDS.emailSequences, featureName: 'Email Sequences', featureKey: 'email_sequences', revenue: 245, cost: 48, margin: 0.804, usageUnits: 12800, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 32, revenue: 165, usageUnits: 8400 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 16, revenue: 80, usageUnits: 4400 }
-          ] },
-          { featureId: FEATURE_IDS.contactEnrichment, featureName: 'Contact Enrichment', featureKey: 'contact_enrichment', revenue: 156, cost: 38, margin: 0.756, usageUnits: 6200, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 38, revenue: 156, usageUnits: 6200 }
-          ] },
-          { featureId: FEATURE_IDS.campaignAnalytics, featureName: 'Campaign Analytics', featureKey: 'campaign_analytics', revenue: 72, cost: 14, margin: 0.806, usageUnits: 4100, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 14, revenue: 72, usageUnits: 4100 }
-          ] },
-          { featureId: FEATURE_IDS.crmIntegrations, featureName: 'CRM Integrations', featureKey: 'crm_integrations', revenue: 46, cost: 12, margin: 0.739, usageUnits: 1800, modelBreakdown: [
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 12, revenue: 46, usageUnits: 1800 }
-          ] }
+          {
+            featureId: FEATURE_IDS.apiAccess,
+            featureName: 'API Access',
+            featureKey: 'api_access',
+            revenue: 180,
+            cost: 42,
+            margin: 0.767,
+            usageUnits: 34000,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o',
+                modelProvider: 'OpenAI',
+                cost: 28,
+                revenue: 120,
+                usageUnits: 22000
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 14,
+                revenue: 60,
+                usageUnits: 12000
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.emailSequences,
+            featureName: 'Email Sequences',
+            featureKey: 'email_sequences',
+            revenue: 245,
+            cost: 48,
+            margin: 0.804,
+            usageUnits: 12800,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 32,
+                revenue: 165,
+                usageUnits: 8400
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 16,
+                revenue: 80,
+                usageUnits: 4400
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.contactEnrichment,
+            featureName: 'Contact Enrichment',
+            featureKey: 'contact_enrichment',
+            revenue: 156,
+            cost: 38,
+            margin: 0.756,
+            usageUnits: 6200,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 38,
+                revenue: 156,
+                usageUnits: 6200
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.campaignAnalytics,
+            featureName: 'Campaign Analytics',
+            featureKey: 'campaign_analytics',
+            revenue: 72,
+            cost: 14,
+            margin: 0.806,
+            usageUnits: 4100,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 14, revenue: 72, usageUnits: 4100 }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.crmIntegrations,
+            featureName: 'CRM Integrations',
+            featureKey: 'crm_integrations',
+            revenue: 46,
+            cost: 12,
+            margin: 0.739,
+            usageUnits: 1800,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 12,
+                revenue: 46,
+                usageUnits: 1800
+              }
+            ]
+          }
         ]
       },
       {
@@ -663,14 +911,50 @@ function buildAnalyticsPortfolio() {
           npsScore: 6
         },
         featureProfitability: [
-          { featureId: FEATURE_IDS.apiAccess, featureName: 'API Access', featureKey: 'api_access', revenue: 18, cost: 8, margin: 0.556, usageUnits: 2100, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 5, revenue: 12, usageUnits: 1400 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 3, revenue: 6, usageUnits: 700 }
-          ] },
-          { featureId: FEATURE_IDS.emailSequences, featureName: 'Email Sequences', featureKey: 'email_sequences', revenue: 32, cost: 14, margin: 0.563, usageUnits: 900, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 9, revenue: 22, usageUnits: 600 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 5, revenue: 10, usageUnits: 300 }
-          ] }
+          {
+            featureId: FEATURE_IDS.apiAccess,
+            featureName: 'API Access',
+            featureKey: 'api_access',
+            revenue: 18,
+            cost: 8,
+            margin: 0.556,
+            usageUnits: 2100,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 5, revenue: 12, usageUnits: 1400 },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 3,
+                revenue: 6,
+                usageUnits: 700
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.emailSequences,
+            featureName: 'Email Sequences',
+            featureKey: 'email_sequences',
+            revenue: 32,
+            cost: 14,
+            margin: 0.563,
+            usageUnits: 900,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 9,
+                revenue: 22,
+                usageUnits: 600
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 5,
+                revenue: 10,
+                usageUnits: 300
+              }
+            ]
+          }
         ]
       },
       {
@@ -695,20 +979,80 @@ function buildAnalyticsPortfolio() {
           npsScore: 8
         },
         featureProfitability: [
-          { featureId: FEATURE_IDS.apiAccess, featureName: 'API Access', featureKey: 'api_access', revenue: 52, cost: 14, margin: 0.731, usageUnits: 9800, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 9, revenue: 35, usageUnits: 6500 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 5, revenue: 17, usageUnits: 3300 }
-          ] },
-          { featureId: FEATURE_IDS.emailSequences, featureName: 'Email Sequences', featureKey: 'email_sequences', revenue: 78, cost: 16, margin: 0.795, usageUnits: 4100, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 10, revenue: 52, usageUnits: 2700 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 6, revenue: 26, usageUnits: 1400 }
-          ] },
-          { featureId: FEATURE_IDS.campaignAnalytics, featureName: 'Campaign Analytics', featureKey: 'campaign_analytics', revenue: 42, cost: 10, margin: 0.762, usageUnits: 2200, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 42, usageUnits: 2200 }
-          ] },
-          { featureId: FEATURE_IDS.crmIntegrations, featureName: 'CRM Integrations', featureKey: 'crm_integrations', revenue: 27, cost: 8, margin: 0.704, usageUnits: 1100, modelBreakdown: [
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 8, revenue: 27, usageUnits: 1100 }
-          ] }
+          {
+            featureId: FEATURE_IDS.apiAccess,
+            featureName: 'API Access',
+            featureKey: 'api_access',
+            revenue: 52,
+            cost: 14,
+            margin: 0.731,
+            usageUnits: 9800,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 9, revenue: 35, usageUnits: 6500 },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 5,
+                revenue: 17,
+                usageUnits: 3300
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.emailSequences,
+            featureName: 'Email Sequences',
+            featureKey: 'email_sequences',
+            revenue: 78,
+            cost: 16,
+            margin: 0.795,
+            usageUnits: 4100,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 10,
+                revenue: 52,
+                usageUnits: 2700
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 6,
+                revenue: 26,
+                usageUnits: 1400
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.campaignAnalytics,
+            featureName: 'Campaign Analytics',
+            featureKey: 'campaign_analytics',
+            revenue: 42,
+            cost: 10,
+            margin: 0.762,
+            usageUnits: 2200,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 42, usageUnits: 2200 }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.crmIntegrations,
+            featureName: 'CRM Integrations',
+            featureKey: 'crm_integrations',
+            revenue: 27,
+            cost: 8,
+            margin: 0.704,
+            usageUnits: 1100,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 8,
+                revenue: 27,
+                usageUnits: 1100
+              }
+            ]
+          }
         ]
       },
       {
@@ -733,27 +1077,129 @@ function buildAnalyticsPortfolio() {
           npsScore: 10
         },
         featureProfitability: [
-          { featureId: FEATURE_IDS.apiAccess, featureName: 'API Access', featureKey: 'api_access', revenue: 195, cost: 38, margin: 0.805, usageUnits: 42000, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 18, revenue: 105, usageUnits: 22000 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 8, revenue: 50, usageUnits: 12000 },
-            { model: 'embed-english-v3.0', modelProvider: 'Cohere', cost: 12, revenue: 40, usageUnits: 8000 }
-          ] },
-          { featureId: FEATURE_IDS.emailSequences, featureName: 'Email Sequences', featureKey: 'email_sequences', revenue: 280, cost: 52, margin: 0.814, usageUnits: 15600, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 34, revenue: 188, usageUnits: 10400 },
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 18, revenue: 92, usageUnits: 5200 }
-          ] },
-          { featureId: FEATURE_IDS.contactEnrichment, featureName: 'Contact Enrichment', featureKey: 'contact_enrichment', revenue: 124, cost: 28, margin: 0.774, usageUnits: 8400, modelBreakdown: [
-            { model: 'claude-3-5-sonnet', modelProvider: 'Anthropic', cost: 28, revenue: 124, usageUnits: 8400 }
-          ] },
-          { featureId: FEATURE_IDS.campaignAnalytics, featureName: 'Campaign Analytics', featureKey: 'campaign_analytics', revenue: 58, cost: 10, margin: 0.828, usageUnits: 3800, modelBreakdown: [
-            { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 58, usageUnits: 3800 }
-          ] },
-          { featureId: FEATURE_IDS.crmIntegrations, featureName: 'CRM Integrations', featureKey: 'crm_integrations', revenue: 32, cost: 6, margin: 0.813, usageUnits: 2100, modelBreakdown: [
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 6, revenue: 32, usageUnits: 2100 }
-          ] },
-          { featureId: FEATURE_IDS.webhookCallbacks, featureName: 'Webhook Callbacks', featureKey: 'webhook_callbacks', revenue: 10, cost: 4, margin: 0.600, usageUnits: 1200, modelBreakdown: [
-            { model: 'gpt-4o-mini', modelProvider: 'OpenAI', cost: 4, revenue: 10, usageUnits: 1200 }
-          ] }
+          {
+            featureId: FEATURE_IDS.apiAccess,
+            featureName: 'API Access',
+            featureKey: 'api_access',
+            revenue: 195,
+            cost: 38,
+            margin: 0.805,
+            usageUnits: 42000,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o',
+                modelProvider: 'OpenAI',
+                cost: 18,
+                revenue: 105,
+                usageUnits: 22000
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 8,
+                revenue: 50,
+                usageUnits: 12000
+              },
+              {
+                model: 'embed-english-v3.0',
+                modelProvider: 'Cohere',
+                cost: 12,
+                revenue: 40,
+                usageUnits: 8000
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.emailSequences,
+            featureName: 'Email Sequences',
+            featureKey: 'email_sequences',
+            revenue: 280,
+            cost: 52,
+            margin: 0.814,
+            usageUnits: 15600,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 34,
+                revenue: 188,
+                usageUnits: 10400
+              },
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 18,
+                revenue: 92,
+                usageUnits: 5200
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.contactEnrichment,
+            featureName: 'Contact Enrichment',
+            featureKey: 'contact_enrichment',
+            revenue: 124,
+            cost: 28,
+            margin: 0.774,
+            usageUnits: 8400,
+            modelBreakdown: [
+              {
+                model: 'claude-3-5-sonnet',
+                modelProvider: 'Anthropic',
+                cost: 28,
+                revenue: 124,
+                usageUnits: 8400
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.campaignAnalytics,
+            featureName: 'Campaign Analytics',
+            featureKey: 'campaign_analytics',
+            revenue: 58,
+            cost: 10,
+            margin: 0.828,
+            usageUnits: 3800,
+            modelBreakdown: [
+              { model: 'gpt-4o', modelProvider: 'OpenAI', cost: 10, revenue: 58, usageUnits: 3800 }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.crmIntegrations,
+            featureName: 'CRM Integrations',
+            featureKey: 'crm_integrations',
+            revenue: 32,
+            cost: 6,
+            margin: 0.813,
+            usageUnits: 2100,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 6,
+                revenue: 32,
+                usageUnits: 2100
+              }
+            ]
+          },
+          {
+            featureId: FEATURE_IDS.webhookCallbacks,
+            featureName: 'Webhook Callbacks',
+            featureKey: 'webhook_callbacks',
+            revenue: 10,
+            cost: 4,
+            margin: 0.6,
+            usageUnits: 1200,
+            modelBreakdown: [
+              {
+                model: 'gpt-4o-mini',
+                modelProvider: 'OpenAI',
+                cost: 4,
+                revenue: 10,
+                usageUnits: 1200
+              }
+            ]
+          }
         ]
       }
     ]
@@ -763,8 +1209,6 @@ function buildAnalyticsPortfolio() {
 // ── Seeder Composable ───────────────────────────────────────────────────────
 export function useDemoDataSeeder() {
   const queryClient = useQueryClient()
-  const route = useRoute()
-  const isObserveDemo = route.query.mode === 'observe'
 
   // Prevent queries from refetching (demo data is static) — set FIRST before any data
   queryClient.setDefaultOptions({
@@ -956,7 +1400,7 @@ export function useDemoDataSeeder() {
           totalCost: 238,
           totalRevenue: 825,
           totalUsage: 78000,
-          avgCostPerEvent: 0.70,
+          avgCostPerEvent: 0.7,
           margin: 0.712,
           lastSeen: new Date().toISOString()
         },
@@ -998,7 +1442,8 @@ export function useDemoDataSeeder() {
         id: 'insight-1',
         severity: 'CRITICAL',
         title: 'claude-3-5-sonnet costs 59% more per event than gpt-4o with similar output quality',
-        description: 'Contact Enrichment and Email Sequences both route to claude-3-5-sonnet at $1.12/event. The same tasks on gpt-4o-mini cost $0.70/event. Switching these two features alone would save $142/month — a 12.6% reduction in total AI spend.',
+        description:
+          'Contact Enrichment and Email Sequences both route to claude-3-5-sonnet at $1.12/event. The same tasks on gpt-4o-mini cost $0.70/event. Switching these two features alone would save $142/month — a 12.6% reduction in total AI spend.',
         category: 'model_comparison',
         featureKey: 'contact_enrichment',
         customerId: null,
@@ -1008,7 +1453,8 @@ export function useDemoDataSeeder() {
         id: 'insight-2',
         severity: 'WARNING',
         title: 'ProspectLab (Starter) has a 31% cost ratio — 2x your portfolio average',
-        description: 'Emily Park generates $31 in AI costs against $99 MRR. She accounts for 3% of revenue but 7% of costs. Her API Access pattern shows single-record calls instead of batching — 2,100 calls for what other customers achieve in 400. A batching guide or rate limit could cut her cost ratio in half.',
+        description:
+          'Emily Park generates $31 in AI costs against $99 MRR. She accounts for 3% of revenue but 7% of costs. Her API Access pattern shows single-record calls instead of batching — 2,100 calls for what other customers achieve in 400. A batching guide or rate limit could cut her cost ratio in half.',
         category: 'customer_profitability',
         featureKey: 'api_access',
         customerId: CUSTOMER_IDS.prospectlab,
@@ -1018,7 +1464,8 @@ export function useDemoDataSeeder() {
         id: 'insight-3',
         severity: 'POSITIVE',
         title: 'Email Sequences delivers 80% margin at scale — your strongest feature',
-        description: 'Across 1,200 events, Email Sequences generates $717 revenue on $148 cost (80% margin). It is used by all 5 customers and scales well — cost per sequence drops as volume increases. This is the feature to lead with in upsells.',
+        description:
+          'Across 1,200 events, Email Sequences generates $717 revenue on $148 cost (80% margin). It is used by all 5 customers and scales well — cost per sequence drops as volume increases. This is the feature to lead with in upsells.',
         category: 'margin_analysis',
         featureKey: 'email_sequences',
         customerId: null,
@@ -1028,7 +1475,8 @@ export function useDemoDataSeeder() {
         id: 'insight-4',
         severity: 'WARNING',
         title: 'CRM Integrations margin is eroding — down from 74% to 65% this month',
-        description: 'CRM sync events increased 40% month-over-month but revenue per sync stayed flat. The cost increase is driven by gpt-4o usage for data mapping. Consider caching repeat mappings or switching to gpt-4o-mini for known CRM schemas.',
+        description:
+          'CRM sync events increased 40% month-over-month but revenue per sync stayed flat. The cost increase is driven by gpt-4o usage for data mapping. Consider caching repeat mappings or switching to gpt-4o-mini for known CRM schemas.',
         category: 'cost_optimization',
         featureKey: 'crm_integrations',
         customerId: null,
@@ -1038,7 +1486,8 @@ export function useDemoDataSeeder() {
         id: 'insight-5',
         severity: 'POSITIVE',
         title: 'SalesForge (Enterprise) is your most efficient customer at $0.19/event',
-        description: 'Anika Patel generates 42,000 API calls at $138 total cost — $0.003/call. Her usage patterns (large batches, embedding-heavy workloads) suggest she would be a strong case study for enterprise prospects evaluating cost efficiency.',
+        description:
+          'Anika Patel generates 42,000 API calls at $138 total cost — $0.003/call. Her usage patterns (large batches, embedding-heavy workloads) suggest she would be a strong case study for enterprise prospects evaluating cost efficiency.',
         category: 'customer_profitability',
         featureKey: null,
         customerId: CUSTOMER_IDS.salesforge,
@@ -1055,8 +1504,7 @@ export function useDemoDataSeeder() {
       stripeEnabled: true,
       stripeCheckoutSuccessUrl: null,
       stripeCheckoutCancelUrl: null,
-      currency: 'USD',
-      platformMode: (isObserveDemo ? 'OBSERVE' : 'FULL') as 'OBSERVE' | 'FULL'
+      currency: 'USD'
     },
     success: true
   })
@@ -1074,5 +1522,4 @@ export function useDemoDataSeeder() {
       success: true
     })
   }
-
 }

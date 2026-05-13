@@ -3,203 +3,31 @@
     <div class="mb-6">
       <h1 class="text-2xl font-semibold tracking-tight text-foreground">Getting Started</h1>
       <p class="text-sm text-muted-foreground mt-1">
-        {{ isObserveMode ? 'Start tracking cost, revenue, and margin per customer.' : 'Connect Tanso to your AI tools in under a minute.' }}
+        Connect Tanso to your AI tools in under a minute.
       </p>
     </div>
 
     <div class="space-y-6">
-
-      <!-- ==================== OBSERVE MODE ==================== -->
-      <template v-if="isObserveMode">
-
-        <!-- Step 1: Get your API key -->
-        <Card class="p-6">
-          <div class="flex items-start gap-4">
-            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
-              <span class="text-xs font-semibold">1</span>
-            </div>
-            <div class="min-w-0 flex-1 space-y-4">
-              <div>
-                <h3 class="text-base font-medium mb-1">Get your API key</h3>
-                <p class="text-sm text-muted-foreground">Use this key to authenticate API requests.</p>
-              </div>
-
-              <div v-if="isLoadingApiKey" class="flex items-center gap-2 text-sm text-muted-foreground py-4">
-                <Loader2 class="w-4 h-4 animate-spin" />
-                Loading...
-              </div>
-              <div v-else-if="apiKeyData?.data?.apiKey" class="space-y-3">
-                <div class="flex items-center gap-2">
-                  <div class="flex-1 bg-muted px-3 py-2 rounded-md font-mono text-xs border">
-                    {{ showApiKey ? apiKeyData.data.apiKey : maskedApiKey }}
-                  </div>
-                  <Button variant="ghost" size="icon" class="h-8 w-8 shrink-0" @click="showApiKey = !showApiKey">
-                    <EyeOff v-if="showApiKey" class="w-3.5 h-3.5" />
-                    <Eye v-else class="w-3.5 h-3.5" />
-                  </Button>
-                  <CopyButton :value="apiKeyData.data.apiKey" label="API key" />
-                </div>
-                <p class="text-xs text-muted-foreground">
-                  Install the SDK: <code class="bg-muted px-1 py-0.5 rounded text-[11px]">npm install @tanso/sdk</code>
-                </p>
-              </div>
-              <div v-else class="flex items-center gap-2 text-sm">
-                <span class="text-destructive">Failed to load API key</span>
-                <Button variant="outline" size="sm" @click="refetchApiKey">Try again</Button>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Step 2: Connect Stripe -->
-        <Card class="p-6">
-          <div class="flex items-start gap-4">
-            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
-              <span class="text-xs font-semibold">2</span>
-            </div>
-            <div class="min-w-0 flex-1 space-y-4">
-              <div>
-                <div class="flex items-center gap-2 mb-1">
-                  <h3 class="text-base font-medium">Connect Stripe</h3>
-                  <Badge v-if="stripeConnected" variant="outline" class="text-emerald-600 border-emerald-200 bg-emerald-50">Connected</Badge>
-                </div>
-                <p class="text-sm text-muted-foreground">
-                  Tanso will pull your customers, subscriptions, and revenue from Stripe automatically. No manual customer creation needed.
-                </p>
-              </div>
-              <Button v-if="!stripeConnected" variant="outline" size="sm" @click="showStripeModal = true">
-                Connect Stripe
-              </Button>
-              <p v-else class="text-xs text-muted-foreground">
-                Customers and revenue data will sync automatically when you open Analytics.
-              </p>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Step 3: Send events -->
-        <Card class="p-6">
-          <div class="flex items-start gap-4">
-            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
-              <span class="text-xs font-semibold">3</span>
-            </div>
-            <div class="min-w-0 flex-1 space-y-4">
-              <div>
-                <h3 class="text-base font-medium mb-1">Send events</h3>
-                <p class="text-sm text-muted-foreground">
-                  Track AI usage with 3 fields: <code class="bg-muted px-1 py-0.5 rounded text-[11px]">eventName</code>,
-                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">stripeCustomerId</code>, and
-                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">featureKey</code>.
-                  Use your Stripe customer ID (<code class="bg-muted px-1 py-0.5 rounded text-[11px]">cus_...</code>) as the
-                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">stripeCustomerId</code> to link events with Stripe revenue data.
-                  Pass <code class="bg-muted px-1 py-0.5 rounded text-[11px]">costInput.model</code> to auto-calculate cost.
-                </p>
-              </div>
-
-              <!-- Tab selector -->
-              <div class="flex gap-4 sm:gap-6 border-b overflow-x-auto">
-                <button
-                  v-for="tab in observeTabs"
-                  :key="tab.id"
-                  class="pb-2.5 text-sm font-medium transition-colors relative whitespace-nowrap"
-                  :class="selectedObserveTab === tab.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
-                  @click="selectedObserveTab = tab.id"
-                >
-                  {{ tab.label }}
-                  <span v-if="selectedObserveTab === tab.id" class="absolute bottom-0 left-0 right-0 h-[2.5px] bg-foreground rounded-full" />
-                </button>
-              </div>
-
-              <!-- curl -->
-              <div v-if="selectedObserveTab === 'curl'" class="space-y-3">
-                <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ curlExampleDisplay }}</code></pre>
-                  <div class="absolute top-2 right-2">
-                    <CopyButton :value="curlExample" label="curl command" />
-                  </div>
-                </div>
-              </div>
-
-              <!-- TypeScript SDK -->
-              <div v-if="selectedObserveTab === 'typescript'" class="space-y-3">
-                <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ sdkExampleDisplay }}</code></pre>
-                  <div class="absolute top-2 right-2">
-                    <CopyButton :value="sdkExample" label="TypeScript code" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Step 4: View analytics -->
-        <Card class="p-6">
-          <div class="flex items-start gap-4">
-            <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
-              <span class="text-xs font-semibold">4</span>
-            </div>
-            <div class="min-w-0 flex-1 space-y-4">
-              <div>
-                <h3 class="text-base font-medium mb-1">View analytics</h3>
-                <p class="text-sm text-muted-foreground">
-                  See cost, revenue, and margin per customer, feature, and model. Stripe revenue syncs automatically.
-                </p>
-              </div>
-              <Button variant="outline" size="sm" as-child>
-                <router-link to="/analytics">
-                  <Activity class="w-4 h-4 mr-1.5" />
-                  View Analytics
-                </router-link>
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <!-- Upgrade CTA -->
-        <Card class="p-6 border-dashed">
-          <div class="space-y-3">
-            <h3 class="text-base font-medium">Ready for more?</h3>
-            <p class="text-sm text-muted-foreground">
-              Upgrade to Tanso Platform to enforce usage limits, manage subscriptions, and bill customers through Stripe.
-            </p>
-            <ul class="space-y-1.5 text-sm text-muted-foreground">
-              <li class="flex items-center gap-2"><Check class="w-3.5 h-3.5 text-primary" /> Plans and pricing rules</li>
-              <li class="flex items-center gap-2"><Check class="w-3.5 h-3.5 text-primary" /> Entitlement enforcement</li>
-              <li class="flex items-center gap-2"><Check class="w-3.5 h-3.5 text-primary" /> Usage caps and credits</li>
-              <li class="flex items-center gap-2"><Check class="w-3.5 h-3.5 text-primary" /> Stripe integration and invoicing</li>
-            </ul>
-            <Button variant="outline" size="sm" as-child>
-              <router-link to="/settings">Upgrade to Tanso Platform</router-link>
-            </Button>
-          </div>
-        </Card>
-
-        <!-- Resources -->
-        <div class="pt-2">
-          <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Resources</p>
-          <div class="flex flex-wrap gap-x-6 gap-y-2">
-            <a href="https://tanso-core.readme.io/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
-              <BookOpen class="w-3.5 h-3.5" /> REST API Docs <ArrowUpRight class="w-3 h-3" />
-            </a>
-          </div>
-        </div>
-      </template>
-
-      <!-- ==================== PLATFORM MODE ==================== -->
-      <template v-else>
-
       <!-- Step 1: Connect MCP -->
       <Card class="p-6">
         <div class="flex items-start gap-4">
-          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
+          <div
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5"
+          >
             <span class="text-xs font-semibold">1</span>
           </div>
           <div class="min-w-0 flex-1 space-y-4">
             <div>
               <div class="flex items-center gap-2 mb-1">
                 <h3 class="text-base font-medium">Connect your MCP server</h3>
-                <Badge variant="outline" :class="isSandbox ? 'text-amber-600 border-amber-200 bg-amber-50' : 'text-emerald-600 border-emerald-200 bg-emerald-50'">
+                <Badge
+                  variant="outline"
+                  :class="
+                    isSandbox
+                      ? 'text-amber-600 border-amber-200 bg-amber-50'
+                      : 'text-emerald-600 border-emerald-200 bg-emerald-50'
+                  "
+                >
                   {{ isSandbox ? 'Sandbox' : 'Production' }}
                 </Badge>
               </div>
@@ -208,7 +36,10 @@
               </p>
             </div>
 
-            <div v-if="isLoadingApiKey" class="flex items-center gap-2 text-sm text-muted-foreground py-4">
+            <div
+              v-if="isLoadingApiKey"
+              class="flex items-center gap-2 text-sm text-muted-foreground py-4"
+            >
               <Loader2 class="w-4 h-4 animate-spin" />
               Loading...
             </div>
@@ -219,7 +50,11 @@
                   v-for="tool in tools"
                   :key="tool.id"
                   class="pb-2.5 text-sm font-medium transition-colors relative whitespace-nowrap"
-                  :class="selectedTool === tool.id ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'"
+                  :class="
+                    selectedTool === tool.id
+                      ? 'text-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  "
                   @click="selectedTool = tool.id"
                 >
                   {{ tool.label }}
@@ -234,7 +69,9 @@
               <div v-if="selectedTool === 'claude-code'" class="space-y-2">
                 <p class="text-xs text-muted-foreground">Run this in your terminal:</p>
                 <div class="flex items-center gap-2">
-                  <div class="flex-1 bg-zinc-950 text-zinc-100 px-3 py-2 rounded-md font-mono text-xs border border-zinc-800 overflow-x-auto">
+                  <div
+                    class="flex-1 bg-zinc-950 text-zinc-100 px-3 py-2 rounded-md font-mono text-xs border border-zinc-800 overflow-x-auto"
+                  >
                     <span class="text-zinc-500 select-none">$ </span>{{ cliCommandDisplay }}
                   </div>
                   <Button
@@ -253,11 +90,22 @@
 
               <!-- Cursor -->
               <div v-if="selectedTool === 'cursor'" class="space-y-2">
-                <p class="text-xs text-muted-foreground">Add this to <code class="bg-muted px-1 py-0.5 rounded text-[11px]">~/.cursor/mcp.json</code></p>
+                <p class="text-xs text-muted-foreground">
+                  Add this to
+                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">~/.cursor/mcp.json</code>
+                </p>
                 <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ mcpConfigDisplayText }}</code></pre>
+                  <pre
+                    class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"
+                  ><code>{{ mcpConfigDisplayText }}</code></pre>
                   <div class="absolute top-2 right-2 flex items-center gap-1">
-                    <Button variant="ghost" size="icon" class="h-7 w-7" :aria-label="showApiKey ? 'Hide API key' : 'Show API key'" @click="showApiKey = !showApiKey">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      :aria-label="showApiKey ? 'Hide API key' : 'Show API key'"
+                      @click="showApiKey = !showApiKey"
+                    >
                       <EyeOff v-if="showApiKey" class="w-3.5 h-3.5" />
                       <Eye v-else class="w-3.5 h-3.5" />
                     </Button>
@@ -268,11 +116,23 @@
 
               <!-- VS Code -->
               <div v-if="selectedTool === 'vscode'" class="space-y-2">
-                <p class="text-xs text-muted-foreground">Add this to <code class="bg-muted px-1 py-0.5 rounded text-[11px]">.vscode/mcp.json</code> in your workspace</p>
+                <p class="text-xs text-muted-foreground">
+                  Add this to
+                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">.vscode/mcp.json</code>
+                  in your workspace
+                </p>
                 <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ vscodeConfigDisplayText }}</code></pre>
+                  <pre
+                    class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"
+                  ><code>{{ vscodeConfigDisplayText }}</code></pre>
                   <div class="absolute top-2 right-2 flex items-center gap-1">
-                    <Button variant="ghost" size="icon" class="h-7 w-7" :aria-label="showApiKey ? 'Hide API key' : 'Show API key'" @click="showApiKey = !showApiKey">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      :aria-label="showApiKey ? 'Hide API key' : 'Show API key'"
+                      @click="showApiKey = !showApiKey"
+                    >
                       <EyeOff v-if="showApiKey" class="w-3.5 h-3.5" />
                       <Eye v-else class="w-3.5 h-3.5" />
                     </Button>
@@ -283,11 +143,24 @@
 
               <!-- Windsurf -->
               <div v-if="selectedTool === 'windsurf'" class="space-y-2">
-                <p class="text-xs text-muted-foreground">Add this to <code class="bg-muted px-1 py-0.5 rounded text-[11px]">~/.codeium/windsurf/mcp_config.json</code></p>
+                <p class="text-xs text-muted-foreground">
+                  Add this to
+                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]"
+                    >~/.codeium/windsurf/mcp_config.json</code
+                  >
+                </p>
                 <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ mcpConfigDisplayText }}</code></pre>
+                  <pre
+                    class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"
+                  ><code>{{ mcpConfigDisplayText }}</code></pre>
                   <div class="absolute top-2 right-2 flex items-center gap-1">
-                    <Button variant="ghost" size="icon" class="h-7 w-7" :aria-label="showApiKey ? 'Hide API key' : 'Show API key'" @click="showApiKey = !showApiKey">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      :aria-label="showApiKey ? 'Hide API key' : 'Show API key'"
+                      @click="showApiKey = !showApiKey"
+                    >
                       <EyeOff v-if="showApiKey" class="w-3.5 h-3.5" />
                       <Eye v-else class="w-3.5 h-3.5" />
                     </Button>
@@ -298,11 +171,22 @@
 
               <!-- Codex -->
               <div v-if="selectedTool === 'codex'" class="space-y-2">
-                <p class="text-xs text-muted-foreground">Add this to <code class="bg-muted px-1 py-0.5 rounded text-[11px]">~/.codex/config.toml</code></p>
+                <p class="text-xs text-muted-foreground">
+                  Add this to
+                  <code class="bg-muted px-1 py-0.5 rounded text-[11px]">~/.codex/config.toml</code>
+                </p>
                 <div class="relative">
-                  <pre class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"><code>{{ codexConfigDisplayText }}</code></pre>
+                  <pre
+                    class="bg-zinc-950 text-zinc-100 rounded-md border border-zinc-800 p-3 text-xs font-mono overflow-x-auto leading-relaxed"
+                  ><code>{{ codexConfigDisplayText }}</code></pre>
                   <div class="absolute top-2 right-2 flex items-center gap-1">
-                    <Button variant="ghost" size="icon" class="h-7 w-7" :aria-label="showApiKey ? 'Hide API key' : 'Show API key'" @click="showApiKey = !showApiKey">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      class="h-7 w-7"
+                      :aria-label="showApiKey ? 'Hide API key' : 'Show API key'"
+                      @click="showApiKey = !showApiKey"
+                    >
                       <EyeOff v-if="showApiKey" class="w-3.5 h-3.5" />
                       <Eye v-else class="w-3.5 h-3.5" />
                     </Button>
@@ -322,14 +206,17 @@
       <!-- Step 2: Paste the context file -->
       <Card class="p-6">
         <div class="flex items-start gap-4">
-          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
+          <div
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5"
+          >
             <span class="text-xs font-semibold">2</span>
           </div>
           <div class="min-w-0 flex-1 space-y-4">
             <div>
               <h3 class="text-base font-medium mb-1">Paste the context file</h3>
               <p class="text-sm text-muted-foreground">
-                Paste this URL into your first conversation so your AI knows how to use Tanso's MCP tools.
+                Paste this URL into your first conversation so your AI knows how to use Tanso's MCP
+                tools.
               </p>
             </div>
             <div class="flex items-center gap-2">
@@ -345,7 +232,9 @@
       <!-- Step 3: Connect data sources -->
       <Card class="p-6">
         <div class="flex items-start gap-4">
-          <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5">
+          <div
+            class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 border-foreground/20 text-muted-foreground mt-0.5"
+          >
             <span class="text-xs font-semibold">3</span>
           </div>
           <div class="min-w-0 flex-1 space-y-4">
@@ -353,16 +242,20 @@
               <div class="flex items-center gap-2 mb-1">
                 <h3 class="text-base font-medium">Connect Stripe</h3>
                 <Badge variant="outline" class="text-muted-foreground">Optional</Badge>
-                <Badge v-if="stripeConnected" variant="outline" class="text-emerald-600 border-emerald-200 bg-emerald-50">Connected</Badge>
+                <Badge
+                  v-if="stripeConnected"
+                  variant="outline"
+                  class="text-emerald-600 border-emerald-200 bg-emerald-50"
+                  >Connected</Badge
+                >
               </div>
               <p class="text-sm text-muted-foreground">
-                Connect Stripe before creating plans in Tanso. Your products, customers, and subscriptions will sync automatically — no need to recreate them.
+                Connect Stripe before creating plans in Tanso. Your products, customers, and
+                subscriptions will sync automatically — no need to recreate them.
               </p>
             </div>
             <Button variant="outline" size="sm" as-child>
-              <router-link to="/settings?tab=integrations">
-                Go to Integrations
-              </router-link>
+              <router-link to="/settings?tab=integrations"> Go to Integrations </router-link>
             </Button>
           </div>
         </div>
@@ -370,36 +263,53 @@
 
       <!-- Try asking -->
       <div class="pt-4">
-        <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Try asking your AI</p>
+        <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+          Try asking your AI
+        </p>
         <div class="space-y-2">
           <div class="rounded-lg border bg-muted/30 p-3">
-            <p class="text-xs text-muted-foreground italic">"Set up two plans: Starter at $29/mo and Pro at $99/mo with usage-based API access."</p>
+            <p class="text-xs text-muted-foreground italic">
+              "Set up two plans: Starter at $29/mo and Pro at $99/mo with usage-based API access."
+            </p>
           </div>
           <div class="rounded-lg border bg-muted/30 p-3">
-            <p class="text-xs text-muted-foreground italic">"Show me all my customers and their current subscription status."</p>
+            <p class="text-xs text-muted-foreground italic">
+              "Show me all my customers and their current subscription status."
+            </p>
           </div>
           <div class="rounded-lg border bg-muted/30 p-3">
-            <p class="text-xs text-muted-foreground italic">"Which customers are close to hitting their usage limits this month?"</p>
+            <p class="text-xs text-muted-foreground italic">
+              "Which customers are close to hitting their usage limits this month?"
+            </p>
           </div>
         </div>
       </div>
 
       <!-- Resources -->
       <div class="pt-2">
-        <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Resources</p>
+        <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
+          Resources
+        </p>
         <div class="flex flex-wrap gap-x-6 gap-y-2">
-          <a href="https://tanso-core.readme.io/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
+          <a
+            href="https://tanso-core.readme.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
             <BookOpen class="w-3.5 h-3.5" /> REST API Docs <ArrowUpRight class="w-3 h-3" />
           </a>
-          <a v-if="isSandbox" href="/example-app" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
+          <a
+            v-if="isSandbox"
+            href="/example-app"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+          >
             <ExternalLink class="w-3.5 h-3.5" /> Sample App
           </a>
         </div>
       </div>
-
-      </template>
-
-      <StripeConnectionModal v-if="showStripeModal" v-model:visible="showStripeModal" />
     </div>
   </div>
 </template>
@@ -409,20 +319,22 @@ import { ref, computed } from 'vue'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Loader2, BookOpen, ExternalLink, Eye, EyeOff, ArrowUpRight, Check, Activity } from 'lucide-vue-next'
+import { Loader2, BookOpen, ExternalLink, Eye, EyeOff, ArrowUpRight } from 'lucide-vue-next'
 import { useAccountApiKeyQuery } from '@/features/account/queries'
 import { useAccountSettingsQuery } from '@/features/integrations/queries'
 import CopyButton from '@/components/CopyButton.vue'
-import StripeConnectionModal from '@/features/integrations/components/StripeConnectionModal.vue'
 import { useEnvironmentStore } from '@/stores/environment'
 
 const environmentStore = useEnvironmentStore()
 const isSandbox = computed(() => environmentStore.isSandbox)
 
-const { data: apiKeyData, isLoading: isLoadingApiKey, refetch: refetchApiKey } = useAccountApiKeyQuery()
+const {
+  data: apiKeyData,
+  isLoading: isLoadingApiKey,
+  refetch: refetchApiKey
+} = useAccountApiKeyQuery()
 const { data: settingsData } = useAccountSettingsQuery()
 
-const showStripeModal = ref(false)
 const showApiKey = ref(false)
 
 type ToolId = 'claude-code' | 'cursor' | 'vscode' | 'windsurf' | 'codex'
@@ -432,7 +344,7 @@ const tools: { id: ToolId; label: string }[] = [
   { id: 'cursor', label: 'Cursor' },
   { id: 'vscode', label: 'VS Code' },
   { id: 'windsurf', label: 'Windsurf' },
-  { id: 'codex', label: 'Codex' },
+  { id: 'codex', label: 'Codex' }
 ]
 
 const selectedTool = ref<ToolId>('claude-code')
@@ -441,7 +353,11 @@ const selectedTool = ref<ToolId>('claude-code')
 const maskedApiKey = computed(() => {
   const key = apiKeyData.value?.data?.apiKey
   if (!key) return ''
-  const prefix = key.startsWith('sk_live_') ? 'sk_live_' : key.startsWith('sk_test_') ? 'sk_test_' : ''
+  const prefix = key.startsWith('sk_live_')
+    ? 'sk_live_'
+    : key.startsWith('sk_test_')
+      ? 'sk_test_'
+      : ''
   const suffix = key.slice(-4)
   return `${prefix}${'••••••••'}${suffix}`
 })
@@ -450,9 +366,7 @@ const maskedApiKey = computed(() => {
 const mcpEndpoint = computed(() =>
   isSandbox.value ? 'http://localhost:8080/mcp' : 'http://localhost:8080/mcp'
 )
-const mcpServerName = computed(() =>
-  isSandbox.value ? 'tanso-sandbox' : 'tanso-prod'
-)
+const mcpServerName = computed(() => (isSandbox.value ? 'tanso-sandbox' : 'tanso-prod'))
 
 const llmsUrl = '/llms-mcp.txt'
 
@@ -463,7 +377,9 @@ const cliCommand = computed(() => {
 })
 
 const cliCommandDisplay = computed(() => {
-  const keyDisplay = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
+  const keyDisplay = showApiKey.value
+    ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here')
+    : maskedApiKey.value
   return `claude mcp add ${mcpServerName.value} --transport http --header "X-API-Key: ${keyDisplay}" ${mcpEndpoint.value}`
 })
 
@@ -474,23 +390,25 @@ const mcpConfigJson = computed(() => {
     mcpServers: {
       [mcpServerName.value]: {
         url: mcpEndpoint.value,
-        headers: { 'X-API-Key': apiKey },
-      },
-    },
+        headers: { 'X-API-Key': apiKey }
+      }
+    }
   }
 })
 
 const mcpConfigText = computed(() => JSON.stringify(mcpConfigJson.value, null, 2))
 
 const mcpConfigDisplayJson = computed(() => {
-  const keyDisplay = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
+  const keyDisplay = showApiKey.value
+    ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here')
+    : maskedApiKey.value
   return {
     mcpServers: {
       [mcpServerName.value]: {
         url: mcpEndpoint.value,
-        headers: { 'X-API-Key': keyDisplay },
-      },
-    },
+        headers: { 'X-API-Key': keyDisplay }
+      }
+    }
   }
 })
 
@@ -504,28 +422,32 @@ const vscodeConfigJson = computed(() => {
       [mcpServerName.value]: {
         type: 'http',
         url: mcpEndpoint.value,
-        headers: { 'X-API-Key': apiKey },
-      },
-    },
+        headers: { 'X-API-Key': apiKey }
+      }
+    }
   }
 })
 
 const vscodeConfigText = computed(() => JSON.stringify(vscodeConfigJson.value, null, 2))
 
 const vscodeConfigDisplayJson = computed(() => {
-  const keyDisplay = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
+  const keyDisplay = showApiKey.value
+    ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here')
+    : maskedApiKey.value
   return {
     servers: {
       [mcpServerName.value]: {
         type: 'http',
         url: mcpEndpoint.value,
-        headers: { 'X-API-Key': keyDisplay },
-      },
-    },
+        headers: { 'X-API-Key': keyDisplay }
+      }
+    }
   }
 })
 
-const vscodeConfigDisplayText = computed(() => JSON.stringify(vscodeConfigDisplayJson.value, null, 2))
+const vscodeConfigDisplayText = computed(() =>
+  JSON.stringify(vscodeConfigDisplayJson.value, null, 2)
+)
 
 // Codex TOML config
 const codexConfigText = computed(() => {
@@ -534,64 +456,12 @@ const codexConfigText = computed(() => {
 })
 
 const codexConfigDisplayText = computed(() => {
-  const keyDisplay = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
+  const keyDisplay = showApiKey.value
+    ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here')
+    : maskedApiKey.value
   return `[mcp_servers.${mcpServerName.value}]\ncommand = "${mcpEndpoint.value}"\n\n[mcp_servers.${mcpServerName.value}.http_headers]\nX-API-Key = "${keyDisplay}"`
 })
 
 // Status tracking
 const stripeConnected = computed(() => settingsData.value?.data?.stripeEnabled === true)
-const isObserveMode = computed(() => settingsData.value?.data?.platformMode === 'OBSERVE')
-
-// Observe users access Analytics directly — Getting Started is Platform-only
-// (Route guard in router.ts handles redirecting Observe users away from /)
-
-// Observe mode
-type ObserveTabId = 'curl' | 'typescript'
-const observeTabs: { id: ObserveTabId; label: string }[] = [
-  { id: 'typescript', label: 'TypeScript' },
-  { id: 'curl', label: 'curl' }
-]
-const selectedObserveTab = ref<ObserveTabId>('typescript')
-
-const apiEndpoint = computed(() =>
-  isSandbox.value ? 'http://localhost:8080' : 'http://localhost:8080'
-)
-
-const curlExample = computed(() => {
-  const key = apiKeyData.value?.data?.apiKey ?? 'your_api_key_here'
-  return `curl -X POST ${apiEndpoint.value}/api/v1/client/events \\
-  -H "X-API-Key: ${key}" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "eventName": "ai_request",
-    "stripeCustomerId": "cus_abc123",
-    "featureKey": "chat",
-    "costInput": { "model": "gpt-4o", "inputTokens": 1200, "outputTokens": 300 }
-  }'`
-})
-
-const curlExampleDisplay = computed(() => {
-  const key = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
-  return curlExample.value.replace(apiKeyData.value?.data?.apiKey ?? 'your_api_key_here', key)
-})
-
-const sdkExample = computed(() => {
-  const key = apiKeyData.value?.data?.apiKey ?? 'your_api_key_here'
-  return `import { TansoClient } from '@tansohq/sdk'
-
-const tanso = new TansoClient('${key}')
-
-// Use your Stripe customer ID to link with revenue data
-await tanso.events.ingest({
-  eventName: 'ai_request',
-  stripeCustomerId: 'cus_abc123',
-  featureKey: 'chat',
-  costInput: { model: 'gpt-4o', inputTokens: 1200, outputTokens: 300 }
-})`
-})
-
-const sdkExampleDisplay = computed(() => {
-  const key = showApiKey.value ? (apiKeyData.value?.data?.apiKey ?? 'your_api_key_here') : maskedApiKey.value
-  return sdkExample.value.replace(apiKeyData.value?.data?.apiKey ?? 'your_api_key_here', key)
-})
 </script>

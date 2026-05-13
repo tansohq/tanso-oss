@@ -111,79 +111,79 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('@/app/views/HomeView.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/plans',
       name: 'plans',
       component: () => import('@/features/plans/pages/PlansPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/plans/:id',
       name: 'plan-detail',
       component: () => import('@/features/plans/pages/PlanDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/features',
       name: 'features',
       component: () => import('@/features/features/pages/FeaturesPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/features/:id',
       name: 'feature-detail',
       component: () => import('@/features/features/pages/FeatureDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/customers',
       name: 'customers',
       component: () => import('@/features/customers/pages/CustomersPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/customers/:id',
       name: 'customers-detail',
       component: () => import('@/features/customers/pages/CustomerDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/subscriptions',
       name: 'subscriptions',
       component: () => import('@/features/subscriptions/pages/SubscriptionsPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/subscriptions/:id',
       name: 'subscription-detail',
       component: () => import('@/features/subscriptions/pages/SubscriptionDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/invoices',
       name: 'invoices',
       component: () => import('@/features/invoices/pages/InvoicesPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/invoices/:id',
       name: 'invoice-detail',
       component: () => import('@/features/invoices/pages/InvoiceDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/credits',
       name: 'credits',
       component: () => import('@/features/credits/pages/CreditModelsPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/credits/:id',
       name: 'credit-detail',
       component: () => import('@/features/credits/pages/CreditModelDetailPage.vue'),
-      meta: { requiresAuth: true, platformOnly: true }
+      meta: { requiresAuth: true }
     },
     {
       path: '/events',

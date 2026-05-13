@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.credit.CreditGrantDto;
 import com.tansoflow.tansocore.model.credit.CreditModelDto;
@@ -46,7 +45,6 @@ public class CreditController {
 
     // ─── Credit Model endpoints ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/models")
     @Operation(summary = "Create a credit model", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CreditModelDto>> createModel(
@@ -76,7 +74,6 @@ public class CreditController {
                 ApiResponse.<CreditModelDto>builder().data(model).success(true).build());
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/models/{id}")
     @Operation(summary = "Soft-delete a credit model", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> deleteModel(
@@ -89,7 +86,6 @@ public class CreditController {
 
     // ─── Credit Allocation endpoints ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/models/{id}/plans/{planId}")
     @Operation(summary = "Add credit allocation to plan", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> addAllocationToPlan(
@@ -114,7 +110,6 @@ public class CreditController {
                 ApiResponse.<List<PlanCreditAllocationDto>>builder().data(allocations).success(true).build());
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/models/{id}/plans/{planId}")
     @Operation(summary = "Remove credit allocation from plan", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> removeAllocationFromPlan(
@@ -128,7 +123,6 @@ public class CreditController {
 
     // ─── Pool endpoints ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/pools")
     @Operation(summary = "Create a credit pool", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CreditPoolDto>> createPool(
@@ -170,7 +164,6 @@ public class CreditController {
 
     // ─── Grant endpoints ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/grants")
     @Operation(summary = "Grant credits to a pool", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CreditGrantDto>> grantCredits(
@@ -193,7 +186,6 @@ public class CreditController {
 
     // ─── Deduction endpoints ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/deductions")
     @Operation(summary = "Deduct credits from a pool", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CreditTransactionDto>> deductCredits(
@@ -206,7 +198,6 @@ public class CreditController {
 
     // ─── Reversal ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/transactions/{transactionId}/reverse")
     @Operation(summary = "Reverse a credit transaction", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CreditTransactionDto>> reverseTransaction(
@@ -220,7 +211,6 @@ public class CreditController {
 
     // ─── Pool-subscription linkage ───
 
-    @RequiresFullPlatformMode
     @PostMapping("/pools/{poolId}/subscriptions/{subscriptionId}")
     @Operation(summary = "Link a credit pool to a subscription", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> linkPoolToSubscription(
@@ -234,7 +224,6 @@ public class CreditController {
                 ApiResponse.<Void>builder().success(true).build());
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/pools/{poolId}/subscriptions/{subscriptionId}")
     @Operation(summary = "Unlink a credit pool from a subscription", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> unlinkPoolFromSubscription(

@@ -7,9 +7,14 @@
           <div class="flex flex-col gap-0.5 min-w-0 group-data-[collapsible=icon]:hidden">
             <div class="flex items-baseline gap-2">
               <span class="font-semibold truncate leading-tight">Tanso</span>
-              <span class="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-none">{{ isObserveDemo ? 'Observe' : 'Platform' }}</span>
+              <span
+                class="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-zinc-600 dark:text-zinc-400 leading-none"
+                >Platform</span
+              >
             </div>
-            <span class="inline-flex items-center gap-1 text-xs font-medium leading-tight text-muted-foreground">
+            <span
+              class="inline-flex items-center gap-1 text-xs font-medium leading-tight text-muted-foreground"
+            >
               <span class="inline-flex h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
               Demo
             </span>
@@ -26,25 +31,14 @@
     </SidebarHeader>
 
     <SidebarContent>
-      <!-- Observe mode -->
-      <SidebarGroup v-if="isObserveDemo">
-        <SidebarMenu>
-          <SidebarMenuItem v-for="item in observeItems" :key="item.title">
-            <SidebarMenuButton as-child :is-active="isActive(item.to)" :tooltip="item.title">
-              <router-link :to="{ path: item.to, query: { mode: 'observe' } }">
-                <component :is="item.icon" />
-                <span>{{ item.title }}</span>
-              </router-link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarGroup>
-
-      <!-- Platform mode -->
-      <SidebarGroup v-else>
+      <SidebarGroup>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton as-child :is-active="isActive('/demo/getting-started')" tooltip="Getting Started">
+            <SidebarMenuButton
+              as-child
+              :is-active="isActive('/demo/getting-started')"
+              tooltip="Getting Started"
+            >
               <router-link to="/demo/getting-started">
                 <Rocket />
                 <span>Getting Started</span>
@@ -70,7 +64,7 @@
             </SidebarMenuButton>
           </SidebarMenuItem>
           <li class="h-px bg-sidebar-border mx-2" />
-          <SidebarMenuItem v-for="item in platformObserveItems" :key="item.title">
+          <SidebarMenuItem v-for="item in analyticsItems" :key="item.title">
             <SidebarMenuButton as-child :is-active="isActive(item.to)" :tooltip="item.title">
               <router-link :to="item.to">
                 <component :is="item.icon" />
@@ -100,7 +94,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   Sidebar,
@@ -134,16 +127,6 @@ import AppLogo from '@/shared/components/AppLogo.vue'
 const route = useRoute()
 const { toggleSidebar } = useSidebar()
 
-const isObserveDemo = computed(() => route.query.mode === 'observe')
-
-// Observe mode — matches real SideNav order
-const observeItems = [
-  { title: 'Getting Started', to: '/demo/sources', icon: Rocket },
-  { title: 'Analytics', to: '/demo/analytics', icon: BarChart3 },
-  { title: 'Events', to: '/demo/events', icon: Activity },
-  { title: 'Models', to: '/demo/models', icon: Cpu },
-]
-
 // Platform mode — happy path order
 const setupItems = [
   { title: 'Plans', to: '/demo/plans', icon: List },
@@ -157,7 +140,7 @@ const operateItems = [
   { title: 'Invoices', to: '/demo/invoices', icon: FileText }
 ]
 
-const platformObserveItems = [
+const analyticsItems = [
   { title: 'Analytics', to: '/demo/analytics', icon: BarChart3 },
   { title: 'Events', to: '/demo/events', icon: Activity },
   { title: 'Models', to: '/demo/models', icon: Cpu }

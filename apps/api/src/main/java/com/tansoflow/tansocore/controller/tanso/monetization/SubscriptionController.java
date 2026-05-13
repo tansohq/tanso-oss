@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -86,7 +85,6 @@ public class SubscriptionController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping()
     @Operation(summary = "Create subscription", description = "Creates a new subscription for a customer with a specific plan", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -103,7 +101,6 @@ public class SubscriptionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/{subscriptionUuid}")
     @Operation(summary = "Delete subscription", description = "Deletes a specific subscription by its UUID", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -117,7 +114,6 @@ public class SubscriptionController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PatchMapping("/{subscriptionUuid}")
     @Operation(summary = "Update subscription", description = "Modifies an existing subscription", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -136,7 +132,6 @@ public class SubscriptionController {
 
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/{subscriptionUuid}/activate")
     @Operation(summary = "Activate subscription", description = "Activates a draft subscription by marking its initial invoice as paid and granting entitlements", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -166,7 +161,6 @@ public class SubscriptionController {
                         .error(new com.tansoflow.tansocore.model.response.Error("Deactivate subscription is not yet implemented")).build());
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/{subscriptionUuid}/cancel")
     @Operation(summary = "Cancel subscription", description = "Cancels a subscription immediately or at end of billing period", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -180,7 +174,6 @@ public class SubscriptionController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/{subscriptionUuid}/scheduled-changes")
     @Operation(summary = "Cancel scheduled changes", description = "Cancels all scheduled plan changes for a subscription", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> cancelScheduledChanges(@AuthenticationPrincipal UserContext userContext,
@@ -189,7 +182,6 @@ public class SubscriptionController {
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/{subscriptionUuid}/scheduled-cancellation")
     @Operation(summary = "Cancel scheduled cancellation", description = "Cancels a scheduled cancellation for a subscription", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> cancelScheduledCancellation(@AuthenticationPrincipal UserContext userContext,

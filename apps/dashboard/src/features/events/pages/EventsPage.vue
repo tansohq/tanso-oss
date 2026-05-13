@@ -158,7 +158,7 @@
 
     <!-- Filters -->
     <div v-if="showFilters" class="flex flex-wrap items-end gap-3 mb-4">
-      <div v-if="!isObserveMode" class="flex flex-col gap-1.5">
+      <div class="flex flex-col gap-1.5">
         <label class="text-xs text-muted-foreground">Event Type</label>
         <Select v-model="filterEventType" @update:model-value="onFilterChange">
           <SelectTrigger class="w-[200px] h-8">
@@ -168,33 +168,6 @@
             <SelectItem value="__all__">All Events</SelectItem>
             <SelectItem value="CLIENT_TRACKED">Usage Events</SelectItem>
             <SelectItem value="ENTITLEMENT_CHECKED">Entitlement Checks</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div v-if="isObserveMode" class="flex flex-col gap-1.5">
-        <label class="text-xs text-muted-foreground">Model</label>
-        <Input
-          v-model="filterModel"
-          placeholder="Filter by model..."
-          class="w-[180px] h-8"
-          @input="onFilterChange"
-        />
-      </div>
-
-      <div v-if="isObserveMode" class="flex flex-col gap-1.5">
-        <label class="text-xs text-muted-foreground">Provider</label>
-        <Select v-model="filterModelProvider" @update:model-value="onFilterChange">
-          <SelectTrigger class="w-[160px] h-8">
-            <SelectValue placeholder="All providers" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">All providers</SelectItem>
-            <SelectItem value="OpenAI">OpenAI</SelectItem>
-            <SelectItem value="Anthropic">Anthropic</SelectItem>
-            <SelectItem value="Google">Google</SelectItem>
-            <SelectItem value="Cohere">Cohere</SelectItem>
-            <SelectItem value="Mistral">Mistral</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -766,7 +739,6 @@ import { queryClient } from '@/lib/queryClient'
 import { useCustomersQuery } from '@/features/customers/queries'
 import { usePlansQuery } from '@/features/plans/queries'
 import { useFeaturesQuery } from '@/features/features/queries'
-import { useAccountSettingsQuery } from '@/features/integrations/queries'
 import { useAuthStore } from '@/stores/auth'
 import { getDateRange, getPresetLabel, type EventsPeriodPreset } from '@/shared/utils/datePresets'
 import { formatDateTime, formatCost } from '@/lib/formatters'
@@ -778,8 +750,6 @@ const route = useRoute()
 const { isDemo } = useDemoPrefix()
 const authStore = isDemo.value ? { logout: () => {} } : useAuthStore()
 const { track } = useTracking()
-const { data: settingsData } = useAccountSettingsQuery()
-const isObserveMode = computed(() => settingsData.value?.data?.platformMode === 'OBSERVE')
 const searchQuery = ref('')
 const currentPage = ref(0)
 const pageSize = ref(25)
@@ -1229,10 +1199,7 @@ const DEMO_EVENTS: Event[] = (() => {
 })()
 
 const events = computed(() => {
-  const raw = isDemo.value ? DEMO_EVENTS : (data.value?.data?.items ?? [])
-  // In Observe mode, hide entitlement checks — they have no cost/model data
-  if (isObserveMode.value) return raw.filter((e: Event) => e.eventType !== 'ENTITLEMENT_CHECKED')
-  return raw
+  return isDemo.value ? DEMO_EVENTS : (data.value?.data?.items ?? [])
 })
 
 // Column configuration (must be after `events` computed)
@@ -1246,9 +1213,7 @@ const BUILT_IN_COLUMNS: Record<string, string> = {
   margin: 'Margin'
 }
 const BUILT_IN_IDS = Object.keys(BUILT_IN_COLUMNS)
-const DEFAULT_COLUMNS = isObserveMode.value
-  ? BUILT_IN_IDS.filter((id) => id !== 'type')
-  : [...BUILT_IN_IDS]
+const DEFAULT_COLUMNS = [...BUILT_IN_IDS]
 
 const COLUMN_PREFS_KEY = 'tanso_events_columns_v2'
 const visibleColumnIds = ref<string[]>(loadColumnPrefs())

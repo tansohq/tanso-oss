@@ -224,7 +224,7 @@ public class EventServiceImpl implements EventService {
                         .ifPresentOrElse(
                                 f -> eventDto.setFeatureId(f.getId()),
                                 () -> {
-                                    // Auto-create feature for Observe users sending events with featureKey
+                                    // Auto-create feature when sending events with unknown featureKey
                                     com.tansoflow.tansocore.entity.Feature autoFeature = autoCreateFeature(account, eventDto.getFeatureKey());
                                     if (autoFeature != null) {
                                         eventDto.setFeatureId(autoFeature.getId());

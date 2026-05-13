@@ -1,8 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import {
-  updateAccountSettings, registerStripeApiKey, deleteStripeKeys, registerStripeWebhook,
-  discoverStripeObjects, startStripeImport, startAutoCreateStripeImport, mapStripeProduct,
-  syncStripeObserve
+  updateAccountSettings,
+  registerStripeApiKey,
+  deleteStripeKeys,
+  registerStripeWebhook,
+  discoverStripeObjects,
+  startStripeImport,
+  startAutoCreateStripeImport,
+  mapStripeProduct
 } from './api'
 import type { UpdateAccountSetting } from './schemas'
 import type { StripeImportStartRequest } from './api'
@@ -53,8 +58,11 @@ export function useRegisterStripeWebhookMutation() {
 
 export function useDiscoverStripeMutation() {
   return useMutation({
-    mutationFn: (request: { includeProducts: boolean; includeCustomers: boolean; includeSubscriptions: boolean }) =>
-      discoverStripeObjects(request)
+    mutationFn: (request: {
+      includeProducts: boolean
+      includeCustomers: boolean
+      includeSubscriptions: boolean
+    }) => discoverStripeObjects(request)
   })
 }
 
@@ -80,19 +88,6 @@ export function useStartAutoCreateStripeImportMutation() {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['plans'] })
       queryClient.invalidateQueries({ queryKey: ['features'] })
-    }
-  })
-}
-
-export function useSyncStripeObserveMutation() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: () => syncStripeObserve(),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['analytics'] })
-      queryClient.invalidateQueries({ queryKey: ['customers'] })
-      queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
-      queryClient.invalidateQueries({ queryKey: ['plans'] })
     }
   })
 }

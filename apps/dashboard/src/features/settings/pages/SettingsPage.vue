@@ -10,11 +10,9 @@
     <Tabs :model-value="activeTab" @update:model-value="handleTabChange">
       <TabsList>
         <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger v-if="!isObserveMode" value="integrations">Integrations</TabsTrigger>
+        <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="data-import">Data Import</TabsTrigger>
-        <TabsTrigger v-if="isDeveloperEnvironment && !isObserveMode" value="developer"
-          >Developer</TabsTrigger
-        >
+        <TabsTrigger v-if="isDeveloperEnvironment" value="developer">Developer</TabsTrigger>
       </TabsList>
 
       <!-- General Tab -->
@@ -30,91 +28,6 @@
               <span class="text-xs text-muted-foreground">Role</span>
               <span class="text-sm font-medium">{{ displayRole }}</span>
             </div>
-          </div>
-
-          <div v-if="accountSettings" class="border-t mt-4 pt-4">
-            <h3 class="text-base font-medium mb-3">Platform Mode</h3>
-            <div class="flex items-center gap-2">
-              <Badge variant="outline" class="text-xs">
-                {{
-                  accountSettings.platformMode === 'OBSERVE' ? 'Tanso Observe' : 'Tanso Platform'
-                }}
-              </Badge>
-              <Dialog
-                v-if="accountSettings.platformMode === 'OBSERVE'"
-                v-model:open="showUpgradeDialog"
-              >
-                <DialogTrigger as-child>
-                  <Button variant="link" size="sm" class="text-xs h-auto p-0">
-                    Upgrade to Tanso Platform
-                  </Button>
-                </DialogTrigger>
-                <DialogContent class="max-w-sm">
-                  <DialogHeader>
-                    <DialogTitle>Upgrade to Tanso Platform</DialogTitle>
-                    <DialogDescription>
-                      This will unlock the full monetization platform.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div class="text-sm space-y-3">
-                    <p class="font-medium">What changes:</p>
-                    <ul class="space-y-1.5 text-muted-foreground">
-                      <li class="flex items-start gap-2">
-                        <Check class="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        Plans, features, and pricing rules
-                      </li>
-                      <li class="flex items-start gap-2">
-                        <Check class="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        Subscriptions and entitlement enforcement
-                      </li>
-                      <li class="flex items-start gap-2">
-                        <Check class="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        Credits and usage caps
-                      </li>
-                      <li class="flex items-start gap-2">
-                        <Check class="w-4 h-4 text-primary mt-0.5 shrink-0" />
-                        Stripe integration and invoicing
-                      </li>
-                    </ul>
-                    <p class="text-xs text-muted-foreground">
-                      Your existing events, customers, and analytics are preserved. To switch back
-                      to Observe, contact support.
-                    </p>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" @click="showUpgradeDialog = false">Cancel</Button>
-                    <Button
-                      :disabled="updateSettingsMutation.isPending.value"
-                      @click="upgradeToPlatform"
-                    >
-                      <Loader2
-                        v-if="updateSettingsMutation.isPending.value"
-                        class="mr-2 h-4 w-4 animate-spin"
-                      />
-                      Upgrade
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-            <p class="text-xs text-muted-foreground mt-1.5">
-              {{
-                accountSettings.platformMode === 'OBSERVE'
-                  ? 'Event ingestion and analytics only.'
-                  : 'Full monetization platform with billing, subscriptions, and entitlements.'
-              }}
-              <a
-                v-if="accountSettings.platformMode === 'FULL'"
-                href="#"
-                class="text-primary hover:underline ml-1"
-                >Contact us</a
-              >
-              <span
-                v-if="accountSettings.platformMode === 'FULL'"
-                class="text-xs text-muted-foreground"
-                >to switch to Observe.</span
-              >
-            </p>
           </div>
 
           <div class="border-t mt-4 pt-4">
@@ -189,7 +102,7 @@
       </TabsContent>
 
       <!-- Integrations Tab (Platform only) -->
-      <TabsContent v-if="!isObserveMode" value="integrations" class="space-y-6 mt-6">
+      <TabsContent value="integrations" class="space-y-6 mt-6">
         <div class="bg-card rounded-lg border shadow-sm p-6">
           <div class="flex items-center gap-3 mb-4">
             <CreditCard class="w-5 h-5 text-muted-foreground" />
@@ -215,7 +128,10 @@
               <Button
                 variant="outline"
                 size="sm"
-                @click="showImportConfirmDialog = true; track('stripe_import_started')"
+                @click="
+                  showImportConfirmDialog = true
+                  track('stripe_import_started')
+                "
               >
                 Import from Stripe
               </Button>
@@ -310,7 +226,10 @@
               Connect Stripe to sync products, customers, and subscriptions.
             </p>
             <Button
-              @click="showStripeModal = true; track('stripe_connection_started')"
+              @click="
+                showStripeModal = true
+                track('stripe_connection_started')
+              "
               >Connect Stripe</Button
             >
           </div>
@@ -332,7 +251,11 @@
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
-                @click="showImportConfirmDialog = false; stripeModalSkipToDiscovery = true; showStripeModal = true"
+                @click="
+                  showImportConfirmDialog = false
+                  stripeModalSkipToDiscovery = true
+                  showStripeModal = true
+                "
               >
                 Continue
               </Button>
@@ -500,12 +423,8 @@
         </div>
       </TabsContent>
 
-      <!-- Developer Tab (sandbox, staging, local — Platform only) -->
-      <TabsContent
-        v-if="isDeveloperEnvironment && !isObserveMode"
-        value="developer"
-        class="space-y-6 mt-6"
-      >
+      <!-- Developer Tab (sandbox, staging, local) -->
+      <TabsContent v-if="isDeveloperEnvironment" value="developer" class="space-y-6 mt-6">
         <div class="bg-card rounded-lg border shadow-sm p-6">
           <h3 class="text-base font-medium mb-2">Submit Test Event</h3>
           <p class="text-sm text-muted-foreground mb-4">
@@ -528,7 +447,6 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -551,20 +469,10 @@ import {
   Plus,
   CheckCircle2,
   HelpCircle,
-  Check,
   Upload,
   FileText,
   X
 } from 'lucide-vue-next'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogTrigger
-} from '@/components/ui/dialog'
 import { useAuthStore } from '@/stores/auth'
 import CopyButton from '@/components/CopyButton.vue'
 import { useAccountApiKeyQuery, useSubscriptionStatusQuery } from '@/features/account/queries'
@@ -618,7 +526,7 @@ const isDeveloperEnvironment = computed(() => environmentStore.isDeveloperEnviro
 const activeTab = computed(() => {
   const tab = route.query.tab as string | undefined
   if (tab === 'data-import') return tab
-  if ((tab === 'integrations' || tab === 'developer') && !isObserveMode.value) return tab
+  if (tab === 'integrations' || tab === 'developer') return tab
   return 'general'
 })
 
@@ -628,7 +536,6 @@ function handleTabChange(value: string | number) {
 }
 
 const accountSettings = computed(() => settingsData.value?.data)
-const isObserveMode = computed(() => accountSettings.value?.platformMode === 'OBSERVE')
 
 // Data import state
 const importFileInputRef = ref<HTMLInputElement | null>(null)
@@ -794,19 +701,6 @@ const hasUrlValidationErrors = computed(
 // Mutations
 const deleteKeysMutation = useDeleteStripeKeysMutation()
 const updateSettingsMutation = useUpdateAccountSettingsMutation()
-const showUpgradeDialog = ref(false)
-
-function upgradeToPlatform() {
-  updateSettingsMutation.mutate(
-    { platformMode: 'FULL' },
-    {
-      onSuccess: () => {
-        showUpgradeDialog.value = false
-        window.location.reload()
-      }
-    }
-  )
-}
 
 function handleStripeConnected() {
   // Queries are invalidated by the modal on close

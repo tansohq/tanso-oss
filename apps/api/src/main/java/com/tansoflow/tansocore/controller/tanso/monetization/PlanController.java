@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.monetization.PlanFeatureLinkedDto;
 import com.tansoflow.tansocore.model.monetization.request.UuidListRequest;
@@ -61,7 +60,6 @@ public class PlanController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PatchMapping("/{uuid}")
     @Operation(summary = "Update plan", description = "Updates an existing plan record", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -80,7 +78,6 @@ public class PlanController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping
     @Operation(summary = "Create plan", description = "Creates a new plan for the authenticated account", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -97,7 +94,6 @@ public class PlanController {
         return ResponseEntity.status(HttpStatus.CREATED).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/{planId}")
     @Operation(summary = "Delete plan", description = "Deletes a specific plan by ID", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -111,7 +107,6 @@ public class PlanController {
         return ResponseEntity.status(HttpStatus.OK).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping
     @Operation(summary = "Bulk delete plans", description = "Deletes a set of existing plans by their IDs", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {

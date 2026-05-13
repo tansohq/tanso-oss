@@ -1,6 +1,5 @@
 package com.tansoflow.tansocore.controller.client;
 
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest;
@@ -43,7 +42,6 @@ public class SubscriptionClientController {
     private final SubscriptionService subscriptionService;
 
     // TODO: Needs to return hosted invoice url in meta data
-    @RequiresFullPlatformMode
     @PostMapping()
     @Operation(summary = "Create subscription", description = "Adds a new subscription to a customer with a specific plan", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -62,7 +60,6 @@ public class SubscriptionClientController {
         return ResponseEntity.status(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/cancellation/{subscriptionId}")
     @Operation(summary = "Cancel subscription", description = "Cancels a customer subscription immediately or at the end of the period", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -79,7 +76,6 @@ public class SubscriptionClientController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/cancellation/{subscriptionId}/scheduled")
     @Operation(summary = "Cancel scheduled cancellation", description = "Cancels a previously scheduled subscription cancellation", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -93,7 +89,6 @@ public class SubscriptionClientController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/{subscriptionId}/plan-change")
     @Operation(summary = "Change plan", description = "Changes a customer subscription to a new plan by upgrading or downgrading", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -115,7 +110,6 @@ public class SubscriptionClientController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @DeleteMapping("/{subscriptionId}/plan-change/scheduled")
     @Operation(summary = "Cancel scheduled plan change", description = "Cancels all scheduled changes for a subscription", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {

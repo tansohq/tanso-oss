@@ -1,5 +1,10 @@
 import { api } from '@/lib/api'
-import type { LoginCredentials, LoginResponse, SignupRequest, OnboardingPlansResponse } from './types'
+import type {
+  LoginCredentials,
+  LoginResponse,
+  SignupRequest,
+  OnboardingPlansResponse
+} from './types'
 
 export async function login(credentials: LoginCredentials): Promise<LoginResponse> {
   return api.post<LoginResponse>('/public/v1/login', credentials)

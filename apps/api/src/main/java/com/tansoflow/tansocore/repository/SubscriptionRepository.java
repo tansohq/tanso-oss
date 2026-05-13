@@ -66,7 +66,7 @@ public interface SubscriptionRepository extends JpaRepository<Subscription, UUID
      AND NOT EXISTS (
        SELECT 1 FROM AccountSetting acs
        WHERE acs.accounts.id = s.account.id
-         AND (acs.stripeMode IN ('FULL_SYNC', 'STRIPE_INTEGRATION', 'STRIPE_DRIVEN') OR acs.platformMode = 'OBSERVE')
+         AND acs.stripeMode IN ('FULL_SYNC', 'STRIPE_INTEGRATION', 'STRIPE_DRIVEN')
      )
    """)
     Page<Subscription> findActiveNeedingRollover(Instant now, Pageable pageable);
