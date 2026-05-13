@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260331-3"
+      author: "kat"
+      changes:
+        - createTable:
+            tableName: signup_email_tracker
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    unique: true
+              - column:
+                  name: email
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: signed_up_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: welcome_sent_at
+                  type: timestamp with time zone
+              - column:
+                  name: followup_sent_at
+                  type: timestamp with time zone
+        - createIndex:
+            indexName: idx_signup_email_tracker_pending_welcome
+            tableName: signup_email_tracker
+            columns:
+              - column:
+                  name: welcome_sent_at
+              - column:
+                  name: signed_up_at
+        - createIndex:
+            indexName: idx_signup_email_tracker_pending_followup
+            tableName: signup_email_tracker
+            columns:
+              - column:
+                  name: followup_sent_at
+              - column:
+                  name: signed_up_at

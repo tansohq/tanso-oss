@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260331-1
+      author: tanso
+      comment: "Increase cost_amount precision from scale 2 to 6 — sub-cent AI costs (e.g. $0.0037) were truncated to $0.00"
+      changes:
+        - modifyDataType:
+            tableName: events
+            columnName: cost_amount
+            newDataType: numeric(18, 6)

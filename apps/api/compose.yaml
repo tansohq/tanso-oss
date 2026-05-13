@@ -1,0 +1,50 @@
+# docker compose file for backend service
+# author: DOUGLAS BAEK
+
+services:
+  backend-webservice:
+    container_name: tanso-core-backend
+    restart: always
+    build:
+      context: .                    # directory where Dockerfile is located
+      args:
+        PROJECT_NAME: tanso-core
+      dockerfile: Dockerfile.deploy          # name of Dockerfile to execute
+    image: tanso-core:latest             # image name
+    platform: linux/amd64
+    ports:
+      - 8081:8080
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/core_db
+      - SPRING_DATASOURCE_USERNAME=dev_user
+      - SPRING_DATASOURCE_PASSWORD=dev_pass
+    networks:
+      - local-tanso-dev-network
+    depends_on:
+      - db
+
+  ####################################
+
+  db:
+    image: postgres:17.5
+    container_name: dev-tanso-db-local-run
+    restart: always
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: core_db
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_pass
+    expose:
+      - '5432'
+    volumes:
+      - tanso-dev:/var/lib/postgresql/data
+      - ./scripts/database-seed:/docker-entrypoint-initdb.d    
+    networks:
+      - local-tanso-dev-network
+
+networks:
+  local-tanso-dev-network:
+
+volumes:
+  tanso-dev:

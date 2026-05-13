@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250803-3
+      author: doug
+      changes:
+        - addColumn:
+            tableName: stripe_subscriptions
+            columns:
+              - column:
+                  name: stripe_price_id
+                  type: varchar(100)
+                  constraints:
+                    nullable: true

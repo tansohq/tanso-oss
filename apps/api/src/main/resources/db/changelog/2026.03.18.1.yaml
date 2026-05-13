@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260318-1"
+      author: dbaek
+      changes:
+        - dropColumn:
+            tableName: plans
+            columnName: billing_model

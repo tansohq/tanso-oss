@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260204-1"
+      author: tanso
+      changes:
+        - addColumn:
+            tableName: plans
+            columns:
+              - column:
+                  name: metadata
+                  type: jsonb
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+        - addColumn:
+            tableName: features
+            columns:
+              - column:
+                  name: metadata
+                  type: jsonb
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false

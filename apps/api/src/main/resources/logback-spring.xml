@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <springProperty scope="context" name="LOG_DIRECTORY" source="logging.file.path"/>
+    <property name="LOG_NAME" value="tanso-core"/>
+    <property name="LOG_PREFIX" value="backend"/>
+
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>
+                %d{ISO8601} %magenta([%thread]) %highlight(%-5level) %logger{36}.%M - ${LOG_PREFIX}: %msg
+                [requestId=%X{requestId} userId=%X{userId} accountId=%X{accountId} errorId=%X{errorId}]%n
+            </pattern>
+        </encoder>
+    </appender>
+
+    <appender name="STDOUT_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeMdcKeyName>requestId</includeMdcKeyName>
+            <includeMdcKeyName>userId</includeMdcKeyName>
+            <includeMdcKeyName>accountId</includeMdcKeyName>
+            <includeMdcKeyName>errorId</includeMdcKeyName>
+            <includeMdcKeyName>requestPath</includeMdcKeyName>
+            <includeMdcKeyName>requestMethod</includeMdcKeyName>
+            <includeMdcKeyName>clientIp</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <appender name="FILE-LOGGER" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIRECTORY}/${LOG_NAME}.log</file>
+        <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
+            <pattern>
+                %d{ISO8601} [%thread] %-5level %logger{36}.%M - ${LOG_PREFIX}: %msg
+                [requestId=%X{requestId} userId=%X{userId} accountId=%X{accountId} errorId=%X{errorId}]%n
+            </pattern>
+        </encoder>
+
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <!-- rollover daily -->
+            <fileNamePattern>${LOG_DIRECTORY}/${LOG_NAME}.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+            <maxHistory>5</maxHistory> <!-- days -->
+
+            <maxFileSize>10MB</maxFileSize>
+
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Production / Sandbox: JSON console only (for log aggregators) -->
+    <springProfile name="production | sandbox">
+        <logger name="com.zaxxer" level="info"/>
+        <logger name="com.tansoflow" level="info"/>
+        <logger name="org.springframework" level="warn"/>
+        <root level="info">
+            <appender-ref ref="STDOUT_JSON" additivity="false"/>
+        </root>
+    </springProfile>
+
+    <!-- No console log: file only -->
+    <springProfile name="no-console-log">
+        <logger name="com.zaxxer" level="info"/>
+        <logger name="com.tansoflow" level="info"/>
+        <logger name="org.springframework" level="warn"/>
+        <root level="info">
+            <appender-ref ref="FILE-LOGGER" additivity="false"/>
+        </root>
+    </springProfile>
+
+    <!-- Default: plain text console + file (local development) -->
+    <springProfile name="default">
+        <logger name="com.zaxxer" level="info"/>
+        <logger name="com.tansoflow" level="info"/>
+        <logger name="org.springframework" level="warn"/>
+        <root level="info">
+            <appender-ref ref="STDOUT" additivity="false"/>
+            <appender-ref ref="FILE-LOGGER" additivity="false"/>
+        </root>
+    </springProfile>
+
+    <!-- Fallback for profiles not matching above (e.g., test, dev) -->
+    <springProfile name="!production &amp; !sandbox &amp; !no-console-log &amp; !default">
+        <logger name="com.zaxxer" level="info"/>
+        <logger name="com.tansoflow" level="info"/>
+        <logger name="org.springframework" level="warn"/>
+        <root level="info">
+            <appender-ref ref="STDOUT" additivity="false"/>
+            <appender-ref ref="FILE-LOGGER" additivity="false"/>
+        </root>
+    </springProfile>
+
+</configuration>

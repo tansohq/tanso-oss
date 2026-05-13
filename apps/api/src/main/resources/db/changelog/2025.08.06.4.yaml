@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250806-4
+      author: doug
+      changes:
+        - renameTable:
+            oldTableName: customers_plans
+            newTableName: subscriptions
+        - dropPrimaryKey:
+            tableName: subscriptions
+        - addColumn:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+              - column:
+                  name: is_active
+                  type: boolean
+                  defaultValueBoolean: true
+              - column:
+                  name: interval
+                  type: varchar(64)
+              - column:
+                  name: type
+                  type: varchar(64)
+        - dropColumn:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: start_date
+              - column:
+                  name: end_date
+        - addPrimaryKey:
+            tableName: subscriptions
+            columnNames: subscription_id
+            constraintName: pk_subscriptions

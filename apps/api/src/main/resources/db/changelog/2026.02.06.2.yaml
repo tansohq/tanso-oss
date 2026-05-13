@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260206-2"
+      author: tanso
+      changes:
+        - createTable:
+            tableName: stripe_prices
+            columns:
+              - column:
+                  name: stripe_price_id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: plan_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_prices_plan
+                    references: plans(plan_id)
+              - column:
+                  name: stripe_product_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_prices_stripe_product
+                    references: stripe_products(stripe_product_id)
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_prices_account
+                    references: accounts(account_id)
+              - column:
+                  name: stripe_price_external_id
+                  type: text
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: now()
+              - column:
+                  name: modified_at
+                  type: timestamp with time zone

@@ -1,0 +1,124 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260116-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+
+              # ------------------------
+              # USAGE (what happened)
+              # ------------------------
+              - column:
+                  name: usage_amount
+                  type: numeric(18,8)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: usage_unit
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: usage_input_amount
+                  type: numeric(18,8)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: usage_output_amount
+                  type: numeric(18,8)
+                  constraints:
+                    nullable: true
+
+              # ------------------------
+              # COST (tenant COGS)
+              # ------------------------
+              - column:
+                  name: cost_amount
+                  type: numeric(18,8)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: cost_unit
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: cost_source
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+
+              # ------------------------
+              # CHARGE (billing impact)
+              # ------------------------
+              - column:
+                  name: charge_amount
+                  type: numeric(18,8)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: charge_unit
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: charge_source
+                  type: varchar(32)
+                  constraints:
+                    nullable: true
+
+        # Optional analytics index (safe even if sparsely populated)
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_event_type_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: event_type }
+              - column: { name: occurred_at }
+
+      rollback:
+        - dropIndex:
+            tableName: events
+            indexName: idx_events_account_event_type_occurred_at
+
+        - dropColumn:
+            tableName: events
+            columnName: charge_source
+        - dropColumn:
+            tableName: events
+            columnName: charge_unit
+        - dropColumn:
+            tableName: events
+            columnName: charge_amount
+
+        - dropColumn:
+            tableName: events
+            columnName: cost_source
+        - dropColumn:
+            tableName: events
+            columnName: cost_unit
+        - dropColumn:
+            tableName: events
+            columnName: cost_amount
+
+        - dropColumn:
+            tableName: events
+            columnName: usage_output_amount
+        - dropColumn:
+            tableName: events
+            columnName: usage_input_amount
+        - dropColumn:
+            tableName: events
+            columnName: usage_unit
+        - dropColumn:
+            tableName: events
+            columnName: usage_amount

@@ -1,0 +1,93 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251122-1"
+      author: doug
+      changes:
+        - createTable:
+            tableName: entitlement_reconcile_jobs
+            remarks: "Async reconciliation tasks for plan/feature → entitlements"
+            columns:
+              - column:
+                  name: job_id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_ent_rec_jobs_accounts
+                    references: accounts(account_id)
+
+              - column:
+                  name: plan_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_ent_rec_jobs_plans
+                    references: plans(plan_id)
+
+              - column:
+                  name: feature_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_ent_rec_jobs_features
+                    references: features(feature_id)
+
+              - column:
+                  name: status
+                  type: varchar(32)
+                  defaultValue: 'PENDING'
+                  constraints:
+                    nullable: false
+              # Allowed values:
+              # PENDING, IN_PROGRESS, COMPLETED, FAILED
+
+              - column:
+                  name: error_message
+                  type: text
+
+              - column:
+                  name: attempts
+                  type: int
+                  defaultValueNumeric: 0
+
+              - column:
+                  name: processed_count
+                  type: int
+                  defaultValueNumeric: 0
+
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+
+
+        # Partial UNIQUE index: only one active (PENDING/IN_PROGRESS) job per (account, plan, feature)
+        - sql:
+            dbms: postgresql
+            sql: >
+              CREATE UNIQUE INDEX uq_ent_rec_jobs_active
+              ON entitlement_reconcile_jobs (account_id, plan_id, feature_id)
+              WHERE status IN ('PENDING','IN_PROGRESS');
+
+        # Optional helper index for worker queries (status + created_at)
+        - sql:
+            dbms: postgresql
+            sql: >
+              CREATE INDEX idx_ent_rec_jobs_status_created
+              ON entitlement_reconcile_jobs (status, created_at);

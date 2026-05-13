@@ -1,0 +1,79 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250614-1
+      author: doug
+      changes:
+        - createTable:
+            tableName: plans
+            columns:
+              - column:
+                  name: plan_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: key
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: name
+                  type: VARCHAR(150)
+                  constraints:
+                    nullable: false
+                    unique: true
+
+              - column:
+                  name: price_in_cents
+                  type: INTEGER
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: plan_type
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: description
+                  type: TEXT
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: interval
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_plans_accounts
+                    references: accounts(account_id) ON DELETE CASCADE
+
+        - addUniqueConstraint:
+            tableName: plans
+            columnNames: key, account_id
+            constraintName: uc_plans_key_account

@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260320-1
+      author: doug
+      changes:
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: source
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: true
+        - sql:
+            sql: "UPDATE customers SET source = 'MANUAL' WHERE source IS NULL"
+        - addUniqueConstraint:
+            tableName: customers
+            columnNames: external_client_customer_id, account_id
+            constraintName: uk_customer_reference_account

@@ -1,0 +1,21 @@
+# adds account_id to users and customers table to show who owns it
+databaseChangeLog:
+  - changeSet:
+      id: 20250714-1
+      author: doug
+      changes:
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: customers
+            baseColumnNames: account_id
+            constraintName: fk_customers_account_id
+            referencedTableName: accounts
+            referencedColumnNames: account_id
+            onDelete: CASCADE

@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260320-2"
+      author: dbaek
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: default_cost_config
+                  type: jsonb

@@ -1,0 +1,31 @@
+app:
+  stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:http://localhost:8080/public/stripe/ingest/webhook}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  admin-email: ${ADMIN_EMAIL:admin@localhost}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/tanso}
+    username: ${SPRING_DATASOURCE_USERNAME:tanso}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme}
+
+  liquibase:
+    contexts: docker
+
+  jpa:
+    properties:
+      hibernate:
+        show_sql: false
+
+logging:
+  level:
+    liquibase: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.web: INFO

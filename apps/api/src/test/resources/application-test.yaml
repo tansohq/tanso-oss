@@ -1,0 +1,7 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/core_db
+    username: dev_user
+    password: dev_pass
+  liquibase:
+    enabled: false   # or true, if you want it during tests

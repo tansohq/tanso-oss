@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251118-2"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: stripe_products
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_products_accounts
+                    references: accounts(account_id)
+        - addColumn:
+            tableName: stripe_subscriptions
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_subscriptions_accounts
+                    references: accounts(account_id)
+        - addColumn:
+            tableName: stripe_webhooks
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_webhooks_accounts
+                    references: accounts(account_id)

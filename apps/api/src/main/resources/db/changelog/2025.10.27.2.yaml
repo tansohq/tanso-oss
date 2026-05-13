@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251027-2"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: invoices
+            columns:
+              - column: { name: invoice_period_start, type: timestamp }
+              - column: { name: invoice_period_end, type: timestamp }

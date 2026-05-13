@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250806-3
+      author: doug
+      changes:
+        - dropColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: address
+        - dropColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: address
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: address_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_customers_address
+                    references: addresses(address_id)
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: address_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_users_address
+                    references: addresses(address_id)

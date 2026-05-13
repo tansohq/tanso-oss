@@ -1,0 +1,162 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260218-1-create-credit-models"
+      author: "tanso"
+      changes:
+        - createTable:
+            tableName: credit_models
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_models_account
+                    references: accounts(account_id)
+              - column:
+                  name: name
+                  type: varchar(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: denomination
+                  type: varchar(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: text
+              - column:
+                  name: hard_limit
+                  type: boolean
+                  defaultValueBoolean: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rollover_policy
+                  type: varchar(20)
+                  defaultValue: 'NONE'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rollover_cap
+                  type: decimal(18,4)
+              - column:
+                  name: metadata
+                  type: jsonb
+                  defaultValue: '{}'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+              - column:
+                  name: modified_at
+                  type: timestamptz
+              - column:
+                  name: deleted_at
+                  type: timestamptz
+        - addUniqueConstraint:
+            tableName: credit_models
+            columnNames: account_id, denomination
+            constraintName: uq_credit_models_account_denomination
+
+  - changeSet:
+      id: "20260218-2-create-plan-credit-allocations"
+      author: "tanso"
+      changes:
+        - createTable:
+            tableName: plan_credit_allocations
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+              - column:
+                  name: plan_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_pca_plan
+                    references: plans(plan_id)
+              - column:
+                  name: credit_model_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_pca_credit_model
+                    references: credit_models(id)
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_pca_account
+                    references: accounts(account_id)
+              - column:
+                  name: credit_amount
+                  type: decimal(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: grant_expires_months
+                  type: int
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+              - column:
+                  name: modified_at
+                  type: timestamptz
+              - column:
+                  name: deleted_at
+                  type: timestamptz
+        - addUniqueConstraint:
+            tableName: plan_credit_allocations
+            columnNames: plan_id, credit_model_id
+            constraintName: uq_pca_plan_credit_model
+
+  - changeSet:
+      id: "20260218-3-add-credit-model-fks"
+      author: "tanso"
+      changes:
+        - addColumn:
+            tableName: plan_feature_rules
+            columns:
+              - column:
+                  name: credit_model_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_pfr_credit_model
+                    references: credit_models(id)
+        - addColumn:
+            tableName: credit_pools
+            columns:
+              - column:
+                  name: credit_model_id
+                  type: uuid
+                  constraints:
+                    foreignKeyName: fk_cp_credit_model
+                    references: credit_models(id)
+
+  - changeSet:
+      id: "20260218-4-fix-pca-unique-constraint-for-soft-delete"
+      author: "tanso"
+      changes:
+        - dropUniqueConstraint:
+            tableName: plan_credit_allocations
+            constraintName: uq_pca_plan_credit_model
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_pca_plan_credit_model
+              ON plan_credit_allocations (plan_id, credit_model_id)
+              WHERE deleted_at IS NULL

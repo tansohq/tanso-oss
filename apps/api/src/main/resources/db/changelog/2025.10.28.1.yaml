@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251028-1"
+      author: doug
+      changes:
+        - dropColumn:
+            tableName: features
+            columnName: type

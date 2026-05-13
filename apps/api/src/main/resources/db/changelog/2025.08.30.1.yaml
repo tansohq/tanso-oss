@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250830-1
+      author: doug
+      changes:
+        - addColumn:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: revoked_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+        - createIndex:
+            indexName: idx_entitlements_revoked_at
+            tableName: entitlements
+            columns:
+              - column:
+                  name: revoked_at

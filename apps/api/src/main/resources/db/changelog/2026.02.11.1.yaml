@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260211-1"
+      author: tanso
+      changes:
+        - dropColumn:
+            tableName: account_api_keys
+            columnName: key_prefix

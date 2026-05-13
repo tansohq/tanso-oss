@@ -1,0 +1,107 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251126-2"
+      author: "doug"
+      changes:
+
+        - createTable:
+            tableName: subscription_scheduled_changes
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: "gen_random_uuid()"
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    referencedTableName: subscriptions
+                    referencedColumnNames: subscription_id
+                    foreignKeyName: fk_ssc_subscription
+
+              - column:
+                  name: from_plan_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    referencedTableName: plans
+                    referencedColumnNames: plan_id
+                    foreignKeyName: fk_ssc_from_plan
+
+              - column:
+                  name: to_plan_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    referencedTableName: plans
+                    referencedColumnNames: plan_id
+                    foreignKeyName: fk_ssc_to_plan
+
+              - column:
+                  name: adjustment_invoice_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    referencedTableName: invoices
+                    referencedColumnNames: invoice_id
+                    foreignKeyName: fk_ssc_adjustment_invoice
+
+              - column:
+                  name: status
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: effective_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: "NOW()"
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: "NOW()"
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: fulfilled_at
+                  type: timestamp
+
+        - addUniqueConstraint:
+            tableName: subscription_scheduled_changes
+            columnNames: adjustment_invoice_id
+            constraintName: uq_ssc_adjustment_invoice
+
+        - createIndex:
+            tableName: subscription_scheduled_changes
+            indexName: idx_ssc_subscription
+            columns:
+              - column:
+                  name: subscription_id
+
+        - createIndex:
+            tableName: subscription_scheduled_changes
+            indexName: idx_ssc_status
+            columns:
+              - column:
+                  name: status

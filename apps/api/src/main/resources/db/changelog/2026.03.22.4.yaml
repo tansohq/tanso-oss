@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260322-4
+      author: doug
+      changes:
+        - addDefaultValue:
+            tableName: account_settings
+            columnName: platform_mode
+            columnDataType: VARCHAR(20)
+            defaultValue: "OBSERVE"

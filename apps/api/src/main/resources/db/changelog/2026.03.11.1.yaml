@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260311-1
+      author: doug
+      changes:
+        - dropNotNullConstraint:
+            tableName: accounts
+            columnName: name
+            columnDataType: VARCHAR(255)

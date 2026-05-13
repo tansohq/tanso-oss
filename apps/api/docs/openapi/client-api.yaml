@@ -1,0 +1,907 @@
+openapi: 3.0.3
+info:
+  title: Tanso Core Client API
+  description: |
+    Welcome to the Tanso Core Client API documentation. This API allows client applications to manage customers, subscriptions, ingest events for billing, and check feature entitlements.
+    
+    ### Authentication
+    All requests to the Client API require a Bearer Token. You can obtain your API Key from the Tanso Dashboard.
+    Include the token in the `Authorization` header of your requests:
+    `Authorization: Bearer YOUR_API_KEY`
+  version: 0.2.3
+servers:
+  - url: https://api.tansoflow.com
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/v1/client/entitlements/{customerReferenceId}/{feature-key}:
+    get:
+      tags:
+        - Entitlements
+      summary: Check feature entitlement
+      description: Checks if a customer has entitlement for a specific feature by its key.
+      parameters:
+        - name: customerReferenceId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Your external reference ID for the customer.
+        - name: feature-key
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The unique key of the feature to check.
+      responses:
+        '200':
+          description: Successfully retrieved entitlement information.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementApiResponse'
+        '204':
+          description: Unable to locate customer.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/client/entitlements:
+    post:
+      tags:
+        - Entitlements
+      summary: Evaluate feature entitlement with optional usage simulation
+      description: Checks if a customer is entitled to a feature. When usage context is provided, simulates whether the proposed usage would be allowed without recording real usage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntitlementEvaluationRequest'
+      responses:
+        '200':
+          description: Successfully evaluated entitlement.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntitlementApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/client/events:
+    post:
+      tags:
+        - Events
+      summary: Ingest an event
+      description: Ingests a single usage event for billing or tracking. Supports idempotency via the `eventIdempotencyKey` in the body or the `X-Idempotency-Key` header.
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          schema:
+            type: string
+          description: Optional idempotency key to prevent duplicate processing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRequest'
+      responses:
+        '201':
+          description: Event successfully ingested.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '409':
+          description: Duplicate event detected (idempotency conflict).
+
+  /api/v1/client/customers:
+    post:
+      tags:
+        - Customers
+      summary: Create a customer
+      description: Creates a new customer record in Tanso.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '201':
+          description: Customer successfully created.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /api/v1/client/customers/{externalClientCustomerId}:
+    get:
+      tags:
+        - Customers
+      summary: Retrieve a customer
+      description: Retrieves details and active subscriptions for a customer by your external reference ID.
+      parameters:
+        - name: externalClientCustomerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved customer details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerClientApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Customer not found.
+
+  /api/v1/client/subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      summary: Create subscription
+      description: Subscribes a customer to a specific plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientSubscriptionRequest'
+      responses:
+        '201':
+          description: Subscription successfully created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscribedCustomerApiResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Invalid plan or customer ID.
+
+  /api/v1/client/subscriptions/cancellation/{subscriptionId}:
+    post:
+      tags:
+        - Subscriptions
+      summary: Cancel subscription
+      description: Cancels an active subscription.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: cancelMode
+          in: query
+          schema:
+            type: string
+            enum: [IMMEDIATELY, END_OF_PERIOD]
+            default: END_OF_PERIOD
+          description: When the cancellation should take effect.
+      responses:
+        '200':
+          description: Subscription successfully cancelled.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Subscription not found.
+
+  /api/v1/client/subscriptions/cancellation/{subscriptionId}/scheduled:
+    delete:
+      tags:
+        - Subscriptions
+      summary: Cancel scheduled cancellation
+      description: Reverses a scheduled "End of Period" cancellation.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Scheduled cancellation successfully reversed.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Subscription not found.
+
+  /api/v1/client/subscriptions/{subscriptionId}/plan-change:
+    post:
+      tags:
+        - Subscriptions
+      summary: Change plan
+      description: Upgrades or downgrades a customer's subscription plan.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientChangeSubscriptionRequest'
+      responses:
+        '200':
+          description: Plan change successfully processed or scheduled.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Subscription or plan not found.
+
+  /api/v1/client/subscriptions/{subscriptionId}/plan-change/scheduled:
+    delete:
+      tags:
+        - Subscriptions
+      summary: Cancel scheduled plan change
+      description: Cancels all scheduled changes for a subscription.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully cancelled scheduled changes.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          description: Subscription not found.
+
+  /api/v1/client/billing/invoices/{externalClientCustomerId}:
+    get:
+      tags:
+        - Billing
+      summary: List customer invoices
+      description: Retrieves all invoices for a customer using your external reference ID.
+      parameters:
+        - name: externalClientCustomerId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved invoices.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvoiceListApiResponse'
+
+  /api/v1/client/billing/invoices/{invoiceId}/mark-paid:
+    post:
+      tags:
+        - Billing
+      summary: Mark invoice as paid
+      description: Manually marks an invoice as paid and activates the associated subscription.
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice marked as paid successfully.
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Invoice not found.
+
+  /api/v1/client/billing/invoices/{subscriptionId}/stripe/checkout:
+    post:
+      tags:
+        - Billing
+      summary: Create Stripe checkout session
+      description: Generates a hosted Stripe Checkout URL for a subscription payment.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Checkout URL generated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeCheckoutApiResponse'
+
+  /api/v1/client/plans:
+    get:
+      tags:
+        - Plans
+      summary: Get client plans features
+      description: Retrieves the list of available plans and their features for the current account.
+      responses:
+        '200':
+          description: Successfully retrieved plan features.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanListApiResponse'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+  
+  responses:
+    UnauthorizedError:
+      description: Authentication failed.
+    ForbiddenError:
+      description: Access denied.
+  
+  schemas:
+    EntitlementApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          $ref: '#/components/schemas/EntitlementResponse'
+          description: Entitlement response data.
+    
+    EntitlementResponse:
+      type: object
+      properties:
+        referenceCustomerId:
+          type: string
+          description: The external client reference ID for the customer.
+          example: "cust_12345"
+        featureKey:
+          type: string
+          description: The key of the feature being checked.
+          example: "premium_reports"
+        isAllowed:
+          type: boolean
+          description: Whether the customer is allowed to access the feature.
+        flowId:
+          type: string
+          description: The flow ID of the event.
+        meta:
+          type: object
+          description: Additional metadata about the entitlement decision.
+          properties:
+            reason:
+              type: object
+              description: The reason why the entitlement was granted or denied.
+              properties:
+                description:
+                  type: string
+                  description: A human-readable description of the reason.
+
+    EntitlementEvaluationRequest:
+      type: object
+      required: [customerReferenceId, featureKey]
+      properties:
+        customerReferenceId:
+          type: string
+          description: External customer reference ID (scoped to tenant/account).
+          example: "cust_123"
+        featureKey:
+          type: string
+          description: Feature key to check.
+          example: "llm.generate"
+        track:
+          $ref: '#/components/schemas/TrackContext'
+          description: Optional tracking context that will be recorded with the entitlement check event. This must not affect the allow/deny decision.
+        context:
+          $ref: '#/components/schemas/RequestContext'
+          description: Optional correlation/debug context. Useful for joining logs/events.
+
+    TrackContext:
+      type: object
+      properties:
+        eventName:
+          type: string
+          description: User-defined event name for what is being attempted.
+          example: "llm.generate"
+        usageUnits:
+          type: number
+          default: 1
+          description: "The amount of usage units to record for this action (e.g., number of tokens, API calls). This value is multiplied by the 'price_per_unit' defined in the plan rule."
+          example: 1000.0
+        meta:
+          type: object
+          description: Optional metadata (JSON object).
+
+    RequestContext:
+      type: object
+      properties:
+        idempotencyKey:
+          type: string
+          description: Caller-provided idempotency key.
+          example: "req_abc123"
+        flowId:
+          type: string
+          description: Flow/correlation identifier.
+          example: "flow_chat_turn_42"
+
+    EventRequest:
+      type: object
+      required: [eventIdempotencyKey, eventName, occurredAt]
+      properties:
+        eventIdempotencyKey:
+          type: string
+          description: Idempotency key for the event.
+          example: "evt_789"
+        flowId:
+          type: string
+          description: Flow identifier associated with the event.
+        eventName:
+          type: string
+          description: Name of the event.
+          example: "api_call"
+        occurredAt:
+          type: string
+          format: date-time
+          description: Timestamp when the event occurred.
+        customerId:
+          type: string
+          format: uuid
+          description: Customer identifier (UUID) associated with the event. Use either customerId or customerReferenceId, not both.
+        customerReferenceId:
+          type: string
+          description: "Customer reference ID associated with the event. Use your Stripe customer ID (cus_...) to link events with Stripe revenue data. Use either customerId or customerReferenceId, not both."
+          example: "cus_abc123"
+        subscriptionId:
+          type: string
+          format: uuid
+          description: Subscription identifier associated with the event.
+        entitlementId:
+          type: string
+          format: uuid
+          description: Entitlement identifier associated with the event.
+        invoiceId:
+          type: string
+          format: uuid
+          description: Invoice identifier associated with the event.
+        costAmount:
+          type: number
+          format: decimal
+          description: "Provider cost (COGS) associated with the event. Optional - if omitted and a cost_model is configured, Tanso will calculate it from usageUnits and cost_per_unit."
+          example: 0.05
+        usageUnits:
+          type: number
+          description: "Usage units (e.g., number of tokens, API calls, storage GB). Used for billing calculations and margin analysis."
+          example: 1000.00
+        meta:
+          type: object
+          description: Metadata associated with the event.
+
+    EventType:
+      type: string
+      enum:
+        - CLIENT_TRACKED
+        - ENTITLEMENT_CHECKED
+        - ENTITLEMENT_REVOKED
+        - CUSTOMER_CREATED
+        - PLAN_CREATED
+        - SUBSCRIPTION_CREATED
+        - SUBSCRIPTION_CANCELLED
+        - SUBSCRIPTION_UPGRADED
+        - SUBSCRIPTION_DOWNGRADED
+        - INVOICE_CREATED
+
+    CustomerRequest:
+      type: object
+      required: [externalClientCustomerId]
+      properties:
+        externalClientCustomerId:
+          type: string
+          description: External client reference ID for the customer.
+          example: "cust_12345"
+        firstName:
+          type: string
+          description: First name of the customer.
+          example: "John"
+        lastName:
+          type: string
+          description: Last name of the customer.
+          example: "Doe"
+        email:
+          type: string
+          description: Email address of the customer.
+          example: "john.doe@example.com"
+        phoneNumber:
+          type: string
+          description: Phone number of the customer.
+          example: "+1234567890"
+        address:
+          type: string
+          description: Physical address of the customer.
+
+    CustomerDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the customer.
+        externalClientCustomerId:
+          type: string
+          description: External client reference ID for the customer.
+          example: "cust_12345"
+        firstName:
+          type: string
+          description: First name of the customer.
+          example: "John"
+        lastName:
+          type: string
+          description: Last name of the customer.
+          example: "Doe"
+        email:
+          type: string
+          description: Email address of the customer.
+          example: "john.doe@example.com"
+        phoneNumber:
+          type: string
+          description: Phone number of the customer.
+          example: "+1234567890"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the customer record was created.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the customer record was last modified.
+
+    CustomerClientApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          $ref: '#/components/schemas/CustomerClientResponse'
+          description: The customer data.
+
+    CustomerClientResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the customer.
+        externalClientCustomerId:
+          type: string
+          description: External client reference ID for the customer.
+          example: "cust_12345"
+        firstName:
+          type: string
+          description: First name of the customer.
+          example: "John"
+        lastName:
+          type: string
+          description: Last name of the customer.
+          example: "Doe"
+        email:
+          type: string
+          description: Email address of the customer.
+          example: "john.doe@example.com"
+        phoneNumber:
+          type: string
+          description: Phone number of the customer.
+          example: "+1234567890"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the customer record was created.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the customer record was last modified.
+        subscriptions:
+          type: array
+          description: List of active subscriptions for the customer.
+          items:
+            $ref: '#/components/schemas/SubscriptionDto'
+
+    ClientSubscriptionRequest:
+      type: object
+      required: [planId, customerReferenceId]
+      properties:
+        planId:
+          type: string
+          description: Unique identifier of the plan to subscribe to.
+        customerReferenceId:
+          type: string
+          description: External client reference ID for the customer.
+        gracePeriod:
+          type: integer
+          description: Number of grace period days for payment.
+          example: 3
+
+    SubscribedCustomerApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          $ref: '#/components/schemas/SubscribedCustomerResponse'
+          description: The subscribed customer and initial invoice data.
+
+    SubscribedCustomerResponse:
+      type: object
+      properties:
+        subscription:
+          $ref: '#/components/schemas/SubscriptionDto'
+          description: Details of the created subscription.
+        invoice:
+          $ref: '#/components/schemas/InvoiceDto'
+          description: Details of the initial invoice for the subscription.
+
+    SubscriptionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the subscription.
+        isActive:
+          type: boolean
+          description: Status indicating if the subscription is active.
+        intervalMonths:
+          type: string
+          description: Billing interval in months.
+          example: "1"
+        customer:
+          $ref: '#/components/schemas/CustomerDto'
+          description: Associated customer details.
+        plan:
+          $ref: '#/components/schemas/PlanDto'
+          description: Associated plan details.
+        gracePeriodDays:
+          type: integer
+          description: Number of grace period days for payment.
+          example: 3
+        currentPeriodStart:
+          type: string
+          format: date-time
+          description: Timestamp when the current period started.
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          description: Timestamp when the current period ends.
+        cancelMode:
+          type: string
+          description: "Cancellation mode (e.g., IMMEDIATELY, END_OF_PERIOD)."
+        cancelEffectiveAt:
+          type: string
+          format: date-time
+          description: Timestamp when the cancellation becomes effective.
+        cancelledAt:
+          type: string
+          format: date-time
+          description: Timestamp when the subscription was cancelled.
+        billingAnchorDay:
+          type: integer
+          description: Billing anchor day of the month.
+          example: 1
+        metadata:
+          type: object
+          description: Additional metadata associated with the subscription.
+        scheduledChange:
+          $ref: '#/components/schemas/SubscriptionScheduledChangeDto'
+          description: Scheduled changes for the subscription.
+
+    SubscriptionScheduledChangeDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the scheduled change.
+        type:
+          type: string
+          description: "Type of scheduled change (e.g., UPGRADE, DOWNGRADE)."
+        subscriptionId:
+          type: string
+          format: uuid
+          description: ID of the subscription this change applies to.
+        fromPlan:
+          $ref: '#/components/schemas/PlanDto'
+          description: Current plan details.
+        toPlan:
+          $ref: '#/components/schemas/PlanDto'
+          description: Target plan details.
+        status:
+          type: string
+          description: Status of the scheduled change.
+        effectiveAt:
+          type: string
+          format: date-time
+          description: Timestamp when the change becomes effective.
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the change was created.
+
+    PlanDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the plan.
+        key:
+          type: string
+          description: Unique key for the plan.
+          example: "premium_monthly"
+        name:
+          type: string
+          description: Display name of the plan.
+          example: "Premium Plan"
+        description:
+          type: string
+          description: Detailed description of the plan.
+        priceAmount:
+          type: integer
+          description: Price in smallest currency unit (e.g., cents).
+          example: 2900
+        intervalMonths:
+          type: string
+          description: Billing interval in months.
+          example: "1"
+        billingTiming:
+          type: string
+          description: Billing timing.
+          example: "advance"
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was created.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the plan was last modified.
+
+    InvoiceDto:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the invoice.
+        amount:
+          type: number
+          description: Total amount of the invoice.
+          example: 29.99
+        currency:
+          type: string
+          description: Currency of the invoice.
+          example: "USD"
+        status:
+          type: string
+          description: Current status of the invoice.
+          example: "PAID"
+        dueDate:
+          type: string
+          format: date-time
+          description: Due date of the invoice.
+        subscription:
+          $ref: '#/components/schemas/SubscriptionDto'
+          description: Associated subscription details.
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the invoice was created.
+        modifiedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the invoice was last modified.
+        metadata:
+          type: object
+          description: Additional metadata associated with the invoice.
+
+    InvoiceListApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          type: array
+          description: List of invoices.
+          items:
+            $ref: '#/components/schemas/InvoiceDto'
+
+    StripeCheckoutApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          type: object
+          description: Stripe checkout session data.
+          properties:
+            url:
+              type: string
+              description: Hosted Stripe Checkout URL.
+
+    PlanListApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indicates if the request was successful.
+        data:
+          type: array
+          description: List of available plans and their features.
+          items:
+            $ref: '#/components/schemas/PlanFeatureLinkedDto'
+
+    PlanFeatureLinkedDto:
+      type: object
+      properties:
+        plan:
+          $ref: '#/components/schemas/PlanDto'
+          description: Plan details.
+        features:
+          type: array
+          description: Features included in this plan.
+          items:
+            $ref: '#/components/schemas/FeatureDto'
+
+    FeatureDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the feature.
+        name:
+          type: string
+          description: Display name of the feature.
+        key:
+          type: string
+          description: Unique key for the feature.
+        isEnabled:
+          type: boolean
+          description: Indicates if the feature is enabled.
+
+    ClientChangeSubscriptionRequest:
+      type: object
+      required: [changeToPlanId, changeType]
+      properties:
+        changeToPlanId:
+          type: string
+          description: ID of the plan to change to.
+        changeType:
+          type: string
+          enum: [UPGRADE, DOWNGRADE]
+          description: Type of plan change.

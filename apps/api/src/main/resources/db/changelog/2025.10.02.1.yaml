@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251002-1"
+      author: doug
+      changes:
+        - renameColumn:
+            tableName: plans
+            oldColumnName: interval_days
+            newColumnName: interval_months
+        - renameColumn:
+            tableName: subscriptions
+            oldColumnName: interval_days
+            newColumnName: interval_months

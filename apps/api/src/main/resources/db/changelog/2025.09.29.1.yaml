@@ -1,0 +1,31 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250929-1
+      author: doug
+      changes:
+        - addColumn:
+            tableName: invoices
+            columns:
+              - column:
+                  name: deleted_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: archived_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+        - addColumn:
+            tableName: invoice_items
+            columns:
+              - column:
+                  name: deleted_at
+                  type: timestamp
+                  constraints:
+                    nullable: true
+              - column:
+                  name: archived_at
+                  type: timestamp
+                  constraints:
+                    nullable: true

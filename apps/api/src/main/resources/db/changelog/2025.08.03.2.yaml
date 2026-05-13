@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250803-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: stripe_subscriptions
+            columns:
+              - column:
+                  name: stripe_subscription_id
+                  type: TEXT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_customer_plan_customer
+                    references: customers(customer_id)
+              - column:
+                  name: plan_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_customer_plan_plan
+                    references: plans(plan_id)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false

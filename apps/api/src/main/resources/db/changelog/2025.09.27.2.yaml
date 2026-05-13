@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250927-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: invoice_items
+            columns:
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: invoice_item_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: invoice_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_invoice_items_invoices
+                    references: invoices(invoice_id)
+              - column:
+                  name: charge_amount
+                  type: numeric(18,2)
+              - column:
+                  name: description
+                  type: VARCHAR(255)

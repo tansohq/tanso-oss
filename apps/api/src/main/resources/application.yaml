@@ -1,0 +1,109 @@
+server:
+  port: 8080
+
+app:
+  stripe-webhook-endpoint: https://example.com/public/stripe/ingest/webhook
+  dogfooding-enabled: false
+  master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
+  api-key-prefix: sk_test_
+  mcp:
+    enabled: false
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-ttl-seconds: 7200   # 2 hours
+    issuer: tanso-core
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: false
+        protocol: STREAMABLE
+        name: tanso-mcp
+        version: 0.5.2
+        streamable-http:
+          mcp-endpoint: /mcp
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  main:
+    allow-bean-definition-overriding: true
+
+  docker:
+    compose:
+      # noinspection SpringBootApplicationYaml
+      enabled: false
+
+  devtools:
+    livereload:
+      enabled: false
+
+  jpa:
+    hibernate:
+      ddl-auto: none  # Disable Hibernate schema auto-generation
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+        jdbc:
+          time_zone: UTC
+
+  liquibase:
+    enabled: true
+    change-log: db/changelog/tanso-db-changelog-master.yaml
+    contexts: dev
+    default-schema: public
+    drop-first: false  # true = wipe DB on startup (only for resets/dev)
+
+  jackson:
+    time-zone: UTC
+
+
+
+logging:
+  file:
+    path: ./logs-generated
+  level:
+    liquibase: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Optional: shows query params
+    org.springframework.web: DEBUG
+    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
+
+
+springdoc:
+  api-docs:
+    enabled: true
+
+jobs:
+  invoicePending:
+    cron: 0 0 1 * * *
+  invoiceDue:
+    cron: 0 0 4 * * *
+  invoiceCancelled:
+    cron: 0 0 5 * * *
+  subscriptionCancellation:
+    cron: 0 0 2 * * *
+  subscriptionCycle:
+    cron: 0 0 6 * * *
+  backgroundJobsWithFixedDelay:
+    reconciliationDelay: 30000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # keep it tight
+      base-path: /actuator
+  info:
+    build:
+      enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true                   # enables /health/liveness & /health/readiness
+      show-details: never               # don’t leak details in prod

@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260210-2"
+      author: tanso
+      changes:
+        - createIndex:
+            tableName: events
+            indexName: idx_events_customer_feature_id_occurred_at
+            columns:
+              - column:
+                  name: customer_id
+              - column:
+                  name: feature_id
+              - column:
+                  name: occurred_at

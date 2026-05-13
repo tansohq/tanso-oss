@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250803-5
+      author: doug
+      changes:
+        - addColumn:
+            tableName: stripe_subscriptions
+            columns:
+              - column:
+                  name: stripe_products_plans_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_stripe_subscriptions_product
+                    references: stripe_products_plans(stripe_products_plans_id)

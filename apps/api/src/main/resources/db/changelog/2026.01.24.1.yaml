@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260124-1"
+      author: doug
+      changes:
+        # Renaming columns from 2026.01.16.1 to match desired standardized naming
+        - renameColumn:
+            tableName: events
+            oldColumnName: usage_amount
+            newColumnName: usage_units
+        - renameColumn:
+            tableName: events
+            oldColumnName: usage_unit
+            newColumnName: usage_unit_type
+        # cost_amount already exists in 2026.01.16.1
+        # cost_unit already exists in 2026.01.16.1 (we keep this name instead of cost_currency)
+
+        # Cleanup unused columns
+        - dropColumn:
+            tableName: events
+            columnName: charge_amount
+        - dropColumn:
+            tableName: events
+            columnName: charge_unit
+        - dropColumn:
+            tableName: events
+            columnName: charge_source
+        - dropColumn:
+            tableName: events
+            columnName: usage_input_amount
+        - dropColumn:
+            tableName: events
+            columnName: usage_output_amount
+        - dropColumn:
+            tableName: events
+            columnName: cost_source
+
+      rollback:
+        - renameColumn:
+            tableName: events
+            oldColumnName: usage_units
+            newColumnName: usage_amount
+        - renameColumn:
+            tableName: events
+            oldColumnName: usage_unit_type
+            newColumnName: usage_unit
+        - addColumn:
+            tableName: events
+            columns:
+              - column: { name: charge_amount, type: "numeric(18,8)" }
+              - column: { name: charge_unit, type: "varchar(32)" }
+              - column: { name: charge_source, type: "varchar(32)" }
+              - column: { name: usage_input_amount, type: "numeric(18,8)" }
+              - column: { name: usage_output_amount, type: "numeric(18,8)" }
+              - column: { name: cost_source, type: "varchar(32)" }

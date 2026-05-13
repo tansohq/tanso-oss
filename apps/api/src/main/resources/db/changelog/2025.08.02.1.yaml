@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250802-1
+      author: doug
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableName: customers_plans
+            constraintName: fk_plans_accounts
+        - dropColumn:
+            tableName: customers_plans
+            columnName: account_id
+        - dropPrimaryKey:
+            tableName: customers_plans
+            constraintName: customers_plans_pkey
+        - dropColumn:
+            tableName: customers_plans
+            columnName: id
+        - addPrimaryKey:
+            tableName: customers_plans
+            columnNames: customer_id, plan_id
+            constraintName: customers_plans_pkey
+      

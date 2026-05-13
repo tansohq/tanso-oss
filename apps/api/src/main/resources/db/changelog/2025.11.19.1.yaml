@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251119-1"
+      author: doug
+      changes:
+        - dropUniqueConstraint:
+            tableName: customers
+            constraintName: customers_email_key

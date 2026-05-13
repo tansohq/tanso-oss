@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250809-1
+      author: doug
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableName: stripe_subscriptions
+            constraintName: fk_stripe_customer_plan_customer
+        - dropForeignKeyConstraint:
+            baseTableName: stripe_subscriptions
+            constraintName: fk_stripe_customer_plan_plan
+        - dropColumn:
+            tableName: stripe_subscriptions
+            columnName: customer_id
+        - dropColumn:
+            tableName: stripe_subscriptions
+            columnName: plan_id
+        - dropForeignKeyConstraint:
+            baseTableName: stripe_subscriptions
+            constraintName: fk_stripe_subscriptions_product
+        - renameColumn:
+            tableName: stripe_subscriptions
+            oldColumnName: stripe_products_plans_id
+            newColumnName: stripe_product_id
+        - modifyDataType:
+            tableName: stripe_subscriptions
+            columnName: stripe_subscription_id
+            newDataType: UUID
+        - addDefaultValue:
+            tableName: stripe_subscriptions
+            columnName: stripe_subscription_id
+            defaultValueComputed: gen_random_uuid()
+        - addColumn:
+            tableName: stripe_subscriptions
+            columns:
+              - column:
+                  name: subscription_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_subscriptions_subscription
+                    references: subscriptions(subscription_id)
+                    deleteCascade: true
+              - column:
+                  name: stripe_subscription_external_id
+                  type: text

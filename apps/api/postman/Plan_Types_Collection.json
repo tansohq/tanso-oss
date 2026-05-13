@@ -1,0 +1,980 @@
+{
+	"info": {
+		"_postman_id": "plan-types-collection",
+		"name": "Plan Types Collection",
+		"description": "All plan type variations for tanso-core monetization API, including credit-based plans.\n\nBilling models: FLAT, USAGE\nBilling timing: IN_ADVANCE (auto for FLAT), IN_ARREARS (auto for USAGE)\nStatuses: DRAFT, ACTIVE, ARCHIVED\nDefault intervalMonths: 3 (if omitted)\n\nCredit system: Plans can include credits via PlanFeatureRule with credit_included model. Credits are managed through pools, grants, deductions, and a full transaction ledger.\n\nGrant types: PLAN_INCLUDED, PURCHASED, PROMOTIONAL, REFUND, SYSTEM, ROLLOVER, MANUAL\nRollover policies: NONE, FULL, CAPPED\nPool statuses: ACTIVE, FROZEN, DEPLETED, ARCHIVED",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "planUuid",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "creditPoolId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "customerId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "subscriptionId",
+			"value": "",
+			"type": "string"
+		},
+		{
+			"key": "transactionId",
+			"value": "",
+			"type": "string"
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{token}}",
+				"type": "string"
+			}
+		]
+	},
+	"item": [
+		{
+			"name": "Create Plans",
+			"item": [
+				{
+					"name": "Flat + In Advance (Monthly)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('planUuid', json.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"flat-monthly-advance\",\n  \"name\": \"Standard Monthly Plan\",\n  \"description\": \"Flat monthly plan billed in advance\",\n  \"priceAmount\": 49.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Creates a standard flat-rate monthly plan. billingTiming auto-set to IN_ADVANCE."
+					},
+					"response": []
+				},
+				{
+					"name": "Flat + In Arrears (Monthly)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"flat-monthly-arrears\",\n  \"name\": \"Flat Monthly In Arrears\",\n  \"description\": \"Flat monthly plan with arrears billing timing override\",\n  \"priceAmount\": 39.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"billingTiming\": \"IN_ARREARS\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Flat plan with explicit IN_ARREARS timing. Tests whether the API accepts a timing override for FLAT billing model."
+					},
+					"response": []
+				},
+				{
+					"name": "Usage + In Arrears (Pay-As-You-Go)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"usage-payg\",\n  \"name\": \"Pay-As-You-Go\",\n  \"description\": \"Usage-based plan billed in arrears\",\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"USAGE\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Usage-based plan with no fixed price. billingTiming auto-set to IN_ARREARS."
+					},
+					"response": []
+				},
+				{
+					"name": "Usage + In Advance",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"usage-advance\",\n  \"name\": \"Usage In Advance\",\n  \"description\": \"Usage-based plan with advance billing timing override\",\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"USAGE\",\n  \"billingTiming\": \"IN_ADVANCE\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Usage plan with explicit IN_ADVANCE timing. Tests whether the API accepts a timing override for USAGE billing model."
+					},
+					"response": []
+				},
+				{
+					"name": "Flat Quarterly",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"flat-quarterly\",\n  \"name\": \"Quarterly Plan\",\n  \"description\": \"Flat plan billed every 3 months\",\n  \"priceAmount\": 129.99,\n  \"intervalMonths\": \"3\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Quarterly billing cadence (intervalMonths=3). This is also the default if intervalMonths is omitted."
+					},
+					"response": []
+				},
+				{
+					"name": "Flat Annual",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"flat-annual\",\n  \"name\": \"Annual Plan\",\n  \"description\": \"Flat plan billed yearly\",\n  \"priceAmount\": 499.99,\n  \"intervalMonths\": \"12\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Annual billing cadence (intervalMonths=12)."
+					},
+					"response": []
+				},
+				{
+					"name": "Hybrid (Flat Base + Usage Features)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"hybrid-base-usage\",\n  \"name\": \"Hybrid Plan\",\n  \"description\": \"Flat base price with usage-based feature add-ons. Link usage features separately via plan-feature rules.\",\n  \"priceAmount\": 29.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"hybrid\",\n    \"usageFeatures\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Hybrid plan: flat base price with usage-tracked features linked via plan-feature rules. The plan itself is FLAT; usage metering is handled at the feature level."
+					},
+					"response": []
+				},
+				{
+					"name": "Free Tier",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"free-tier\",\n  \"name\": \"Free Tier\",\n  \"description\": \"Free plan with no charge\",\n  \"priceAmount\": 0,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"free\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Free tier with priceAmount=0. Uses FLAT billing model."
+					},
+					"response": []
+				},
+				{
+					"name": "With Metadata (Enterprise)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"enterprise-custom\",\n  \"name\": \"Enterprise Plan\",\n  \"description\": \"Enterprise plan with rich metadata for custom configuration\",\n  \"priceAmount\": 999.99,\n  \"intervalMonths\": \"12\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"enterprise\",\n    \"supportLevel\": \"priority\",\n    \"slaUptimePercent\": 99.9,\n    \"dedicatedAccountManager\": true,\n    \"customBranding\": true,\n    \"maxSeats\": 500\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Enterprise plan with extensive metadata. Tests JSONB storage of arbitrary key-value data."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (No Rollover, Hard Limit)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('planUuid', json.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-starter-hard\",\n  \"name\": \"Credit Starter (Hard Limit)\",\n  \"description\": \"Credit-based plan with 500 credits/month, no rollover, hard limit blocks access at zero balance. Credits are granted via PlanFeatureRule with credit_included model on subscription.\",\n  \"priceAmount\": 29.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-starter\",\n    \"creditAmount\": 500,\n    \"creditDenomination\": \"CREDITS\",\n    \"rolloverPolicy\": \"NONE\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan: 500 credits/month, no rollover, hard limit. Access blocked when credits depleted. Credits are actually provisioned when a PlanFeatureRule with credit_included model is linked to this plan and a customer subscribes."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Full Rollover)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-pro-rollover\",\n  \"name\": \"Credit Pro (Full Rollover)\",\n  \"description\": \"Credit-based plan with 2000 credits/month, full rollover of unused credits, hard limit.\",\n  \"priceAmount\": 79.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-pro\",\n    \"creditAmount\": 2000,\n    \"creditDenomination\": \"CREDITS\",\n    \"rolloverPolicy\": \"FULL\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan with FULL rollover: all unused credits carry forward to the next period indefinitely."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Capped Rollover)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-business-capped\",\n  \"name\": \"Credit Business (Capped Rollover)\",\n  \"description\": \"Credit-based plan with 5000 credits/month, capped rollover at 2500, hard limit.\",\n  \"priceAmount\": 199.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-business\",\n    \"creditAmount\": 5000,\n    \"creditDenomination\": \"CREDITS\",\n    \"rolloverPolicy\": \"CAPPED\",\n    \"rolloverCap\": 2500,\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan with CAPPED rollover: unused credits roll forward up to the cap (2500). Excess above cap is forfeited."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Soft Limit / Overage)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-growth-soft\",\n  \"name\": \"Credit Growth (Soft Limit)\",\n  \"description\": \"Credit-based plan with 1000 credits/month, no rollover, soft limit allows overage.\",\n  \"priceAmount\": 49.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-growth\",\n    \"creditAmount\": 1000,\n    \"creditDenomination\": \"CREDITS\",\n    \"rolloverPolicy\": \"NONE\",\n    \"hardLimit\": false\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan with soft limit (hardLimit=false): access continues after credits depleted, overage tracked separately."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Token Denomination)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"ai-tokens-plan\",\n  \"name\": \"AI Token Plan\",\n  \"description\": \"Credit-based plan using TOKENS denomination for AI workloads. 100000 tokens/month.\",\n  \"priceAmount\": 59.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"ai-tokens\",\n    \"creditAmount\": 100000,\n    \"creditDenomination\": \"TOKENS\",\n    \"rolloverPolicy\": \"NONE\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan using TOKENS denomination instead of CREDITS. Tests that the pool denomination is flexible."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Expiring Grants)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-expiring\",\n  \"name\": \"Credit Plan (Expiring Grants)\",\n  \"description\": \"Credit-based plan where each grant expires after 3 months. 1500 credits/month.\",\n  \"priceAmount\": 69.99,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-expiring\",\n    \"creditAmount\": 1500,\n    \"creditDenomination\": \"CREDITS\",\n    \"grantExpiresMonths\": 3,\n    \"rolloverPolicy\": \"FULL\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Credit plan where each monthly grant expires 3 months after issuance. Uses FULL rollover so grants accumulate, but each one individually expires. Tests grant_expires_months on the credit_included model."
+					},
+					"response": []
+				},
+				{
+					"name": "Credit-Based Plan (Annual with Large Grant)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"credit-annual-bulk\",\n  \"name\": \"Annual Credit Plan\",\n  \"description\": \"Annual credit plan with a single large grant of 50000 credits upfront, 12-month expiry.\",\n  \"priceAmount\": 899.99,\n  \"intervalMonths\": \"12\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"credit-annual\",\n    \"creditAmount\": 50000,\n    \"creditDenomination\": \"CREDITS\",\n    \"grantExpiresMonths\": 12,\n    \"rolloverPolicy\": \"NONE\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Annual billing with a large one-time credit grant. Tests credit_included model on a non-monthly cadence."
+					},
+					"response": []
+				},
+				{
+					"name": "Free Tier with Credits",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"key\": \"free-with-credits\",\n  \"name\": \"Free Tier with Credits\",\n  \"description\": \"Free plan that includes 100 credits/month with hard limit. No rollover.\",\n  \"priceAmount\": 0,\n  \"intervalMonths\": \"1\",\n  \"billingModel\": \"FLAT\",\n  \"status\": \"DRAFT\",\n  \"metadata\": {\n    \"tier\": \"free\",\n    \"creditAmount\": 100,\n    \"creditDenomination\": \"CREDITS\",\n    \"rolloverPolicy\": \"NONE\",\n    \"hardLimit\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "Free tier that still grants a small number of credits. Tests credit provisioning on a zero-price plan."
+					},
+					"response": []
+				}
+			],
+			"description": "One request per plan type variant: different billing models, cadences, credit configurations, and rollover policies."
+		},
+		{
+			"name": "Manage Plans",
+			"item": [
+				{
+					"name": "List Plans",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans"]
+						},
+						"description": "List all plans for the authenticated account."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Plan",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Plan Name\",\n  \"description\": \"Updated description\",\n  \"priceAmount\": 59.99,\n  \"status\": \"ACTIVE\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans/{{planUuid}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans", "{{planUuid}}"]
+						},
+						"description": "Update an existing plan by UUID. Only provided fields are changed (null fields are ignored). Status transitions: DRAFT->ACTIVE, ACTIVE->ARCHIVED, ARCHIVED->ACTIVE."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Plan",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans/{{planUuid}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans", "{{planUuid}}"]
+						},
+						"description": "Soft-delete a plan by UUID. Also cascade-deletes associated PlanFeatureRule records."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Linked Features",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/plans/{{planUuid}}/features",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "plans", "{{planUuid}}", "features"]
+						},
+						"description": "Get all features linked to a specific plan. Returns PlanFeatureLinkedDto with plan details and feature list."
+					},
+					"response": []
+				}
+			],
+			"description": "List, update, delete plans and view linked features."
+		},
+		{
+			"name": "Credit Pools",
+			"item": [
+				{
+					"name": "Create Credit Pool",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    pm.collectionVariables.set('creditPoolId', json.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Default Credit Pool\",\n  \"denomination\": \"CREDITS\",\n  \"currency\": \"USD\",\n  \"customerId\": \"{{customerId}}\",\n  \"hardLimit\": true,\n  \"rolloverPolicy\": \"NONE\",\n  \"metadata\": {\n    \"source\": \"postman-test\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools"]
+						},
+						"description": "Create a credit pool with CREDITS denomination, hard limit, no rollover. Pool names must be unique per account."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Token Pool (Alt Denomination)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"AI Token Pool\",\n  \"denomination\": \"TOKENS\",\n  \"currency\": \"USD\",\n  \"customerId\": \"{{customerId}}\",\n  \"hardLimit\": true,\n  \"rolloverPolicy\": \"CAPPED\",\n  \"rolloverCap\": 50000,\n  \"metadata\": {\n    \"source\": \"postman-test\",\n    \"poolType\": \"ai-tokens\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools"]
+						},
+						"description": "Credit pool with TOKENS denomination and CAPPED rollover policy. Tests alternate denomination and rollover cap."
+					},
+					"response": []
+				},
+				{
+					"name": "Create Soft-Limit Pool",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Overage-Allowed Pool\",\n  \"denomination\": \"CREDITS\",\n  \"currency\": \"USD\",\n  \"customerId\": \"{{customerId}}\",\n  \"hardLimit\": false,\n  \"rolloverPolicy\": \"FULL\",\n  \"metadata\": {\n    \"source\": \"postman-test\",\n    \"allowOverage\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools"]
+						},
+						"description": "Pool with soft limit (hardLimit=false) and FULL rollover. Access not blocked at zero balance; overage accrues."
+					},
+					"response": []
+				},
+				{
+					"name": "List Credit Pools",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools"]
+						},
+						"description": "List all credit pools for the authenticated account."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Credit Pool",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}"]
+						},
+						"description": "Get a specific credit pool by ID. Returns balance, totals (granted, consumed, expired, reversed), and configuration."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Customer Pools",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/customer/{{customerId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "customer", "{{customerId}}"]
+						},
+						"description": "List all credit pools scoped to a specific customer."
+					},
+					"response": []
+				}
+			],
+			"description": "Create and query credit pools. Pools hold credit balances per denomination (CREDITS, TOKENS, etc.) and define rollover/limit behavior."
+		},
+		{
+			"name": "Credit Grants",
+			"item": [
+				{
+					"name": "Grant Credits (MANUAL)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    if (json.id) pm.collectionVariables.set('transactionId', json.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 500,\n  \"grantType\": \"MANUAL\",\n  \"description\": \"Manual credit grant for testing\",\n  \"idempotencyKey\": \"manual-grant-test-001\",\n  \"metadata\": {\n    \"reason\": \"postman-test\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/grants",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "grants"]
+						},
+						"description": "Manually grant 500 credits to a pool. Uses idempotencyKey to prevent duplicate grants."
+					},
+					"response": []
+				},
+				{
+					"name": "Grant Credits (PROMOTIONAL)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 200,\n  \"grantType\": \"PROMOTIONAL\",\n  \"description\": \"Welcome bonus credits\",\n  \"expiresAt\": \"2026-06-01T00:00:00Z\",\n  \"idempotencyKey\": \"promo-grant-test-001\",\n  \"metadata\": {\n    \"campaign\": \"welcome-bonus\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/grants",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "grants"]
+						},
+						"description": "Promotional credit grant with explicit expiration date. Tests PROMOTIONAL grant type and expiresAt field."
+					},
+					"response": []
+				},
+				{
+					"name": "Grant Credits (PURCHASED)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 1000,\n  \"grantType\": \"PURCHASED\",\n  \"description\": \"Customer purchased additional credits\",\n  \"idempotencyKey\": \"purchased-grant-test-001\",\n  \"metadata\": {\n    \"purchaseOrderId\": \"PO-12345\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/grants",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "grants"]
+						},
+						"description": "Grant credits that were purchased separately (top-up). Tests PURCHASED grant type."
+					},
+					"response": []
+				},
+				{
+					"name": "Grant Credits (PLAN_INCLUDED with Subscription)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 500,\n  \"grantType\": \"PLAN_INCLUDED\",\n  \"subscriptionId\": \"{{subscriptionId}}\",\n  \"description\": \"Plan-included credits for current billing period\",\n  \"idempotencyKey\": \"plan-included-test-001\",\n  \"metadata\": {\n    \"billingPeriod\": \"2026-02\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/grants",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "grants"]
+						},
+						"description": "Simulates a plan-included credit grant linked to a subscription. Normally auto-created by processCreditGrantsForSubscription, but can be tested manually."
+					},
+					"response": []
+				},
+				{
+					"name": "List Grants for Pool",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}/grants",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}", "grants"]
+						},
+						"description": "List all credit grants for a specific pool. Shows amount, remaining, grantType, expiresAt, and voidedAt."
+					},
+					"response": []
+				}
+			],
+			"description": "Grant credits to pools using different grant types (MANUAL, PROMOTIONAL, PURCHASED, PLAN_INCLUDED). Tests idempotency, expiration, and subscription linkage."
+		},
+		{
+			"name": "Credit Deductions & Transactions",
+			"item": [
+				{
+					"name": "Deduct Credits",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"if (pm.response.code === 201 || pm.response.code === 200) {",
+									"    var json = pm.response.json();",
+									"    if (json.id) pm.collectionVariables.set('transactionId', json.id);",
+									"}"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 50,\n  \"description\": \"Usage deduction: 50 API calls\",\n  \"idempotencyKey\": \"deduction-test-001\",\n  \"metadata\": {\n    \"featureKey\": \"api-calls\",\n    \"quantity\": 50\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/deductions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "deductions"]
+						},
+						"description": "Deduct 50 credits from the pool. Reduces the remaining balance of the oldest non-expired grant first (FIFO)."
+					},
+					"response": []
+				},
+				{
+					"name": "Deduct Credits (with Subscription)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"creditPoolId\": \"{{creditPoolId}}\",\n  \"amount\": 100,\n  \"subscriptionId\": \"{{subscriptionId}}\",\n  \"customerId\": \"{{customerId}}\",\n  \"description\": \"Usage deduction linked to subscription\",\n  \"idempotencyKey\": \"deduction-sub-test-001\",\n  \"metadata\": {\n    \"featureKey\": \"data-processing\"\n  }\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/deductions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "deductions"]
+						},
+						"description": "Deduct credits linked to a specific subscription and customer for tracking."
+					},
+					"response": []
+				},
+				{
+					"name": "List Pool Transactions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}/transactions",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}", "transactions"]
+						},
+						"description": "List the full transaction ledger for a pool. Shows GRANT, DEDUCTION, EXPIRATION, REVERSAL, ADJUSTMENT, FREEZE, UNFREEZE entries with balanceBefore/balanceAfter."
+					},
+					"response": []
+				},
+				{
+					"name": "Reverse Transaction",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"description\": \"Reversing erroneous deduction\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/transactions/{{transactionId}}/reverse",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "transactions", "{{transactionId}}", "reverse"]
+						},
+						"description": "Reverse a specific transaction by ID. Creates a REVERSAL entry in the ledger and restores the credit balance."
+					},
+					"response": []
+				}
+			],
+			"description": "Deduct credits from pools, view the transaction ledger, and reverse transactions."
+		},
+		{
+			"name": "Pool-Subscription Linkage",
+			"item": [
+				{
+					"name": "Link Pool to Subscription",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}/subscriptions/{{subscriptionId}}?drawPriority=0",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}", "subscriptions", "{{subscriptionId}}"],
+							"query": [
+								{
+									"key": "drawPriority",
+									"value": "0",
+									"description": "Priority order for multi-pool deductions (lower = higher priority)"
+								}
+							]
+						},
+						"description": "Link a credit pool to a subscription. drawPriority controls which pool is drawn from first when a customer has multiple pools."
+					},
+					"response": []
+				},
+				{
+					"name": "Link Pool to Subscription (with Draw Limit)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}/subscriptions/{{subscriptionId}}?drawPriority=1&drawLimit=500",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}", "subscriptions", "{{subscriptionId}}"],
+							"query": [
+								{
+									"key": "drawPriority",
+									"value": "1",
+									"description": "Lower priority than the primary pool"
+								},
+								{
+									"key": "drawLimit",
+									"value": "500",
+									"description": "Maximum credits that can be drawn from this pool per period"
+								}
+							]
+						},
+						"description": "Link a pool with a draw limit (max 500 credits per period) and lower priority. Tests multi-pool draw ordering and per-pool caps."
+					},
+					"response": []
+				},
+				{
+					"name": "Unlink Pool from Subscription",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/v1/monetization/credits/pools/{{creditPoolId}}/subscriptions/{{subscriptionId}}",
+							"host": ["{{baseUrl}}"],
+							"path": ["api", "v1", "monetization", "credits", "pools", "{{creditPoolId}}", "subscriptions", "{{subscriptionId}}"]
+						},
+						"description": "Remove the link between a credit pool and a subscription."
+					},
+					"response": []
+				}
+			],
+			"description": "Link and unlink credit pools to subscriptions. Controls draw priority and per-pool draw limits for multi-pool scenarios."
+		}
+	]
+}

@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260219-1-widen-idempotency-key-columns"
+      author: "tanso"
+      changes:
+        - modifyDataType:
+            tableName: credit_grants
+            columnName: idempotency_key
+            newDataType: varchar(128)
+        - modifyDataType:
+            tableName: credit_transactions
+            columnName: idempotency_key
+            newDataType: varchar(128)

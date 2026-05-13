@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260326-1
+      author: tanso
+      comment: "Rename FULL_SYNC stripe mode to STRIPE_INTEGRATION (additive — keeps FULL_SYNC working via app-level alias)"
+      changes:
+        - sql:
+            sql: >
+              UPDATE account_settings
+              SET stripe_mode = 'STRIPE_INTEGRATION'
+              WHERE stripe_mode = 'FULL_SYNC';

@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20250930-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: grace_period_days
+                  type: int
+                  defaultValueNumeric: "3"
+                  constraints:
+                    nullable: true
+        - modifyDataType:
+            tableName: plans
+            columnName: interval
+            newDataType: int
+        - renameColumn:
+            tableName: plans
+            oldColumnName: interval
+            newColumnName: interval_days

@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251116-1"
+      author: doug
+      changes:
+        # 1) Add the new id column (nullable for now)
+        - addColumn:
+            tableName: plan_feature_rules
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+
+        # 2) Populate id for existing rows
+        - update:
+            tableName: plan_feature_rules
+            columns:
+              - column:
+                  name: id
+                  valueComputed: "gen_random_uuid()"
+            where: "id IS NULL"
+
+        # 3) Make id NOT NULL
+        - addNotNullConstraint:
+            tableName: plan_feature_rules
+            columnName: id
+            columnDataType: UUID
+
+        # 4) Drop the existing composite primary key on (plan_id, feature_id)
+        - dropPrimaryKey:
+            tableName: plan_feature_rules
+            constraintName: plan_feature_rules_pkey
+
+        # 5) Add primary key on id
+        - addPrimaryKey:
+            tableName: plan_feature_rules
+            columnNames: id
+            constraintName: plan_feature_rules_pkey
+
+        - sql:
+            dbms: postgresql
+            sql: >
+              CREATE UNIQUE INDEX uq_plan_feature_rules_plan_feature_active
+              ON plan_feature_rules (plan_id, feature_id)
+              WHERE deleted_at IS NULL;

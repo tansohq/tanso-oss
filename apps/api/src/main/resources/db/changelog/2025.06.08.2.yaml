@@ -1,0 +1,19 @@
+# reusable trigger to prevent account_id from being updated
+databaseChangeLog:
+  - changeSet:
+      id: 20250608-2
+      author: doug
+      changes:
+        - sql:
+            splitStatements: false
+            dbms: postgresql
+            sql: |
+              CREATE OR REPLACE FUNCTION prevent_account_id_update()
+              RETURNS TRIGGER AS $$
+              BEGIN
+                IF OLD.account_id IS DISTINCT FROM NEW.account_id THEN
+                  RAISE EXCEPTION 'account_id cannot be updated';
+                END IF;
+                RETURN NEW;
+              END;
+              $$ LANGUAGE plpgsql;

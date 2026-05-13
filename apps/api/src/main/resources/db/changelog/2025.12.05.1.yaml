@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251205-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: stripe_checkout_success_url
+                  type: text
+              - column:
+                  name: stripe_checkout_cancel_url
+                  type: text

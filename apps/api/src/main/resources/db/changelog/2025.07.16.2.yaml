@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250716-2
+      author: doug
+      changes:
+        - addUniqueConstraint:
+            tableName: customers
+            columnNames: account_id, reference_id
+            constraintName: uq_customers_account_reference

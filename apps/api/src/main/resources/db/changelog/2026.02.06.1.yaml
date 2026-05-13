@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260206-1"
+      author: tanso
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: stripe_mode
+                  type: varchar(30)
+                  defaultValue: "NONE"
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: "UPDATE account_settings SET stripe_mode = 'PAYMENT_PASS_THROUGH' WHERE stripe_enabled = true"

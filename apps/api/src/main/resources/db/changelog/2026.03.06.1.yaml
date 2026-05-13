@@ -1,0 +1,59 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260306-1
+      author: tanso
+      changes:
+        - createTable:
+            tableName: stripe_import_jobs
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_import_jobs_account
+                    references: accounts(account_id)
+              - column:
+                  name: status
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_items
+                  type: int
+                  defaultValueNumeric: 0
+              - column:
+                  name: processed_items
+                  type: int
+                  defaultValueNumeric: 0
+              - column:
+                  name: failed_items
+                  type: int
+                  defaultValueNumeric: 0
+              - column:
+                  name: error_details
+                  type: text
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+
+        - createIndex:
+            indexName: idx_stripe_import_jobs_account_id
+            tableName: stripe_import_jobs
+            columns:
+              - column:
+                  name: account_id

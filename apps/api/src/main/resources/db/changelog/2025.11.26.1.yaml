@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251126-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: invoices
+            columns:
+              - column:
+                  name: type
+                  type: varchar(32)

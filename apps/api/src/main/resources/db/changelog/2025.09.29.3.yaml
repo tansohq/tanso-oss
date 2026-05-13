@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20250929-3"
+      author: doug
+      changes:
+        - renameColumn:
+            tableName: plans
+            oldColumnName: price_in_cents
+            newColumnName: price_amount
+        - modifyDataType:
+            tableName: plans
+            columnName: price_amount
+            newDataType: numeric(18,2)

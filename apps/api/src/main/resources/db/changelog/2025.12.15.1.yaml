@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251215-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: stripe_invoices
+            columns:
+              - column:
+                  name: stripe_customer_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_stripe_customer_id
+                    references: stripe_customers(stripe_customer_id)

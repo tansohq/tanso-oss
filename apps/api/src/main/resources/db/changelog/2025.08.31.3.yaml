@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250831-3
+      author: doug
+      changes:
+        - renameTable:
+            oldTableName: entitlementMetas
+            newTableName: entitlement_metas

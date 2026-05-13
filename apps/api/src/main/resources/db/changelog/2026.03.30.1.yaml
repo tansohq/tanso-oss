@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260330-1
+      author: tanso
+      comment: "Add unique constraint on stripe_customers (stripe_customer_external_id, account_id) for non-deleted rows"
+      changes:
+        - sql:
+            sql: >
+              CREATE UNIQUE INDEX uq_stripe_customers_external_id_account
+              ON stripe_customers (stripe_customer_external_id, account_id)
+              WHERE deleted_at IS NULL;

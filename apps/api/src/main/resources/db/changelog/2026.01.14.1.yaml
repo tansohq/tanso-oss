@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260114-1"
+      author: doug
+      changes:
+
+        # 1. Add column (nullable first to avoid locking issues)
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: event_type
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+
+        #    account + type + time is the core analytics access path
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_type_occurred_at
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: event_type
+              - column:
+                  name: occurred_at

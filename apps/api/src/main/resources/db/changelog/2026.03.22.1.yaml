@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260322-1
+      author: doug
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: platform_mode
+                  type: VARCHAR(20)
+                  defaultValue: "FULL"
+                  constraints:
+                    nullable: false

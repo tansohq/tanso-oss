@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250803-1
+      author: doug
+      changes:
+        - createTable:
+            tableName: stripe_customers
+            columns:
+              - column:
+                  name: stripe_customer_id
+                  type: TEXT
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_customer_account
+                    references: accounts(account_id)
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_customer_customer
+                    references: customers(customer_id)
+              - column:
+                  name: synced_at
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false

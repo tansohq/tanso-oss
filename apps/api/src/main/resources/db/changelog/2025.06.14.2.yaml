@@ -1,0 +1,85 @@
+# Links customer and plans. (many to many)
+databaseChangeLog:
+  - changeSet:
+      id: 20250614-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: customers_plans
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: plan_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: start_date
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: end_date
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_plans_accounts
+                    references: accounts(account_id) ON DELETE CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: customers_plans
+            baseColumnNames: customer_id
+            referencedTableName: customers
+            referencedColumnNames: customer_id
+            constraintName: fk_customer_plans_customer_id
+            onDelete: CASCADE
+
+        - addForeignKeyConstraint:
+            baseTableName: customers_plans
+            baseColumnNames: plan_id
+            referencedTableName: plans
+            referencedColumnNames: plan_id
+            constraintName: fk_customer_plans_plan_id
+            onDelete: RESTRICT
+
+        - createIndex:
+            tableName: customers_plans
+            indexName: idx_customer_plan_composite
+            columns:
+              - column:
+                  name: customer_id
+              - column:
+                  name: plan_id

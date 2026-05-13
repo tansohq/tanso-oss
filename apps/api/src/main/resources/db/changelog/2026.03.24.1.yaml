@@ -1,0 +1,65 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260324-1
+      author: tanso
+      changes:
+        - createTable:
+            tableName: ai_insights
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+              - column:
+                  name: severity
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: title
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: category
+                  type: VARCHAR(64)
+              - column:
+                  name: feature_key
+                  type: VARCHAR(128)
+              - column:
+                  name: customer_id
+                  type: VARCHAR(128)
+              - column:
+                  name: metric_value
+                  type: NUMERIC(18, 4)
+              - column:
+                  name: tokens_used
+                  type: INTEGER
+              - column:
+                  name: cost_usd
+                  type: NUMERIC(18, 6)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: ai_insights
+            baseColumnNames: account_id
+            referencedTableName: accounts
+            referencedColumnNames: account_id
+            constraintName: fk_ai_insights_account

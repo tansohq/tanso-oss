@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260311-2
+      author: claude
+      changes:
+        - dropNotNullConstraint:
+            tableName: users
+            columnName: first_name
+            columnDataType: VARCHAR(100)
+        - dropNotNullConstraint:
+            tableName: users
+            columnName: last_name
+            columnDataType: VARCHAR(100)

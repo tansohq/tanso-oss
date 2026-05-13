@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250716-1
+      author: doug
+      changes:
+        - createTable:
+            tableName: stripe_webhooks
+            columns:
+              - column:
+                  name: stripe_webhook_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: api_key_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_webhooks_account_api_key
+                    references: account_api_keys(api_key_id)
+              - column:
+                  name: signing_secret
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false

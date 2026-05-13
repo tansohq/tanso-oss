@@ -1,0 +1,1739 @@
+openapi: 3.1.0
+x-readme:
+  samples-languages:
+  - shell
+info:
+  title: Tanso Client API
+  description: |
+    Most SaaS billing stacks are duct-taped together — a Stripe configuration here, a custom entitlements table there, usage data living in a spreadsheet someone updates manually. The Tanso Client API replaces that sprawl with a single, consistent REST interface that connects product access, usage metering, and revenue billing into one system of record.
+
+    From your first API call, you can provision customers, gate features in real time, ingest usage events for metered billing, and retrieve invoices — without managing Tanso's internal IDs or building any glue logic yourself.
+
+    ## Getting Started
+
+    **Three calls to go live:**
+
+    1. **Get your API key** — Generate one in the [Tanso Dashboard](https://dashboard.tansohq.com). Takes 30 seconds.
+    2. **Authenticate** — Pass your key in every request:
+       ```
+       Authorization: Bearer sk_test_your_api_key
+       ```
+    3. **Create a customer → subscribe them to a plan → check their first entitlement.** Your billing infrastructure is live.
+
+    ## Authentication
+
+    All requests require an API key. You can pass it in one of two ways:
+
+    | Method | Header | Example |
+    |--------|--------|---------|
+    | Bearer Token | `Authorization` | `Bearer sk_test_abc123` |
+    | API Key Header | `X-API-Key` | `sk_test_abc123` |
+
+    ## Response Format
+
+    Every response follows a consistent envelope:
+
+    ```json
+    {
+      "success": true,
+      "data": { ... },
+      "error": null
+    }
+    ```
+
+    - **`success`** — Always present. `true` for successful requests, `false` for errors.
+    - **`data`** — The response payload. Omitted when there is no data to return.
+    - **`error`** — Present only when `success` is `false`. Contains `message` and optionally `detail`.
+
+    Null fields are omitted from responses to keep payloads compact.
+
+    ## Idempotency
+
+    **Idempotency protects your billing data on retries.** Include an `eventIdempotencyKey` in the request body or pass an `X-Idempotency-Key` header. If a duplicate is detected, Tanso returns `409 Conflict` and ignores the repeat — so network failures never cause double-counted usage or inflated invoices.
+
+    ## Billing Models
+
+    Tanso supports two billing models out of the box:
+
+    - **Flat** — Fixed recurring price per billing period. No event ingestion required.
+    - **Usage-based** — Pay per unit of consumption, metered through the Events API.
+
+    ## Customer Identity
+
+    **Bring your own customer IDs — no ID sync required.** Tanso identifies every customer by your `externalClientCustomerId`, the same identifier you already use in your own database. Pass it to any endpoint: subscriptions, entitlement checks, event ingestion, invoice retrieval. Tanso's internal UUIDs exist but you never need to touch them.
+  version: 1.0.0
+  contact:
+    name: Tanso Support
+    url: https://tansohq.com
+    email: support@tansohq.com
+  x-logo:
+    url: https://tansohq.com/logo.png
+    altText: Tanso
+
+servers:
+  - url: https://sandbox.api.tansoflow.com
+    description: Sandbox
+
+security:
+  - BearerAuth: []
+  - ApiKeyAuth: []
+
+x-tagGroups:
+  - name: API Reference
+    tags:
+      - Customers
+      - Subscriptions
+      - Plans
+      - Entitlements
+      - Events
+      - Billing
+
+tags:
+  - name: Customers
+    description: |
+      A customer is the root object in Tanso's data model — everything else (subscriptions, entitlements, usage events, invoices) belongs to one.
+
+      Customers are identified entirely by your `externalClientCustomerId` — the ID you already use in your own system. Register a customer once and use that same ID everywhere: to subscribe them to a plan, check their feature access, ingest their usage, and pull their billing history. No internal ID management required.
+  - name: Subscriptions
+    description: |
+      Manage the full subscription lifecycle across Flat, Usage, and Hybrid billing models.
+
+      **Lifecycle overview:**
+      - **Create** — Subscribe a customer to a plan. Generates an initial invoice.
+      - **Cancel** — Terminate immediately or schedule cancellation for end-of-period.
+      - **Revert cancellation** — Undo a scheduled end-of-period cancellation before it takes effect.
+      - **Change plan** — Upgrades take effect immediately (with a new invoice). Downgrades are scheduled for the end of the current billing period.
+      - **Cancel plan change** — Revert a scheduled downgrade before it takes effect.
+  - name: Plans
+    description: |
+      Retrieve your active plans — including every linked feature and its pricing configuration — ready to power pricing pages, plan selectors, or subscription creation flows.
+
+      Each plan response includes the full feature set with `pricingType` (`included`, `usage_based`, or `graduated`) and per-unit pricing, giving you everything you need to display pricing accurately without hardcoding plan details on the frontend.
+  - name: Entitlements
+    description: |
+      Entitlements are Tanso's real-time access control layer. Every time a customer tries to use a feature, call this endpoint to get a definitive answer: allowed or denied — with a human-readable reason explaining why.
+
+      Two modes, two use cases:
+      - **Check** `GET` — Instant boolean gate. No request body required. An audit event is recorded for traceability. Use this for high-frequency feature gating where latency matters.
+      - **Evaluate** `POST` — Full evaluation with optional usage simulation. Before consuming expensive resources — LLM tokens, API calls, compute — pre-flight the request by passing `track.usageUnits`. Tanso simulates whether that consumption would be permitted under the customer's plan limits, without recording real usage. A zero-usage audit event is written for traceability. For usage simulation with pre-flight quota checks, use the POST endpoint.
+  - name: Events
+    description: |
+      Events are the bridge between what your product does and what you charge for it. Every API call, token consumed, file processed, or action taken becomes a billable event — ingested here and automatically rolled into the customer's next invoice.
+
+      Required for all usage-based and hybrid plans. Flat plans don't require events.
+
+      **Reliability built in:** Every event requires a unique `eventIdempotencyKey`. On retries, Tanso detects duplicates and returns `409 Conflict`, ignoring the repeat. Your usage data stays accurate even under network failures or service restarts.
+  - name: Billing
+    description: |
+      Tanso generates invoices automatically — on subscription creation, on renewal, and at the end of usage billing periods for metered plans. This section exposes those invoices and gives you two paths to collect payment.
+
+      **Stripe Checkout** — Generate a hosted Stripe Checkout URL for any invoice and redirect your customer to pay. Requires Stripe to be enabled on your account. No custom payment form required.
+
+      **Custom payment flows** — If you handle payment outside of Stripe (bank transfers, enterprise invoicing, internal credits), mark invoices as paid directly via the API to activate the associated subscription.
+
+paths:
+  # ── Customers ──────────────────────────────────────────────────────────
+  /api/v1/client/customers:
+    post:
+      tags:
+        - Customers
+      operationId: createCustomer
+      summary: Create a customer
+      description: |
+        Registers a new customer under your account. The `externalClientCustomerId` is your own identifier for this customer — use it consistently across all API calls.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+            example:
+              externalClientCustomerId: "cust_12345"
+              firstName: "Jane"
+              lastName: "Smith"
+              email: "jane@example.com"
+      responses:
+        '201':
+          description: Customer created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/client/customers/{externalClientCustomerId}:
+    get:
+      tags:
+        - Customers
+      operationId: getCustomer
+      summary: Retrieve a customer
+      description: |
+        Returns customer details along with all active subscriptions. Use your external reference ID to look up any customer.
+      parameters:
+        - name: externalClientCustomerId
+          in: path
+          required: true
+          description: Your external reference ID for the customer.
+          schema:
+            type: string
+          example: "cust_12345"
+      responses:
+        '200':
+          description: Customer retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseCustomerClientResponse'
+              example:
+                success: true
+                data:
+                  externalClientCustomerId: "cust_12345"
+                  firstName: "Jane"
+                  lastName: "Smith"
+                  email: "jane@example.com"
+                  createdAt: "2025-01-15T10:30:00Z"
+                  modifiedAt: "2025-01-15T10:30:00Z"
+                  subscriptions: []
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Customer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+              example:
+                success: false
+                error:
+                  message: "Customer not found."
+
+  # ── Subscriptions ──────────────────────────────────────────────────────
+  /api/v1/client/subscriptions:
+    post:
+      tags:
+        - Subscriptions
+      operationId: createSubscription
+      summary: Create a subscription
+      description: |
+        Subscribes a customer to a plan and immediately returns the new subscription with its initial invoice. For usage-based and hybrid plans, the invoice reflects the base charge (if any) — usage charges accumulate through the Events endpoint and appear on the next billing cycle invoice.
+
+        The customer is identified by your `externalClientCustomerId`. Retrieve available plan IDs from the Plans endpoint.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientSubscriptionRequest'
+            example:
+              planId: "550e8400-e29b-41d4-a716-446655440001"
+              customerReferenceId: "cust_12345"
+              gracePeriod: 3
+      responses:
+        '201':
+          description: Subscription created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseSubscribedCustomerResponse'
+              example:
+                success: true
+                data:
+                  subscription:
+                    id: "550e8400-e29b-41d4-a716-446655440010"
+                    isActive: true
+                    intervalMonths: "1"
+                    gracePeriodDays: 3
+                    currentPeriodStart: "2025-01-15T00:00:00Z"
+                    currentPeriodEnd: "2025-02-15T00:00:00Z"
+                    billingAnchorDay: 15
+                  invoice:
+                    id: "550e8400-e29b-41d4-a716-446655440020"
+                    amount: 49.00
+                    currency: "USD"
+                    status: "DUE"
+                    dueDate: "2025-01-18T00:00:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Plan or customer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/subscriptions/cancellation/{subscriptionId}:
+    post:
+      tags:
+        - Subscriptions
+      operationId: cancelSubscription
+      summary: Cancel a subscription
+      description: |
+        Cancels an active subscription. Choose between immediate cancellation or scheduling it for the end of the current billing period.
+
+        - **`IMMEDIATE`** — The subscription is deactivated right away.
+        - **`END_OF_PERIOD`** (default) — The subscription remains active until the current billing period ends, then cancels automatically.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          description: The subscription ID to cancel.
+          schema:
+            type: string
+            format: uuid
+        - name: cancelMode
+          in: query
+          required: false
+          description: When the cancellation takes effect.
+          schema:
+            type: string
+            enum:
+              - IMMEDIATE
+              - END_OF_PERIOD
+            default: END_OF_PERIOD
+      responses:
+        '200':
+          description: Subscription cancelled successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Subscription not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/subscriptions/cancellation/{subscriptionId}/scheduled:
+    delete:
+      tags:
+        - Subscriptions
+      operationId: revertScheduledCancellation
+      summary: Revert a scheduled cancellation
+      description: |
+        Reverses a previously scheduled end-of-period cancellation. The subscription returns to its normal active state and will renew as expected.
+
+        This only applies to subscriptions cancelled with `cancelMode=END_OF_PERIOD` that have not yet reached their period end.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          description: The subscription ID with the scheduled cancellation.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scheduled cancellation reverted successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Subscription not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/subscriptions/{subscriptionId}/plan-change:
+    post:
+      tags:
+        - Subscriptions
+      operationId: changeSubscriptionPlan
+      summary: Change subscription plan
+      description: |
+        Upgrades or downgrades a customer's subscription to a different plan.
+
+        **Upgrade behavior:** Takes effect immediately. A new invoice is generated for the upgraded plan.
+
+        **Downgrade behavior:** Scheduled for the end of the current billing period. The customer keeps their current plan until the period ends, then transitions to the new plan automatically.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          description: The subscription ID to change.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClientChangeSubscriptionRequest'
+            example:
+              changeToPlanId: "550e8400-e29b-41d4-a716-446655440002"
+              changeType: "UPGRADE"
+      responses:
+        '200':
+          description: Plan change processed or scheduled successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Subscription or plan not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/subscriptions/{subscriptionId}/plan-change/scheduled:
+    delete:
+      tags:
+        - Subscriptions
+      operationId: cancelScheduledPlanChange
+      summary: Cancel a scheduled plan change
+      description: |
+        Cancels a pending plan downgrade before it takes effect. The subscription remains on its current plan.
+      parameters:
+        - name: subscriptionId
+          in: path
+          required: true
+          description: The subscription ID with the scheduled change.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Scheduled plan change cancelled successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Subscription not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  # ── Plans ──────────────────────────────────────────────────────────────
+  /api/v1/client/plans:
+    get:
+      tags:
+        - Plans
+      operationId: listPlans
+      summary: List plans with pricing
+      description: |
+        Returns all active plans for your account, including linked features and their pricing configuration.
+
+        Use this to build pricing pages, plan comparison tables, or to retrieve plan IDs for subscription creation.
+      responses:
+        '200':
+          description: Plans retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePlanList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Entitlements ───────────────────────────────────────────────────────
+  /api/v1/client/entitlements/{customerReferenceId}/{feature-key}:
+    get:
+      tags:
+        - Entitlements
+      operationId: checkEntitlement
+      summary: Check feature entitlement
+      description: |
+        Performs a lightweight check to determine if a customer has access to a specific feature. Returns an `isAllowed` boolean with an explanation in `meta.reason`.
+
+        This is the fastest way to gate features — no request body required. An audit event is recorded for traceability. For usage simulation with pre-flight quota checks, use the POST endpoint.
+      parameters:
+        - name: customerReferenceId
+          in: path
+          required: true
+          description: Your external reference ID for the customer.
+          schema:
+            type: string
+          example: "cust_12345"
+        - name: feature-key
+          in: path
+          required: true
+          description: The unique key of the feature to check.
+          schema:
+            type: string
+          example: "premium_reports"
+      responses:
+        '200':
+          description: Entitlement check completed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEntitlementResponse'
+              examples:
+                allowed:
+                  summary: Access granted
+                  value:
+                    success: true
+                    data:
+                      referenceCustomerId: "cust_12345"
+                      featureKey: "premium_reports"
+                      isAllowed: true
+                      usage:
+                        used: 42
+                        limit: 1000
+                        remaining: 958
+                denied:
+                  summary: Access denied
+                  value:
+                    success: true
+                    data:
+                      referenceCustomerId: "cust_12345"
+                      featureKey: "premium_reports"
+                      isAllowed: false
+                      meta:
+                        reason:
+                          description: "Usage limit exceeded for this billing period."
+                      usage:
+                        used: 1000
+                        limit: 1000
+                        remaining: 0
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/client/entitlements:
+    post:
+      tags:
+        - Entitlements
+      operationId: evaluateEntitlement
+      summary: Evaluate entitlement with usage simulation
+      description: |
+        Evaluates whether a customer can access a feature, with optional pre-flight usage simulation.
+
+        **Without `track`:** Returns an `isAllowed` decision with a reason — identical in outcome to the GET check, but usable when you need a POST interface.
+
+        **With `track`:** Simulates whether the proposed `usageUnits` would be permitted under the customer's current plan limits — without recording real consumption. Use this to pre-flight expensive operations before they happen: check if a customer has 10,000 tokens remaining before firing an LLM call, for example. A zero-usage audit event is always written for traceability.
+
+        **Important:** When `track` is provided without `usageUnits`, the simulation assumes `1` unit. This endpoint does **not** record billable usage — to meter actual consumption, use the Events endpoint (`POST /api/v1/client/events`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EntitlementEvaluationRequest'
+            examples:
+              simple-check:
+                summary: Simple entitlement check
+                value:
+                  customerReferenceId: "cust_12345"
+                  featureKey: "api_access"
+              with-simulation:
+                summary: Check with usage simulation
+                value:
+                  customerReferenceId: "cust_12345"
+                  featureKey: "llm.generate"
+                  track:
+                    eventName: "llm.generate"
+                    usageUnits: 1000
+                  context:
+                    idempotencyKey: "req_abc123"
+                    flowId: "flow_chat_turn_42"
+      responses:
+        '200':
+          description: Entitlement evaluated successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEntitlementResponse'
+              examples:
+                simple-check:
+                  summary: Simple entitlement check
+                  value:
+                    success: true
+                    data:
+                      referenceCustomerId: "cust_12345"
+                      featureKey: "api_access"
+                      isAllowed: true
+                      flowId: "flow_chat_turn_42"
+                      usage:
+                        used: 500
+                        limit: 10000
+                        remaining: 9500
+                with-simulation:
+                  summary: Evaluation with usage simulation
+                  value:
+                    success: true
+                    data:
+                      referenceCustomerId: "cust_12345"
+                      featureKey: "llm.generate"
+                      isAllowed: true
+                      flowId: "flow_chat_turn_42"
+                      usage:
+                        used: 8000
+                        limit: 10000
+                        remaining: 2000
+                      simulation:
+                        requestedUsage: 1000
+                        projectedUsage: 9000
+                        projectedRemaining: 1000
+                        wouldExceedLimit: false
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # ── Events ─────────────────────────────────────────────────────────────
+  /api/v1/client/events:
+    post:
+      tags:
+        - Events
+      operationId: ingestEvent
+      summary: Ingest a usage event
+      description: |
+        Records a single usage event for billing and tracking. Events feed into invoice calculations for usage-based and hybrid plans.
+
+        **Idempotency:** Every event requires an `eventIdempotencyKey`. If a duplicate key is detected, the endpoint returns `409 Conflict` — making it safe to retry on failure.
+
+        **Customer identification:** Use either `customerReferenceId` (your external ID) or `customerId` (Tanso UUID), not both.
+
+        **Cost tracking:** Optionally include `costAmount` to track provider costs (COGS) alongside usage. If omitted and a cost model is configured on the feature, Tanso calculates it automatically from `usageUnits`.
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          required: false
+          description: Optional idempotency key. Overrides `eventIdempotencyKey` in the body if provided.
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventRequest'
+            example:
+              eventIdempotencyKey: "evt_20250115_cust12345_api"
+              eventName: "api_call"
+              occurredAt: "2025-01-15T14:30:00Z"
+              customerReferenceId: "cust_12345"
+              usageUnits: 150
+              meta:
+                endpoint: "/v1/generate"
+                model: "gpt-4"
+      responses:
+        '201':
+          description: Event ingested successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEventIngestionResponse'
+              example:
+                success: true
+        '200':
+          description: |
+            Event ingested, and the customer's usage has reached or exceeded the configured limit for this feature. The event is still recorded. Use the `usageLimitExceeded` flag to surface an upgrade prompt or restrict further access in your application.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseEventIngestionResponse'
+              example:
+                success: true
+                data:
+                  usageLimitExceeded: true
+                  message: "Usage limit exceeded for feature 'api_access'."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: Duplicate event detected. The event with this idempotency key has already been processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+              example:
+                success: false
+                error:
+                  message: "Duplicate event. An event with this idempotency key has already been processed."
+
+  # ── Billing ────────────────────────────────────────────────────────────
+  /api/v1/client/billing/invoices/{externalClientCustomerId}:
+    get:
+      tags:
+        - Billing
+      operationId: listCustomerInvoices
+      summary: List customer invoices
+      description: |
+        Retrieves all invoices for a customer using your external reference ID. Returns invoices across all subscriptions, sorted by creation date.
+      parameters:
+        - name: externalClientCustomerId
+          in: path
+          required: true
+          description: Your external reference ID for the customer.
+          schema:
+            type: string
+          example: "cust_12345"
+      responses:
+        '200':
+          description: Invoices retrieved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseInvoiceList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Customer not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/billing/invoices/{invoiceId}/mark-paid:
+    post:
+      tags:
+        - Billing
+      operationId: markInvoicePaid
+      summary: Mark invoice as paid
+      description: |
+        Manually marks an invoice as paid and activates the associated subscription. Use this when you handle payment collection outside of Stripe (e.g., bank transfers, custom payment flows, enterprise invoicing).
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          description: The invoice ID to mark as paid.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invoice marked as paid. Associated subscription is now active.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+              example:
+                success: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Invoice not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+  /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout:
+    post:
+      tags:
+        - Billing
+      operationId: createStripeCheckoutSession
+      summary: Create Stripe checkout session
+      description: |
+        Generates a hosted Stripe Checkout URL for a specific invoice. Redirect your customer to the returned URL to collect payment through Stripe's secure, hosted checkout page.
+
+        **Requirements:** Stripe must be enabled on your account. Configure your Stripe integration in the [Tanso Dashboard](https://dashboard.tansohq.com).
+
+        **Already paid:** If the invoice is already paid, the response will return successfully with an empty `url` field.
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          description: The invoice ID to create a checkout session for.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Checkout session created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseStripeCheckoutSession'
+              example:
+                success: true
+                data:
+                  url: "https://checkout.stripe.com/pay/cs_test_a1b2c3..."
+        '400':
+          description: Stripe is not enabled or the invoice is in an invalid state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+              example:
+                success: false
+                error:
+                  message: "Stripe is not enabled at the account."
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          description: Invoice not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        Pass your API key as a Bearer token. Keys are prefixed with `sk_test_` for the sandbox environment.
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Alternatively, pass your API key in the `X-API-Key` header.
+
+  responses:
+    Unauthorized:
+      description: Authentication failed. Verify your API key is correct and active.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+          example:
+            success: false
+            error:
+              message: "Invalid or missing API key."
+    Forbidden:
+      description: Access denied. Your API key does not have permission for this operation.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResponseError'
+          example:
+            success: false
+            error:
+              message: "Access denied."
+
+  schemas:
+    # ── Request Schemas ────────────────────────────────────────────────
+    CustomerRequest:
+      type: object
+      required:
+        - firstName
+        - lastName
+        - email
+      properties:
+        externalClientCustomerId:
+          type: string
+          description: Your unique identifier for this customer. Used as the primary lookup key across all API endpoints.
+          example: "cust_12345"
+        firstName:
+          type: string
+          description: Customer's first name.
+          example: "Jane"
+        lastName:
+          type: string
+          description: Customer's last name.
+          example: "Smith"
+        email:
+          type: string
+          format: email
+          description: Customer's email address.
+          example: "jane@example.com"
+        phoneNumber:
+          type: string
+          description: Customer's phone number.
+          example: "+1-555-0123"
+        address:
+          type: string
+          description: Customer's physical address.
+
+    ClientSubscriptionRequest:
+      type: object
+      required:
+        - planId
+        - customerReferenceId
+      properties:
+        planId:
+          type: string
+          description: The ID of the plan to subscribe to. Retrieve available plan IDs from the Plans endpoint.
+          example: "550e8400-e29b-41d4-a716-446655440001"
+        customerReferenceId:
+          type: string
+          description: Your external reference ID for the customer.
+          example: "cust_12345"
+        gracePeriod:
+          type: integer
+          description: Number of days after the invoice due date before the subscription is suspended for non-payment. Gives customers time to resolve payment issues without immediate access loss.
+          example: 3
+
+    ClientChangeSubscriptionRequest:
+      type: object
+      required:
+        - changeToPlanId
+        - changeType
+      properties:
+        changeToPlanId:
+          type: string
+          description: The ID of the plan to switch to.
+          example: "550e8400-e29b-41d4-a716-446655440002"
+        changeType:
+          type: string
+          enum:
+            - UPGRADE
+            - DOWNGRADE
+          description: |
+            The type of plan change. Determines timing:
+            - `UPGRADE` — Takes effect immediately with a new invoice.
+            - `DOWNGRADE` — Scheduled for the end of the current billing period.
+
+    EntitlementEvaluationRequest:
+      type: object
+      required:
+        - customerReferenceId
+        - featureKey
+      properties:
+        customerReferenceId:
+          type: string
+          maxLength: 128
+          description: Your external reference ID for the customer.
+          example: "cust_12345"
+        featureKey:
+          type: string
+          maxLength: 128
+          description: The unique key of the feature to evaluate.
+          example: "llm.generate"
+        track:
+          $ref: '#/components/schemas/TrackContext'
+        context:
+          $ref: '#/components/schemas/RequestContext'
+
+    TrackContext:
+      type: object
+      description: |
+        Optional tracking context for usage simulation. When provided, the system simulates whether the proposed usage would be allowed. A zero-usage audit event is recorded.
+      properties:
+        eventName:
+          type: string
+          maxLength: 128
+          description: A descriptive name for the action being attempted.
+          example: "llm.generate"
+        usageUnits:
+          type: number
+          default: 1
+          description: |
+            The number of usage units to simulate. Multiplied by the feature's `price_per_unit` to determine projected cost. Defaults to `1` if omitted.
+          example: 1000
+        meta:
+          type: object
+          additionalProperties: true
+          description: Arbitrary metadata to attach to the audit event.
+
+    RequestContext:
+      type: object
+      description: Optional correlation context for tracing and debugging.
+      properties:
+        idempotencyKey:
+          type: string
+          maxLength: 128
+          description: Caller-provided idempotency key for deduplication.
+          example: "req_abc123"
+        flowId:
+          type: string
+          maxLength: 128
+          description: A flow or correlation identifier to group related events.
+          example: "flow_chat_turn_42"
+
+    EventRequest:
+      type: object
+      required:
+        - eventIdempotencyKey
+        - eventName
+        - occurredAt
+      properties:
+        eventIdempotencyKey:
+          type: string
+          description: A unique key for this event. Used to prevent duplicate processing on retries.
+          example: "evt_20250115_cust12345_api"
+        eventName:
+          type: string
+          description: Name of the event. Should match a feature key or a meaningful tracking label.
+          example: "api_call"
+        occurredAt:
+          type: string
+          format: date-time
+          description: When the event occurred. Use ISO 8601 format.
+          example: "2025-01-15T14:30:00Z"
+        flowId:
+          type: string
+          description: Optional flow identifier to correlate related events.
+        featureKey:
+          type: string
+          description: The key of the feature this event tracks usage for. Used to resolve pricing rules and billing.
+        featureId:
+          type: string
+          format: uuid
+          description: Feature UUID. If provided, supersedes featureKey.
+        customerReferenceId:
+          type: string
+          description: Your external customer ID. Use this or `customerId`, not both.
+          example: "cust_12345"
+        customerId:
+          type: string
+          format: uuid
+          description: Tanso's internal customer UUID. Use this or `customerReferenceId`, not both.
+        subscriptionId:
+          type: string
+          format: uuid
+          description: Optional subscription ID to associate the event with a specific subscription.
+        entitlementId:
+          type: string
+          format: uuid
+          description: Optional entitlement ID for direct entitlement attribution.
+        invoiceId:
+          type: string
+          format: uuid
+          description: Optional invoice ID for direct invoice attribution.
+        costAmount:
+          type: number
+          description: |
+            Provider cost (COGS) for this event. If omitted and a cost model is configured on the feature, Tanso calculates it from `usageUnits` and `cost_per_unit`.
+          example: 0.05
+        usageUnits:
+          type: number
+          description: |
+            The quantity of usage to record (e.g., API calls, tokens, storage GB). Used for billing calculations and margin analysis.
+          example: 150
+        meta:
+          type: object
+          additionalProperties: true
+          description: Arbitrary metadata to attach to the event.
+
+    # ── Response Schemas ───────────────────────────────────────────────
+    ApiResponseVoid:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ApiResponseError:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorObject'
+
+    ErrorObject:
+      type: object
+      properties:
+        message:
+          type: string
+          description: A human-readable error message.
+        detail:
+          type: string
+          description: Additional context about the error, when available.
+
+    ApiResponseCustomerClientResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/CustomerClientResponse'
+
+    CustomerClientResponse:
+      type: object
+      properties:
+        externalClientCustomerId:
+          type: string
+          description: Your external reference ID for the customer.
+          example: "cust_12345"
+        firstName:
+          type: string
+          example: "Jane"
+        lastName:
+          type: string
+          example: "Smith"
+        email:
+          type: string
+          format: email
+          example: "jane@example.com"
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+        subscriptions:
+          type: array
+          description: All active subscriptions for this customer.
+          items:
+            $ref: '#/components/schemas/SubscriptionDto'
+        creditPools:
+          type: array
+          nullable: true
+          description: Credit pools associated with this customer.
+          items:
+            $ref: '#/components/schemas/CreditPoolDto'
+
+    CreditPoolDto:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        denomination:
+          type: string
+          example: "TOKENS"
+        currency:
+          type: string
+          example: "USD"
+        balance:
+          type: number
+        totalGranted:
+          type: number
+        totalConsumed:
+          type: number
+        totalExpired:
+          type: number
+        totalReversed:
+          type: number
+        hardLimit:
+          type: boolean
+          nullable: true
+        status:
+          type: string
+          enum:
+            - ACTIVE
+            - FROZEN
+            - DEPLETED
+            - ARCHIVED
+        rolloverPolicy:
+          type: string
+          enum:
+            - NONE
+            - FULL
+            - CAPPED
+        rolloverCap:
+          type: number
+          nullable: true
+        customerId:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+
+    ApiResponseSubscribedCustomerResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/SubscribedCustomerResponse'
+
+    SubscribedCustomerResponse:
+      type: object
+      properties:
+        subscription:
+          $ref: '#/components/schemas/SubscriptionDto'
+        invoice:
+          $ref: '#/components/schemas/InvoiceDto'
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata from the subscription creation.
+
+    SubscriptionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique subscription ID.
+        isActive:
+          type: boolean
+          description: Whether the subscription is currently active.
+        intervalMonths:
+          type: string
+          description: Billing interval in months.
+          example: "1"
+        customer:
+          $ref: '#/components/schemas/CustomerDto'
+        plan:
+          $ref: '#/components/schemas/PlanDto'
+        gracePeriodDays:
+          type: integer
+          description: Grace period in days. After an invoice passes its due date without payment, Tanso waits this many days before suspending the subscription. Gives customers time to resolve payment issues without immediate access loss.
+          example: 3
+        currentPeriodStart:
+          type: string
+          format: date-time
+          description: Start of the current billing period.
+        currentPeriodEnd:
+          type: string
+          format: date-time
+          description: End of the current billing period.
+        cancelMode:
+          type: string
+          description: Cancellation mode, if the subscription is being cancelled.
+          enum:
+            - IMMEDIATE
+            - END_OF_PERIOD
+        cancelEffectiveAt:
+          type: string
+          format: date-time
+          description: When the cancellation takes effect.
+        cancelledAt:
+          type: string
+          format: date-time
+          description: When the cancellation was initiated.
+        billingAnchorDay:
+          type: integer
+          description: Day of the month used as the billing anchor.
+          example: 1
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Additional metadata.
+        scheduledChange:
+          $ref: '#/components/schemas/SubscriptionScheduledChangeDto'
+
+    SubscriptionScheduledChangeDto:
+      type: object
+      description: A pending plan change scheduled for the end of the billing period.
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: Type of change.
+          enum:
+            - UPGRADE
+            - DOWNGRADE
+        subscriptionId:
+          type: string
+          format: uuid
+        fromPlan:
+          $ref: '#/components/schemas/PlanDto'
+        toPlan:
+          $ref: '#/components/schemas/PlanDto'
+        status:
+          type: string
+          description: Status of the scheduled change.
+          enum:
+            - PENDING
+            - COMPLETED
+            - CANCELLED
+            - FAILED
+          example: "PENDING"
+        effectiveAt:
+          type: string
+          format: date-time
+          description: When the change will take effect.
+        createdAt:
+          type: string
+          format: date-time
+
+    CustomerDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        externalClientCustomerId:
+          type: string
+          example: "cust_12345"
+        firstName:
+          type: string
+          example: "Jane"
+        lastName:
+          type: string
+          example: "Smith"
+        email:
+          type: string
+          format: email
+          example: "jane@example.com"
+        phoneNumber:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+
+    PlanDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Unique plan key.
+          example: "pro_monthly"
+        name:
+          type: string
+          description: Display name.
+          example: "Pro Plan"
+        description:
+          type: string
+        priceAmount:
+          type: number
+          description: Base price amount in dollars.
+          example: 49.00
+        intervalMonths:
+          type: string
+          example: "1"
+        billingTiming:
+          type: string
+          example: "IN_ARREARS"
+        status:
+          type: string
+          description: Plan lifecycle status.
+        metadata:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+
+    ApiResponseEntitlementResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/EntitlementResponse'
+
+    EntitlementResponse:
+      type: object
+      properties:
+        referenceCustomerId:
+          type: string
+          description: Your external customer reference ID.
+          example: "cust_12345"
+        featureKey:
+          type: string
+          description: The feature key that was checked.
+          example: "premium_reports"
+        isAllowed:
+          type: boolean
+          description: Whether the customer is allowed to access this feature.
+        flowId:
+          type: string
+          nullable: true
+          description: Flow ID for event correlation. Only populated on POST evaluate responses, not GET check responses.
+        meta:
+          type: object
+          nullable: true
+          description: Additional context about the entitlement decision.
+          properties:
+            reason:
+              type: object
+              description: Present only when access is denied. Contains a human-readable explanation.
+              properties:
+                description:
+                  type: string
+                  description: Human-readable explanation of why access was denied.
+        usage:
+          type: object
+          nullable: true
+          description: Current usage information for usage-based features.
+          properties:
+            used:
+              type: number
+              description: Units consumed in the current billing period.
+            limit:
+              type: number
+              nullable: true
+              description: Maximum allowed units per period. Null if unlimited.
+            remaining:
+              type: number
+              nullable: true
+              description: Units remaining before the limit is reached. Null if unlimited.
+        simulation:
+          type: object
+          nullable: true
+          description: Usage simulation results. Only present on POST evaluate responses when `track` is provided.
+          properties:
+            requestedUsage:
+              type: number
+              description: The number of units that were simulated.
+            projectedUsage:
+              type: number
+              description: Total usage if the simulated units were consumed.
+            projectedRemaining:
+              type: number
+              description: Remaining units after the simulated consumption.
+            wouldExceedLimit:
+              type: boolean
+              description: Whether the simulated usage would exceed the plan limit.
+        credit:
+          type: object
+          nullable: true
+          description: Credit pool information, when the feature is backed by a credit model.
+          properties:
+            denomination:
+              type: string
+              description: The unit of credit (e.g., "TOKENS").
+            balance:
+              type: number
+              description: Current credit balance.
+            totalGranted:
+              type: number
+              description: Total credits ever granted.
+            totalConsumed:
+              type: number
+              description: Total credits consumed to date.
+            hardLimit:
+              type: boolean
+              description: Whether access is denied when credits are exhausted.
+
+    ApiResponseEventIngestionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/EventIngestionResponse'
+
+    EventIngestionResponse:
+      type: object
+      description: Present in the response body when Tanso has additional information to surface alongside the ingested event — most commonly a usage limit warning. When `usageLimitExceeded` is `true`, the event was still recorded; your application should decide whether to restrict further usage or prompt an upgrade.
+      properties:
+        usageLimitExceeded:
+          type: boolean
+          description: Indicates whether this event caused a usage limit to be exceeded. The event is still recorded regardless.
+        message:
+          type: string
+          description: Human-readable message with details about the limit that was exceeded.
+
+    ApiResponsePlanList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientPlanFeatureLinkedDto'
+
+    ClientPlanFeatureLinkedDto:
+      type: object
+      description: A plan with its linked features and pricing configuration.
+      properties:
+        plan:
+          $ref: '#/components/schemas/ClientPlanDto'
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientFeatureDto'
+        creditAllocations:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/PlanCreditAllocationDto'
+
+    PlanCreditAllocationDto:
+      type: object
+      properties:
+        id:
+          type: string
+        creditModelId:
+          type: string
+        creditModelName:
+          type: string
+        denomination:
+          type: string
+          example: "TOKENS"
+        creditAmount:
+          type: number
+        grantExpiresMonths:
+          type: integer
+          nullable: true
+        hardLimit:
+          type: boolean
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ClientPlanDto:
+      type: object
+      description: Plan information as presented to client applications.
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+          description: Unique plan key.
+          example: "pro_monthly"
+        name:
+          type: string
+          description: Display name.
+          example: "Pro Plan"
+        description:
+          type: string
+          description: Plan description for display purposes.
+        priceAmount:
+          type: number
+          description: Base price amount in dollars.
+          example: 49.00
+        currency:
+          type: string
+          description: Currency code.
+          example: "USD"
+        intervalMonths:
+          type: integer
+          description: Billing interval in months.
+          example: 1
+        billingTiming:
+          type: string
+          description: |
+            When billing occurs:
+            - `IN_ADVANCE` — Charged at the start of the period.
+            - `IN_ARREARS` — Charged at the end of the period.
+          example: "IN_ARREARS"
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Custom metadata attached to the plan.
+
+    ClientFeatureDto:
+      type: object
+      description: A feature linked to a plan, with pricing details.
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Display name of the feature.
+          example: "API Access"
+        key:
+          type: string
+          description: The feature's unique string identifier. Pass this value as `feature-key` in entitlement check requests and as `eventName` in event ingestion to connect usage data to the correct feature.
+          example: "api_access"
+        description:
+          type: string
+          description: Feature description.
+        pricingType:
+          type: string
+          description: |
+            How this feature is priced within the plan:
+            - `included` — No additional charge; included in the base plan price.
+            - `usage_based` — Charged per unit of consumption.
+            - `graduated` — Tiered pricing based on usage volume.
+          enum:
+            - included
+            - usage_based
+            - graduated
+          example: "usage_based"
+        pricing:
+          nullable: true
+          $ref: '#/components/schemas/ClientFeaturePricingDto'
+
+    ClientFeaturePricingDto:
+      type: object
+      description: Pricing configuration for a usage-based or graduated feature. Null for included features.
+      properties:
+        model:
+          type: string
+          description: Pricing model type.
+          example: "usage"
+        pricePerUnit:
+          type: number
+          description: Price per unit of usage.
+          example: 0.05
+        unitLabel:
+          type: string
+          description: Human-readable label for the usage unit.
+          example: "messages"
+        maxUsage:
+          type: number
+          description: Maximum usage allowed per billing period. Null if unlimited.
+          example: 10000
+        resetMode:
+          type: string
+          description: |
+            How usage counters behave at the end of each billing period:
+            - `reset` — Usage resets to zero at the start of each new period.
+            - `accumulate` — Usage carries forward and accumulates across periods.
+          example: "reset"
+        tiers:
+          type: array
+          description: Graduated pricing tiers. Only present for graduated pricing.
+          items:
+            $ref: '#/components/schemas/ClientPriceTierDto'
+
+    ClientPriceTierDto:
+      type: object
+      description: A single tier in a graduated pricing schedule.
+      properties:
+        upTo:
+          oneOf:
+            - type: number
+            - type: string
+              enum:
+                - "inf"
+          description: |
+            Upper usage limit for this tier. Use `"inf"` for the final unbounded tier.
+          example: 100
+        pricePerUnit:
+          type: number
+          description: Price per unit within this tier.
+          example: 0.50
+        flatFee:
+          type: number
+          description: Fixed fee applied when this tier is reached.
+          example: 5.00
+
+    InvoiceDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          description: Total invoice amount.
+          example: 49.99
+        currency:
+          type: string
+          description: Currency code.
+          example: "USD"
+        status:
+          type: string
+          description: |
+            Lifecycle status of the invoice:
+            - `PENDING` — Generated and awaiting payment window.
+            - `DUE` — Payment window is open. Invoice is payable.
+            - `PAST_DUE` — Past the due date. Subscription may be in its grace period.
+            - `PAID` — Payment confirmed. Associated subscription is active.
+            - `VOID` — Invoice voided and no longer payable.
+            - `CANCELLED` — Invoice cancelled, typically because the subscription was cancelled.
+            - `CANCELLED_PROCESSED` — Invoice was cancelled after partial processing (e.g., usage already recorded).
+            - `ADJUSTMENT_OPEN` — Adjustment invoice generated and awaiting resolution.
+            - `ADJUSTMENT_PAID` — Adjustment invoice has been settled.
+          enum:
+            - PENDING
+            - DUE
+            - PAST_DUE
+            - PAID
+            - VOID
+            - CANCELLED
+            - CANCELLED_PROCESSED
+            - ADJUSTMENT_OPEN
+            - ADJUSTMENT_PAID
+          example: "PENDING"
+        dueDate:
+          type: string
+          format: date-time
+          description: Payment due date.
+        subscription:
+          $ref: '#/components/schemas/SubscriptionDto'
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+        items:
+          type: array
+          nullable: true
+          description: Line items for this invoice. Only populated on detail endpoints.
+          items:
+            $ref: '#/components/schemas/InvoiceItemDto'
+
+    InvoiceItemDto:
+      type: object
+      properties:
+        id:
+          type: string
+        invoiceId:
+          type: string
+        chargeAmount:
+          type: number
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        modifiedAt:
+          type: string
+          format: date-time
+
+    ApiResponseInvoiceList:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceDto'
+
+    ApiResponseStripeCheckoutSession:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          $ref: '#/components/schemas/StripeCheckoutSessionResponse'
+
+    StripeCheckoutSessionResponse:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Stripe-hosted checkout URL. Redirect your customer here to collect payment.
+          example: "https://checkout.stripe.com/pay/cs_test_a1b2c3..."

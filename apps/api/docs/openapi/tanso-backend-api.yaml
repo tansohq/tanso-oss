@@ -1,0 +1,966 @@
+openapi: 3.0.3
+info:
+  title: Tanso Backend API
+  description: Internal API for the Tanso UI and dashboard operations.
+  version: 1.0.0
+servers:
+  - url: https://api.tansoflow.com
+    description: Production server
+tags:
+  - name: Account
+    description: Account management, authentication, and API key operations
+  - name: Customers
+    description: Operations for managing customers
+  - name: Plans
+    description: Operations for managing subscription plans
+  - name: Features
+    description: Operations for managing features
+  - name: Subscriptions
+    description: Operations for managing customer subscriptions
+  - name: Monetization Rules
+    description: Operations for managing monetization rules (linking plans and features)
+  - name: Events
+    description: Operations for viewing usage events
+  - name: Onboarding
+    description: Public onboarding and signup operations
+
+paths:
+  # Onboarding
+  /public/v1/signup:
+    post:
+      tags: [Onboarding]
+      summary: Self-serve signup
+      description: Creates a new organization, user, and registers them for monetization. Returns a JWT token for seamless login.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: Successfully signed up
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtApiResponse'
+
+  # Authentication
+  /public/v1/login:
+    post:
+      tags: [Account]
+      summary: Login
+      description: Authenticates a user and returns a JWT token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsernameAndPasswordRequest'
+      responses:
+        '200':
+          description: Successfully authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JwtApiResponse'
+        '401':
+          description: Invalid credentials
+
+  # Account
+  /api/v1/account/api-keys:
+    get:
+      tags: [Account]
+      summary: Get account API keys
+      security: [{Bearer: []}]
+      responses:
+        '200':
+          description: Successfully retrieved API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountApiKeyApiResponse'
+  /api/v1/account/api-keys/rotate:
+    post:
+      tags: [Account]
+      summary: Rotate account API key
+      security: [{Bearer: []}]
+      responses:
+        '200':
+          description: Successfully rotated API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountApiKeyApiResponse'
+
+  # Customers
+  /api/v1/monetization/customers:
+    get:
+      tags: [Customers]
+      summary: List customers with pagination
+      security: [{Bearer: []}]
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCustomerDtoApiResponse'
+    post:
+      tags: [Customers]
+      summary: Create a customer
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDtoApiResponse'
+  /api/v1/monetization/customers/{id}:
+    get:
+      tags: [Customers]
+      summary: Get customer by ID
+      security: [{Bearer: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerDtoApiResponse'
+  /api/v1/monetization/customers/bulk:
+    get:
+      tags: [Customers]
+      summary: Get customers in bulk by IDs
+      security: [{Bearer: []}]
+      parameters:
+        - name: ids
+          in: query
+          required: true
+          schema:
+            type: array
+            items: {type: string}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerBulkResponseApiResponse'
+
+  # Plans
+  /api/v1/monetization/plans:
+    get:
+      tags: [Plans]
+      summary: List plans with pagination
+      security: [{Bearer: []}]
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedPlanDtoApiResponse'
+    post:
+      tags: [Plans]
+      summary: Create a plan
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDtoApiResponse'
+  /api/v1/monetization/plans/{id}:
+    get:
+      tags: [Plans]
+      summary: Get plan by ID
+      security: [{Bearer: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanDtoApiResponse'
+  /api/v1/monetization/plans/features:
+    get:
+      tags: [Plans]
+      summary: Get all plans with their linked features
+      security: [{Bearer: []}]
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFeatureLinkedDtoListApiResponse'
+  /api/v1/monetization/plans/bulk-delete:
+    post:
+      tags: [Plans]
+      summary: Delete multiple plans
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UuidListRequest'
+      responses:
+        '200':
+          description: Successfully deleted plans
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidApiResponse'
+
+  # Features
+  /api/v1/monetization/features:
+    get:
+      tags: [Features]
+      summary: List features with pagination
+      security: [{Bearer: []}]
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedFeatureDtoApiResponse'
+    post:
+      tags: [Features]
+      summary: Create a feature
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FeatureRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureDtoApiResponse'
+  /api/v1/monetization/features/{id}:
+    get:
+      tags: [Features]
+      summary: Get feature by ID
+      security: [{Bearer: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FeatureDtoApiResponse'
+  /api/v1/monetization/features/bulk-delete:
+    post:
+      tags: [Features]
+      summary: Delete multiple features
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UuidListRequest'
+      responses:
+        '200':
+          description: Successfully deleted features
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidApiResponse'
+
+  # Subscriptions
+  /api/v1/monetization/subscriptions:
+    get:
+      tags: [Subscriptions]
+      summary: List subscriptions with pagination
+      security: [{Bearer: []}]
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSubscriptionDtoApiResponse'
+    post:
+      tags: [Subscriptions]
+      summary: Create a subscription
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionDtoApiResponse'
+  /api/v1/monetization/subscriptions/{id}:
+    get:
+      tags: [Subscriptions]
+      summary: Get subscription by ID
+      security: [{Bearer: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubscriptionDtoApiResponse'
+    delete:
+      tags: [Subscriptions]
+      summary: Cancel a subscription
+      security: [{Bearer: []}]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: Successfully cancelled subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidApiResponse'
+
+    # Monetization Rules
+  /api/v1/monetization/rules/plan-features:
+    post:
+      tags: [Monetization Rules]
+      summary: Create plan-feature rule
+      description: Links a feature to a plan with specific rules. The 'value' field should contain a PricingModel and optional CostModel.
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanFeatureRuleRequest'
+      responses:
+        '201':
+          description: Successfully created a new plan feature rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFeatureRuleDtoApiResponse'
+    patch:
+      tags: [Monetization Rules]
+      summary: Update plan-feature rule
+      description: Updates rules for a plan-feature link.
+      security: [{Bearer: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanFeatureRuleRequest'
+      responses:
+        '200':
+          description: Successfully updated a plan feature rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFeatureRuleDtoApiResponse'
+
+  /api/v1/monetization/rules/plan-features/{planUuid}/{featureUuid}:
+    get:
+      tags: [Monetization Rules]
+      summary: Get plan-feature rule
+      description: Retrieves rules for a specific plan-feature link.
+      security: [{Bearer: []}]
+      parameters:
+        - name: planUuid
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: featureUuid
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Successfully retrieved plan feature rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFeatureRuleDtoApiResponse'
+    delete:
+      tags: [Monetization Rules]
+      summary: Delete plan-feature rule
+      description: Unlinks a feature from a plan.
+      security: [{Bearer: []}]
+      parameters:
+        - name: planUuid
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: featureUuid
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Successfully deleted a plan feature rule
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoidApiResponse'
+
+  /api/v1/monetization/rules/plan-features/diff/{planUuid}:
+    patch:
+      tags: [Monetization Rules]
+      summary: Sync plan-feature links
+      description: Links/Unlinks features for a plan based on a provided list (diff).
+      security: [{Bearer: []}]
+      parameters:
+        - name: planUuid
+          in: path
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlanFeatureLinkedDiffRequest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlanFeatureLinkedDiffResponseApiResponse'
+
+  # Events
+  /api/v1/tanso/events:
+    get:
+      tags: [Events]
+      summary: List events with pagination
+      security: [{Bearer: []}]
+      parameters:
+        - name: page
+          in: query
+          schema: {type: integer, default: 0}
+        - name: size
+          in: query
+          schema: {type: integer, default: 10}
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedEventDtoApiResponse'
+
+components:
+  securitySchemes:
+    Bearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # API Response Wrappers
+    AccountApiKeyApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/AccountApiKeyResponse'}
+    CustomerDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/CustomerDto'}
+    PagedCustomerDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          allOf:
+            - $ref: '#/components/schemas/PagedResponse'
+            - type: object
+              properties:
+                items:
+                  type: array
+                  items: {$ref: '#/components/schemas/CustomerDto'}
+    CustomerBulkResponseApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/CustomerBulkResponse'}
+    PlanDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/PlanDto'}
+    PagedPlanDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          allOf:
+            - $ref: '#/components/schemas/PagedResponse'
+            - type: object
+              properties:
+                items:
+                  type: array
+                  items: {$ref: '#/components/schemas/PlanDto'}
+    PlanFeatureLinkedDtoListApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/PlanFeatureLinkedDto'}
+    FeatureDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/FeatureDto'}
+    PagedFeatureDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          allOf:
+            - $ref: '#/components/schemas/PagedResponse'
+            - type: object
+              properties:
+                items:
+                  type: array
+                  items: {$ref: '#/components/schemas/FeatureDto'}
+    SubscriptionDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/SubscriptionDto'}
+    PagedSubscriptionDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          allOf:
+            - $ref: '#/components/schemas/PagedResponse'
+            - type: object
+              properties:
+                items:
+                  type: array
+                  items: {$ref: '#/components/schemas/SubscriptionDto'}
+    PlanFeatureRuleDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/PlanFeatureRuleDto'}
+    PlanFeatureLinkedDiffResponseApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/PlanFeatureLinkedDiffResponse'}
+    JwtApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data: {$ref: '#/components/schemas/JwtResponse'}
+    PagedEventDtoApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+        data:
+          allOf:
+            - $ref: '#/components/schemas/PagedResponse'
+            - type: object
+              properties:
+                items:
+                  type: array
+                  items: {$ref: '#/components/schemas/EventDto'}
+    VoidApiResponse:
+      type: object
+      properties:
+        success: {type: boolean}
+
+    # Models
+    AccountApiKeyResponse:
+      type: object
+      properties:
+        apiKey: {type: string}
+
+    UsernameAndPasswordRequest:
+      type: object
+      properties:
+        username: {type: string}
+        password: {type: string, format: password}
+
+    SignupRequest:
+      type: object
+      properties:
+        customerDetails: {$ref: '#/components/schemas/CustomerRequest'}
+        organizationName: {type: string}
+        password: {type: string, format: password}
+
+    JwtResponse:
+      type: object
+      properties:
+        token: {type: string}
+        type: {type: string, default: Bearer}
+
+    CustomerDto:
+      type: object
+      description: Data Transfer Object for Customer information
+      properties:
+        id: {type: string, format: uuid}
+        externalClientCustomerId: {type: string, example: "cust_12345"}
+        firstName: {type: string, example: "John"}
+        lastName: {type: string, example: "Doe"}
+        email: {type: string, example: "john.doe@example.com"}
+        phoneNumber: {type: string, example: "+1234567890"}
+        createdAt: {type: string, format: date-time}
+        modifiedAt: {type: string, format: date-time}
+
+    CustomerRequest:
+      type: object
+      properties:
+        externalClientCustomerId: {type: string}
+        firstName: {type: string}
+        lastName: {type: string}
+        email: {type: string}
+        phoneNumber: {type: string}
+        address: {type: string}
+
+    CustomerBulkResponse:
+      type: object
+      properties:
+        customers:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string, format: uuid}
+              referenceId: {type: string}
+              firstName: {type: string}
+              lastName: {type: string}
+              email: {type: string}
+
+    PlanDto:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        key: {type: string, example: "premium_monthly"}
+        name: {type: string, example: "Premium Plan"}
+        description: {type: string}
+        priceAmount: {type: integer, example: 2900}
+        intervalMonths: {type: string, example: "1"}
+        billingTiming: {type: string, example: "advance"}
+        createdAt: {type: string, format: date-time}
+        modifiedAt: {type: string, format: date-time}
+
+    PlanRequest:
+      type: object
+      properties:
+        key: {type: string}
+        name: {type: string}
+        priceAmount: {type: integer}
+        description: {type: string}
+        intervalMonths: {type: string}
+        billingTiming: {type: string}
+
+    PlanFeatureLinkedDto:
+      type: object
+      properties:
+        plan: {$ref: '#/components/schemas/PlanDto'}
+        features:
+          type: array
+          items: {$ref: '#/components/schemas/FeatureDto'}
+
+    FeatureDto:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        name: {type: string, example: "SSO Authentication"}
+        key: {type: string, example: "sso_auth"}
+        description: {type: string}
+        createdAt: {type: string, format: date-time}
+        modifiedAt: {type: string, format: date-time}
+        isEnabled: {type: boolean}
+
+    FeatureRequest:
+      type: object
+      properties:
+        name: {type: string}
+        key: {type: string}
+        description: {type: string}
+        isEnabled: {type: boolean}
+
+    SubscriptionDto:
+      type: object
+      properties:
+        id: {type: string}
+        isActive: {type: boolean}
+        intervalMonths: {type: string, example: "1"}
+        customer: {$ref: '#/components/schemas/CustomerDto'}
+        plan: {$ref: '#/components/schemas/PlanDto'}
+        gracePeriodDays: {type: integer, example: 3}
+        currentPeriodStart: {type: string, format: date-time}
+        currentPeriodEnd: {type: string, format: date-time}
+        cancelMode: {type: string}
+        cancelEffectiveAt: {type: string, format: date-time}
+        cancelledAt: {type: string, format: date-time}
+        billingAnchorDay: {type: integer}
+        metadata:
+          type: object
+          additionalProperties:
+            type: array
+            items: {type: object}
+        scheduledChange: {$ref: '#/components/schemas/SubscriptionScheduledChangeDto'}
+
+    SubscriptionRequest:
+      type: object
+      properties:
+        planId: {type: string}
+        customerId: {type: string}
+        gracePeriod: {type: integer}
+
+    SubscriptionScheduledChangeDto:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        effectiveAt: {type: string, format: date-time}
+        changeType: {type: string}
+        newPlanId: {type: string, format: uuid}
+
+    PlanFeatureRuleDto:
+      type: object
+      description: Data Transfer Object for Plan-Feature link rules
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier of the rule
+        planId:
+          type: string
+          format: uuid
+          description: ID of the associated plan
+        featureId:
+          type: string
+          format: uuid
+          description: ID of the associated feature
+        value:
+          oneOf:
+            - $ref: '#/components/schemas/PricingAndCostConfig'
+            - type: object
+              additionalProperties: true
+          description: >
+            Configuration values for the rule. Contains PricingModel and optional CostModel.
+        type:
+          type: string
+          description: Type of the rule
+          example: "BASE"
+        enabled:
+          type: boolean
+          description: Status indicating if the rule is enabled
+
+    PlanFeatureRuleRequest:
+      type: object
+      properties:
+        planId: {type: string}
+        featureId: {type: string}
+        isEnabled: {type: boolean}
+        type:
+          type: string
+          example: "BASE"
+        value:
+          oneOf:
+            - $ref: '#/components/schemas/PricingAndCostConfig'
+            - type: object
+              additionalProperties: true
+
+    PricingAndCostConfig:
+      type: object
+      properties:
+        model:
+          type: string
+          enum: ["usage", "graduated"]
+          description: The pricing model type.
+        usage_unit_type:
+          type: string
+          description: The unit of measurement (e.g., tokens, requests).
+        price_per_unit:
+          type: number
+          description: Price per unit for 'usage' model.
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceTier'
+          description: Pricing tiers for 'graduated' model.
+        cost_model:
+          type: string
+          enum: ["simple"]
+          description: Internal cost model type.
+        cost_per_unit:
+          type: number
+          description: Internal cost per unit.
+        cost_unit:
+          type: string
+          description: Currency or unit for cost (e.g., USD).
+
+    PriceTier:
+      type: object
+      properties:
+        upTo:
+          oneOf:
+            - type: number
+            - type: string
+              enum: ["inf"]
+          description: Upper limit of the tier. Use "inf" for the last tier.
+        pricePerUnit:
+          type: number
+          description: Price per unit for this tier.
+        flatFee:
+          type: number
+          description: Fixed charge applied once if any usage falls in this tier. Defaults to 0.
+
+    PlanFeatureLinkedDiffRequest:
+      type: object
+      properties:
+        features:
+          type: array
+          items:
+            type: object
+            properties:
+              featureId: {type: string, format: uuid}
+              isEnabled: {type: boolean}
+              type:
+                type: string
+                example: "BASE"
+                description: Type of the rule
+              value:
+                oneOf:
+                  - $ref: '#/components/schemas/PricingAndCostConfig'
+                  - type: object
+                    additionalProperties: true
+
+    PlanFeatureLinkedDiffResponse:
+      type: object
+      properties:
+        addedFeatures:
+          type: array
+          items: {$ref: '#/components/schemas/FeatureDto'}
+        removedFeatures:
+          type: array
+          items: {$ref: '#/components/schemas/FeatureDto'}
+
+    EventDto:
+      type: object
+      properties:
+        id: {type: string, format: uuid}
+        accountId: {type: string, format: uuid}
+        eventIdempotencyKey: {type: string, example: "event_12345"}
+        flowId: {type: string}
+        eventName: {type: string}
+        occurredAt: {type: string, format: date-time}
+        customerId: {type: string, format: uuid}
+        customerReferenceId: {type: string, example: "user_abc123"}
+        featureId: {type: string, format: uuid}
+        subscriptionId: {type: string, format: uuid}
+        entitlementId: {type: string, format: uuid}
+        invoiceId: {type: string, format: uuid}
+        costAmount: {type: number, description: "Provider cost (COGS)"}
+        costUnit: {type: string, example: "USD"}
+        revenueAmount: {type: number, description: "Customer-facing charge (revenue)"}
+        revenueUnit: {type: string, example: "USD"}
+        usageUnits: {type: number, example: 1000.00}
+        usageUnitType: {type: string, example: "tokens"}
+        properties: {type: object, additionalProperties: true}
+        meta: {type: object, additionalProperties: true}
+        context: {type: object, additionalProperties: true}
+        ingestError: {type: string}
+        createdAt: {type: string, format: date-time}
+        modifiedAt: {type: string, format: date-time}
+        eventType: {type: string}
+
+    UuidListRequest:
+      type: object
+      properties:
+        ids:
+          type: array
+          items: {type: string}
+
+    PagedResponse:
+      type: object
+      properties:
+        totalElements: {type: integer}
+        totalPages: {type: integer}
+        page: {type: integer}
+        size: {type: integer}
