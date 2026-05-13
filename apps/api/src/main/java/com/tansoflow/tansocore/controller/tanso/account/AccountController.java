@@ -119,37 +119,6 @@ public class AccountController {
                         .build());
     }
 
-    @PostMapping("/environment-token")
-    @Operation(summary = "Get token for target environment", description = "Exchanges the current JWT for a token in the target environment (e.g., sandbox)")
-    public ResponseEntity<ApiResponse<EnvironmentTokenResponse>> getEnvironmentToken(
-            @AuthenticationPrincipal UserContext userContext,
-            @Valid @RequestBody EnvironmentTokenRequest request) {
-        log.info("Environment token requested for user {} targeting {}", userContext.getUserId(), request.getTargetEnvironment());
-
-        if (!"sandbox".equals(request.getTargetEnvironment())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(ApiResponse.<EnvironmentTokenResponse>builder()
-                            .success(false)
-                            .error(new Error("Only 'sandbox' is supported as target environment"))
-                            .build());
-        }
-
-        try {
-            EnvironmentTokenResponse response = onboardingService.getEnvironmentToken(userContext);
-            return ResponseEntity.ok(ApiResponse.<EnvironmentTokenResponse>builder()
-                    .success(true)
-                    .data(response)
-                    .build());
-        } catch (Exception e) {
-            log.error("Failed to get environment token for user {}: {}", userContext.getUserId(), e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(ApiResponse.<EnvironmentTokenResponse>builder()
-                            .success(false)
-                            .error(new Error(e.getMessage()))
-                            .build());
-        }
-    }
-
     @PostMapping("/feature-request")
     @Operation(summary = "Request a feature", description = "Sends an internal email notifying the team of a feature interest")
     public ResponseEntity<ApiResponse<Void>> requestFeature(

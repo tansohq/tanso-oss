@@ -5,7 +5,6 @@ import com.tansoflow.tansocore.mcp.tools.AdminEventTools;
 import com.tansoflow.tansocore.mcp.tools.AdminFeatureTools;
 import com.tansoflow.tansocore.mcp.tools.AdminPlanFeatureRuleTools;
 import com.tansoflow.tansocore.mcp.tools.AdminPlanTools;
-import com.tansoflow.tansocore.mcp.tools.AiInsightTools;
 import com.tansoflow.tansocore.mcp.tools.AnalyticsTools;
 import com.tansoflow.tansocore.mcp.tools.BillingTools;
 import com.tansoflow.tansocore.mcp.tools.CreditTools;
@@ -39,14 +38,13 @@ public class McpServerConfig {
             AdminPlanFeatureRuleTools adminPlanFeatureRuleTools,
             StripeSetupTools stripeSetupTools,
             AnalyticsTools analyticsTools,
-            AiInsightTools aiInsightTools,
             AdminEventTools adminEventTools,
             AdminCreditTools adminCreditTools) {
         return MethodToolCallbackProvider.builder()
                 .toolObjects(planTools, entitlementTools, customerTools,
                         billingTools, creditTools, subscriptionTools, eventTools,
                         adminFeatureTools, adminPlanTools, adminPlanFeatureRuleTools,
-                        stripeSetupTools, analyticsTools, aiInsightTools,
+                        stripeSetupTools, analyticsTools,
                         adminEventTools, adminCreditTools)
                 .build();
     }

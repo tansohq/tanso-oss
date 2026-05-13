@@ -245,12 +245,9 @@ import {
   FileText,
   Activity,
   BookOpen,
-  Map as MapIcon,
   MessageSquare,
   Settings,
   PanelLeft,
-  BarChart3,
-  Cpu,
   Coins,
   ChevronDown,
   Check,
@@ -268,14 +265,11 @@ import { useEnvironmentStore } from '@/stores/environment'
 import { useAuthStore } from '@/stores/auth'
 import { env } from '@/lib/env'
 import { useTracking } from '@/lib/tracking'
-import { useAccountSettingsQuery } from '@/features/integrations/queries'
 
 const route = useRoute()
 const { track } = useTracking()
 const { toggleSidebar } = useSidebar()
 const environmentStore = useEnvironmentStore()
-const { data: settingsData } = useAccountSettingsQuery()
-
 const authStore = useAuthStore()
 const userMenuOpen = ref(false)
 const userEmail = computed(() => authStore.userEmail || '')

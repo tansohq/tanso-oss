@@ -2,7 +2,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { env } from '@/lib/env'
 import { checkSubscriptionStatus } from '@/lib/subscriptionCache'
-import { checkOnboardingStatus } from '@/lib/onboardingCache'
 
 const PRODUCTION_SIGNUP_URL = '/signup'
 
