@@ -72,7 +72,7 @@ Your Application Backend
     └─────────────────────────────────────────┘
          │
          ▼
-    Tanso Dashboard (dashboard.tansohq.com)
+    Tanso Dashboard (localhost:3000)
     ┌─────────────────────────────────────────┐
     │  Configure plans and features           │
     │  Monitor customers and invoices         │
@@ -116,7 +116,7 @@ Get from zero to a working Stripe integration in 10 minutes.
 
 ## Step 1: Create Your Account (~1 min)
 
-Sign up at [dashboard.tansohq.com](https://dashboard.tansohq.com). You land in Sandbox (amber dot in the top-left). Stay here for setup — all data is isolated from production.
+Sign up at [localhost:3000](http://localhost:3000). You land in Sandbox (amber dot in the top-left). Stay here for setup — all data is isolated from production.
 
 ---
 
@@ -172,7 +172,7 @@ An entitlement check answers: "Is this customer allowed to use this feature righ
 Replace `cust_abc123` with a `customerReferenceId` from your system and `api-calls` with a feature key from your catalog.
 
 ```bash
-curl -X GET "https://api.tansohq.com/api/v1/client/entitlements/cust_abc123/api-calls" \
+curl -X GET "http://localhost:8080/api/v1/client/entitlements/cust_abc123/api-calls" \
   -H "X-API-Key: $TANSO_API_KEY"
 ```
 
@@ -223,7 +223,7 @@ The entitlement check fails closed — if Tanso is unreachable, access is denied
 After a customer uses a feature, report it with an event. Events flow into Stripe Billing Meters and appear on the customer's next invoice.
 
 ```bash
-curl -X POST "https://api.tansohq.com/api/v1/client/events" \
+curl -X POST "http://localhost:8080/api/v1/client/events" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1328,7 +1328,7 @@ Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to comp
 - **[Analytics](./analytics.md)** — Invoice data and cost models combined into per-customer margin intelligence
 # Analytics & Portfolio Intelligence
 
-> **Coming Soon** — Analytics is currently in early access. [Request access](https://tansohq.com) or [book a call](https://cal.com/katrina-laszlo/30-minute-meeting) to get started.
+> **Coming Soon** — Analytics is currently in early access. [Request access](http://localhost:3000) or [book a call](https://cal.com/katrina-laszlo/30-minute-meeting) to get started.
 
 Most billing systems tell you what you collected. Tanso tells you what you actually made. The Analytics module computes per-customer margins from your configured cost models, classifies financial health, surfaces churn risk signals, and projects revenue trajectories.
 

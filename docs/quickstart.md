@@ -2,13 +2,13 @@
 
 Enforce usage limits and gate features with two API calls. No Stripe required.
 
-> **AI coding assistant?** Feed it `https://docs.tansohq.com/llms.txt` or `npm install @tansohq/sdk` for typed autocomplete.
+> **AI coding assistant?** Feed it `http://localhost:3000/llms.txt` or `npm install @tansohq/sdk` for typed autocomplete.
 
 ---
 
 ## Prerequisites
 
-You need a Tanso API key and at least one active plan with a feature. Get your key from [dashboard.tansohq.com](https://dashboard.tansohq.com) under **Settings > General**.
+You need a Tanso API key and at least one active plan with a feature. Get your key from [localhost:3000](http://localhost:3000) under **Settings > General**.
 
 ```bash
 export TANSO_API_KEY="sk_test_..."
@@ -24,12 +24,12 @@ Use your own IDs. No sync required.
 
 **curl:**
 ```bash
-curl -X POST "https://api.tansohq.com/api/v1/client/customers" \
+curl -X POST "http://localhost:8080/api/v1/client/customers" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "externalClientCustomerId": "user_123", "email": "jane@acme.com" }'
 
-curl -X POST "https://api.tansohq.com/api/v1/client/subscriptions" \
+curl -X POST "http://localhost:8080/api/v1/client/subscriptions" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{ "customerReferenceId": "user_123", "planKey": "starter" }'
@@ -53,11 +53,11 @@ These are the two calls you'll use in your request path. Check before processing
 **curl:**
 ```bash
 # Check: can this customer use this feature?
-curl "https://api.tansohq.com/api/v1/client/entitlements/user_123/ai-messages" \
+curl "http://localhost:8080/api/v1/client/entitlements/user_123/ai-messages" \
   -H "X-API-Key: $TANSO_API_KEY"
 
 # Report: they used 1 unit
-curl -X POST "https://api.tansohq.com/api/v1/client/events" \
+curl -X POST "http://localhost:8080/api/v1/client/events" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -148,8 +148,8 @@ See [Stripe Integration](./stripe-integration.md) for details.
 
 ## LLM-Friendly Docs
 
-- `https://docs.tansohq.com/llms.txt` - concise API summary for AI assistants
-- `https://docs.tansohq.com/llms-full.txt` - complete docs in one file
+- `http://localhost:3000/llms.txt` - concise API summary for AI assistants
+- `http://localhost:3000/llms-full.txt` - complete docs in one file
 
 ---
 

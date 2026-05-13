@@ -71,8 +71,8 @@ Then follow the **[Quickstart](./quickstart.md)**.
 
 Tanso publishes docs optimized for AI coding assistants:
 
-- `https://docs.tansohq.com/llms.txt` - concise summary
-- `https://docs.tansohq.com/llms-full.txt` - complete reference
+- `http://localhost:3000/llms.txt` - concise summary
+- `http://localhost:3000/llms-full.txt` - complete reference
 
 The TypeScript SDK also provides full types for autocomplete.
 

@@ -13,7 +13,7 @@ info:
 
     **Three calls to go live:**
 
-    1. **Get your API key** — Generate one in the [Tanso Dashboard](https://dashboard.tansohq.com). Takes 30 seconds.
+    1. **Get your API key** — Generate one in the [Tanso Dashboard](http://localhost:3000). Takes 30 seconds.
     2. **Authenticate** — Pass your key in every request:
        ```
        Authorization: Bearer sk_test_your_api_key
@@ -64,10 +64,10 @@ info:
   version: 1.0.0
   contact:
     name: Tanso Support
-    url: https://tansohq.com
-    email: support@tansohq.com
+    url: http://localhost:3000
+    email: support@example.com
   x-logo:
-    url: https://tansohq.com/logo.png
+    url: /logo.png
     altText: Tanso
 
 servers:
@@ -765,7 +765,7 @@ paths:
       description: |
         Generates a hosted Stripe Checkout URL for a specific invoice. Redirect your customer to the returned URL to collect payment through Stripe's secure, hosted checkout page.
 
-        **Requirements:** Stripe must be enabled on your account. Configure your Stripe integration in the [Tanso Dashboard](https://dashboard.tansohq.com).
+        **Requirements:** Stripe must be enabled on your account. Configure your Stripe integration in the [Tanso Dashboard](http://localhost:3000).
 
         **Already paid:** If the invoice is already paid, the response will return successfully with an empty `url` field.
       parameters:
