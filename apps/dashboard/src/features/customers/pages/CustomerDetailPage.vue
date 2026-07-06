@@ -282,6 +282,7 @@
         <DialogContent class="sm:max-w-[400px]">
           <DialogHeader>
             <DialogTitle>Grant Credits</DialogTitle>
+            <DialogDescription>Add credits to this customer's pool by hand.</DialogDescription>
           </DialogHeader>
           <div class="flex flex-col gap-4">
             <div class="flex flex-col gap-2">
@@ -348,6 +349,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

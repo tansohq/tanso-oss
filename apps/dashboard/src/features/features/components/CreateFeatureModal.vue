@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[600px]">
       <DialogHeader>
         <DialogTitle>Create New Feature</DialogTitle>
+        <DialogDescription>Define a feature you can meter or gate in your app.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-6">
@@ -81,6 +82,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

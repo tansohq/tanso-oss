@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[400px]">
       <DialogHeader>
         <DialogTitle>Edit Base Price</DialogTitle>
+        <DialogDescription>Set the plan's recurring base fee and when it's charged.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-6">
@@ -69,6 +70,7 @@ import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

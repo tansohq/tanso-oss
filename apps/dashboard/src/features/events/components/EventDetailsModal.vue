@@ -4,6 +4,7 @@
       <SheetHeader>
         <div class="flex items-center justify-between pr-8">
           <SheetTitle>Event Details</SheetTitle>
+          <SheetDescription class="sr-only">Full details for this usage event, including its pricing and cost breakdown.</SheetDescription>
           <div class="flex items-center gap-0 border rounded-md">
             <Button
               variant="ghost"
@@ -301,7 +302,7 @@ import { ChevronRight, ChevronUp, ChevronDown } from 'lucide-vue-next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 
 import CopyButton from '@/components/CopyButton.vue'

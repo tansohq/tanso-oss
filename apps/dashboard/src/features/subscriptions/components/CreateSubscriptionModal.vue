@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[600px]">
       <DialogHeader>
         <DialogTitle>Create New Subscription</DialogTitle>
+        <DialogDescription>Put a customer on a plan to start billing them.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-6">
@@ -112,6 +113,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

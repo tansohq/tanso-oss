@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[600px]">
       <DialogHeader>
         <DialogTitle>Submit test event</DialogTitle>
+        <DialogDescription>Send a manual usage event to check how entitlements respond.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-5">
@@ -285,6 +286,7 @@ import { usePlanFeaturesQuery } from '@/features/plans/queries'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[600px]">
       <DialogHeader>
         <DialogTitle>Create New Customer</DialogTitle>
+        <DialogDescription>Register a customer you can subscribe to plans and bill.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-6">
@@ -113,6 +114,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle

@@ -3,6 +3,7 @@
     <DialogContent class="sm:max-w-[500px]">
       <DialogHeader>
         <DialogTitle>Create Credit Model</DialogTitle>
+        <DialogDescription>Define a credit type customers can spend against features.</DialogDescription>
       </DialogHeader>
 
       <form @submit.prevent="onSubmit" class="flex flex-col gap-5">
@@ -68,6 +69,7 @@ import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle
