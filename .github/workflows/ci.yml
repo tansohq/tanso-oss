@@ -13,6 +13,22 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: dev_user
+          POSTGRES_PASSWORD: dev_pass
+          POSTGRES_DB: core_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dev_user -d core_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      JWT_SECRET: ci-test-secret-not-for-production-do-not-use
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4

@@ -230,6 +230,9 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!-- @Tag("manual") tests are integration checks run by hand against ambient
+                         data; they are not isolated and must not run in CI. -->
+                    <excludedGroups>manual</excludedGroups>
                     <systemPropertyVariables>
                         <spring.profiles.active>test</spring.profiles.active>
                     </systemPropertyVariables>

@@ -129,7 +129,7 @@
                 variant="outline"
                 size="sm"
                 @click="
-                  showImportConfirmDialog = true
+                  showImportConfirmDialog = true;
                   track('stripe_import_started')
                 "
               >
@@ -227,7 +227,7 @@
             </p>
             <Button
               @click="
-                showStripeModal = true
+                showStripeModal = true;
                 track('stripe_connection_started')
               "
               >Connect Stripe</Button
@@ -252,8 +252,8 @@
               <AlertDialogCancel>Cancel</AlertDialogCancel>
               <Button
                 @click="
-                  showImportConfirmDialog = false
-                  stripeModalSkipToDiscovery = true
+                  showImportConfirmDialog = false;
+                  stripeModalSkipToDiscovery = true;
                   showStripeModal = true
                 "
               >
