@@ -353,3 +353,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/2026.04.01.1.yaml
       id: "20260401-1"
+  - include:
+      file: db/changelog/2026.04.02.1.yaml
+      id: "20260402-1"

@@ -40,8 +40,10 @@ class AccountControllerTest {
     @Test
     void testGetAccountApiKey_Success() {
         AccountApiKey apiKey = new AccountApiKey();
-        apiKey.setKeyValue("sk_test_12345");
-        
+        // Keys are hashed at rest; only the display prefix is retrievable, never the full key.
+        apiKey.setKeyValue("hashed-value-not-returned");
+        apiKey.setKeyPrefix("sk_test_1234");
+
         when(accountService.retrieveFirstApiKey(userContext.getAccountId())).thenReturn(apiKey);
 
         ResponseEntity<ApiResponse<AccountApiKeyResponse>> response = accountController.getAccountApiKey(userContext);
@@ -49,7 +51,7 @@ class AccountControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertTrue(response.getBody().isSuccess());
-        assertEquals("sk_test_12345", response.getBody().getData().getApiKey());
+        assertEquals("sk_test_1234****************", response.getBody().getData().getApiKey());
         assertEquals("secret", response.getBody().getData().getKeyType());
     }
 }

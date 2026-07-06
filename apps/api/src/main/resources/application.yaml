@@ -6,6 +6,7 @@ app:
   dogfooding-enabled: false
   master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
   api-key-prefix: sk_test_
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
   mcp:
     enabled: false
 
@@ -19,7 +20,7 @@ spring:
   ai:
     mcp:
       server:
-        enabled: false
+        enabled: ${app.mcp.enabled:false}
         protocol: STREAMABLE
         name: tanso-mcp
         version: 0.5.2
@@ -48,7 +49,7 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        show_sql: true
+        show_sql: false
         jdbc:
           time_zone: UTC
 
@@ -69,10 +70,8 @@ logging:
     path: ./logs-generated
   level:
     liquibase: INFO
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Optional: shows query params
-    org.springframework.web: DEBUG
-    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
+    org.hibernate.SQL: WARN
+    org.springframework.web: INFO
 
 
 springdoc:

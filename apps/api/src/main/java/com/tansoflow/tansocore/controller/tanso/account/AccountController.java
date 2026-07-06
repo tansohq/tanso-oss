@@ -52,12 +52,14 @@ public class AccountController {
     private String adminEmail;
 
     @GetMapping("/api-key")
-    @Operation(summary = "Get account API key", description = "Returns the account's API key")
+    @Operation(summary = "Get account API key", description = "Returns a masked view of the account's API key. The full key is only shown once, at create/rotate time.")
     public ResponseEntity<ApiResponse<AccountApiKeyResponse>> getAccountApiKey(@AuthenticationPrincipal UserContext userContext) {
         AccountApiKey apiKey = accountService.retrieveFirstApiKey(userContext.getAccountId());
 
+        // The full key is stored only as a hash and cannot be recovered; return the display prefix + a mask.
+        String prefix = apiKey.getKeyPrefix() != null ? apiKey.getKeyPrefix() : "";
         AccountApiKeyResponse response = AccountApiKeyResponse.builder()
-                .apiKey(apiKey.getKeyValue())
+                .apiKey(prefix + "****************")
                 .keyType("secret") // Defaulting to secret as per current usage
                 .build();
 
@@ -81,8 +83,9 @@ public class AccountController {
                 UUID.fromString(userContext.getAccountId()),
                 "ACCOUNT", userContext.getAccountId(), null);
 
+        // Raw key is returned exactly once here; only its hash is persisted.
         AccountApiKeyResponse response = AccountApiKeyResponse.builder()
-                .apiKey(newKey.getKeyValue())
+                .apiKey(newKey.getRawKey())
                 .keyType("secret")
                 .build();
 

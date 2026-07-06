@@ -69,15 +69,8 @@ $$
                 ------------------------------------------------------------
                 -- 3) Account API key
                 ------------------------------------------------------------
-                INSERT INTO account_api_keys (account_id, key_type, key_value, is_active, expires_at, created_at,
-                                              modified_at)
-                VALUES (v_account_id,
-                        'SECRET',
-                        'sk_test_' || encode(gen_random_bytes(16), 'hex'),
-                        TRUE,
-                        v_now + INTERVAL '365 days',
-                        v_now,
-                        v_now);
+                -- API keys are hashed at rest and issued through the app (POST /api-key).
+                -- A plaintext key_value can never match the SHA-256 lookup, so none is seeded.
 
                 ------------------------------------------------------------
                 -- 4) Features (10 per tenant)

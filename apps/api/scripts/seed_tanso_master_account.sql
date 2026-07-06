@@ -18,18 +18,10 @@ VALUES (
 )
 ON CONFLICT (account_id) DO NOTHING;
 
--- 2. API Key (for internal context switching)
-INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at)
-VALUES (
-    '00000000-0000-0000-0000-000000000031',
-    '00000000-0000-0000-0000-000000000000',
-    'secret',
-    'sk_live_tanso_platform_master_key',
-    true,
-    '2099-01-01 00:00:00',
-    NOW()
-)
-ON CONFLICT (api_key_id) DO NOTHING;
+-- 2. No API key is seeded for the master account. Internal attribution uses the master
+-- account UUID directly (see EventServiceImpl / app.master-account-id), not an API key.
+-- API keys are stored only as a SHA-256 hash, so a working key cannot be seeded here.
+-- Issue one through the running app if the platform account ever needs external API access.
 
 -- 3. Feature: API Access
 INSERT INTO features (feature_id, account_id, name, key, description, is_enabled, is_deleted, metadata, created_at)

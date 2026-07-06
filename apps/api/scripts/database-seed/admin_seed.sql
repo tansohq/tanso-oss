@@ -18,10 +18,9 @@ INSERT INTO users_accounts (id, user_id, account_id, role, created_at)
 VALUES (gen_random_uuid(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-0000-0000-000000000001', 'ADMIN', NOW())
 ON CONFLICT DO NOTHING;
 
--- 4. Create API Key for Account
-INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at)
-VALUES (gen_random_uuid(), '00000000-0000-0000-0000-000000000001', 'SECRET', 'ts_live_admin_api_key', true, NOW() + INTERVAL '10 years', NOW())
-ON CONFLICT DO NOTHING;
+-- 4. API keys are NOT seeded. Keys are high-entropy secrets that the app stores only as a
+-- SHA-256 hash, so no working key can be inserted here. Issue one through the running app
+-- (POST /api/v1/account/api-key) after logging in; the raw key is shown once at that time.
 
 -- 5. Initialize Account Settings
 INSERT INTO account_settings (account_id, stripe_enabled)

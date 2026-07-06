@@ -29,6 +29,10 @@ COPY --from=build /workspace/target/app.jar /app/app.jar
 # Reasonable defaults for containerized JVMs
 ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+ExitOnOutOfMemoryError"
 
+# Default to the hardened "docker" profile (application-docker.yaml) so a bare `docker run`
+# doesn't fall back to the insecure base application.yaml. Override with SPRING_PROFILES_ACTIVE.
+ENV SPRING_PROFILES_ACTIVE=docker
+
 # Health/port hints (adjust if not 8080)
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=3s --start-period=30s --retries=3 \

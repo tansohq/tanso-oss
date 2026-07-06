@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -68,11 +71,19 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public Account findByApiKey(String apiKey) {
-        AccountApiKey accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(apiKey);
-        if (accountApiKey != null) {
-            return accountApiKey.getAccount();
+        AccountApiKey accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(hashApiKey(apiKey));
+        if (accountApiKey == null) {
+            return null;
         }
-        return null;
+        if (!Boolean.TRUE.equals(accountApiKey.getIsActive())) {
+            log.warn("API key authentication rejected: key {} is not active", accountApiKey.getId());
+            return null;
+        }
+        if (accountApiKey.getExpiresAt() == null || accountApiKey.getExpiresAt().isBefore(Instant.now())) {
+            log.warn("API key authentication rejected: key {} is expired", accountApiKey.getId());
+            return null;
+        }
+        return accountApiKey.getAccount();
     }
 
     @Override
@@ -97,9 +108,9 @@ public class AccountServiceImpl implements AccountService {
     public AccountApiKey retrieveFirstApiKey(String accountId) {
         List<AccountApiKey> keys = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));
 
-        // Prefer keys with valid sk_ prefix (required by ApiKeyAuthFilter)
+        // Keys are stored hashed, so we can no longer match on the value; prefer an active key
         return keys.stream()
-                .filter(k -> k.getKeyValue().startsWith("sk_live_") || k.getKeyValue().startsWith("sk_test_"))
+                .filter(k -> Boolean.TRUE.equals(k.getIsActive()))
                 .findFirst()
                 .or(() -> keys.stream().findFirst())
                 .orElseGet(() -> {
@@ -117,12 +128,15 @@ public class AccountServiceImpl implements AccountService {
         AccountApiKey apiKey = new AccountApiKey();
         apiKey.setAccount(account);
         apiKey.setKeyType("secret");
-        apiKey.setKeyValue(rawKey);
+        apiKey.setKeyValue(hashApiKey(rawKey));
+        apiKey.setKeyPrefix(displayPrefix(rawKey));
         apiKey.setIsActive(true);
         apiKey.setExpiresAt(Instant.now().plus(1825, ChronoUnit.DAYS));
 
         AccountApiKey saved = accountApiKeyRepository.save(apiKey);
         log.info("Created API key for account {}", account.getId());
+        // The raw key is never persisted; expose it once on the returned object so the caller can show it
+        saved.setRawKey(rawKey);
         return saved;
     }
 
@@ -141,6 +155,24 @@ public class AccountServiceImpl implements AccountService {
     private String generateRawApiKey() {
         String uuid = UUID.randomUUID().toString().replace("-", "");
         return appProperty.getApiKeyPrefix() + uuid;
+    }
+
+    private static String hashApiKey(String rawKey) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hashed = digest.digest(rawKey.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(hashed.length * 2);
+            for (byte b : hashed) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    private static String displayPrefix(String rawKey) {
+        return rawKey.substring(0, Math.min(12, rawKey.length()));
     }
 
     @Override

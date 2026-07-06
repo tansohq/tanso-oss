@@ -19,8 +19,8 @@ VALUES ('d6559146-c789-43f5-b95f-be486ca9b861', '0ab38d70-120e-4fce-9273-36496d1
 INSERT INTO account_settings (account_id, stripe_mode)
 VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'NONE');
 
--- 5. Create API Key
-INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at, modified_at)
-VALUES ('286c570c-8a08-441d-92c0-2fc074a93457', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'SECRET', 'sk_test_828df0fc77874c219f353417fbca1ef4', true, '2036-01-26 19:24:00', NOW(), NOW());
+-- 5. API keys are NOT seeded. Keys are stored only as a SHA-256 hash, so no working key
+-- can be inserted here. Issue one through the running app (POST /api/v1/account/api-key)
+-- after logging in as this user; the raw key is shown once at that time.
 
 COMMIT;

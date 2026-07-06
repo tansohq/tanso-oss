@@ -176,7 +176,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html","/public/**").permitAll()
                         .requestMatchers("/public/v1/signup").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/admin/**", "/public/stripe/ingest/webhook/**").permitAll()
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/public/stripe/ingest/webhook/**").permitAll()
                         // TODO: Remove this after Stripe integration for webhooks is completed.
                         .requestMatchers("/public").denyAll()
                 )

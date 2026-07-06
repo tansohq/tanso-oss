@@ -4,6 +4,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-tanso}
       POSTGRES_USER: ${POSTGRES_USER:-tanso}
+      # "changeme" is a non-functional placeholder — set POSTGRES_PASSWORD in your .env before deploying
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -24,7 +25,8 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-tanso}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-tanso}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      JWT_SECRET: ${JWT_SECRET:-generate-a-secure-random-string}
+      # Required — container fails to start if unset/empty (no insecure repo-published default)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     ports:
@@ -38,7 +40,7 @@ services:
       context: ../apps/dashboard
       dockerfile: Dockerfile
     environment:
-      VITE_API_URL: ${VITE_API_URL:-http://localhost:8080}
+      VITE_TANSO_BACKEND_URL: ${VITE_TANSO_BACKEND_URL:-http://localhost:8080}
     ports:
       - "${DASHBOARD_PORT:-3000}:3000"
     depends_on:

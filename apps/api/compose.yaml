@@ -39,7 +39,8 @@ services:
       - '5432'
     volumes:
       - tanso-dev:/var/lib/postgresql/data
-      - ./scripts/database-seed:/docker-entrypoint-initdb.d    
+      # DEV-ONLY seed data — auto-runs on first DB init. Never use this for a real/staging/prod deployment.
+      - ./scripts/database-seed:/docker-entrypoint-initdb.d
     networks:
       - local-tanso-dev-network
 

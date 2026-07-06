@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260402-1"
+      author: tanso
+      comment: "API keys are now stored as a SHA-256 hash in key_value; add a display prefix and a unique index on the hash."
+      changes:
+        - addColumn:
+            tableName: account_api_keys
+            columns:
+              - column:
+                  name: key_prefix
+                  type: varchar(16)
+        - sql:
+            dbms: postgresql
+            sql: |
+              CREATE UNIQUE INDEX uq_account_api_keys_key_value
+              ON account_api_keys (key_value)
+              WHERE deleted_at IS NULL;

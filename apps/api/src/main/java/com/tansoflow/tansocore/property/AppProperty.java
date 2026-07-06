@@ -19,7 +19,7 @@ public class AppProperty {
     private String stripeWebhookEndpoint;
     private boolean dogfoodingEnabled = false;
     private String masterAccountId = "00000000-0000-0000-0000-000000000000";
-    private List<String> corsAllowedOrigins = List.of("*");
+    private List<String> corsAllowedOrigins = List.of();
     private String apiKeyPrefix;
     private String defaultFreePlanId;
 

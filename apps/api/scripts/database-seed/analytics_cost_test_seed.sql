@@ -28,9 +28,8 @@ ON CONFLICT (user_id) DO NOTHING;
 INSERT INTO users_accounts (id, user_id, account_id, role, created_at)
 VALUES (gen_random_uuid(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '00000000-0000-0000-0000-000000000001', 'ADMIN', NOW());
 
--- 4. Create API Key for Account
-INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at)
-VALUES (gen_random_uuid(), '00000000-0000-0000-0000-000000000001', 'SECRET', 'ts_live_51P2...dummy_key_value', true, NOW() + INTERVAL '1 year', NOW());
+-- 4. API keys are hashed at rest and issued through the app (POST /api-key), not seeded.
+--    A plaintext key_value here can never match the SHA-256 lookup, so no key is seeded.
 
 -- 5. Create Features
 INSERT INTO features (feature_id, name, key, description, account_id, is_enabled, is_deleted, created_at)

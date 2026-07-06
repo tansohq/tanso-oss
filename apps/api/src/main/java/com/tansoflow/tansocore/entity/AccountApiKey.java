@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
@@ -45,6 +46,13 @@ public class AccountApiKey {
     @NotNull
     @Column(name = "key_value", nullable = false, length = Integer.MAX_VALUE)
     private String keyValue;
+
+    @Size(max = 16)
+    @Column(name = "key_prefix", length = 16)
+    private String keyPrefix;
+
+    @Transient
+    private String rawKey;
 
     @ColumnDefault("false")
     @Column(name = "is_active")

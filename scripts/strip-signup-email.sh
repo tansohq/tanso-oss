@@ -14,5 +14,5 @@ rm -f "$TANSO_OSS/apps/api/src/main/java/com/tansoflow/tansocore/service/interna
 rm -f "$TANSO_OSS/apps/api/src/main/java/com/tansoflow/tansocore/controller/tanso/account/NotifyUpgradeController.java"
 
 echo "=== Signup email stripped ==="
-echo "NOTE: AccountController.java still has hardcoded email addresses (kat@/doug@tansohq.com)."
+echo "NOTE: AccountController.java still has hardcoded email addresses (<founder-emails>)."
 echo "This needs manual editing to make email addresses configurable."
