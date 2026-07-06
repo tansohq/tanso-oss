@@ -36,6 +36,13 @@ own, set `ADMIN_PASSWORD` in `.env` before running `setup.sh`.)
 5. **Check entitlements** — real-time access checks that return allow/deny
 6. **Generate invoices** — automated billing cycles with Stripe sync
 
+## Documentation
+
+Full guides and API reference: **[docs.tanso.dev](https://docs.tanso.dev)**.
+
+For AI agents, the repo also ships machine-readable docs: [`docs/llms.txt`](docs/llms.txt)
+and the [OpenAPI spec](docs/clientAPI/openapi.yaml).
+
 ## Architecture
 
 ```
@@ -45,7 +52,7 @@ apps/
 deploy/
   docker-compose.yml
   setup.sh      First-run admin bootstrap
-docs/           API docs, quickstart, llms.txt
+docs/           OpenAPI spec + llms.txt (agent-readable docs)
 ```
 
 The official client SDK is published on npm as [`@tansohq/sdk`](https://www.npmjs.com/package/@tansohq/sdk).
