@@ -1,183 +1,69 @@
-# 🧱 Tanso Core – Build & Deploy Guide
+# Tanso API
 
-This project uses **GNU Make** to build, tag, push, and deploy Docker images to **AWS ECR** and **ECS**.
+The Tanso backend: real-time entitlement checks, usage metering, credit pools, billing
+and invoices, Stripe sync, and an MCP server for AI agents. Spring Boot (Java 21) +
+PostgreSQL.
 
----
+To run the whole platform (API + dashboard + database) the fast way, use the Docker
+Compose quickstart in the [root README](../../README.md). This guide is for working on
+the backend itself.
 
-## ⚙️ Requirements
+## Prerequisites
 
-- macOS with [Homebrew](https://brew.sh)
-- AWS CLI configured with appropriate credentials
-- Docker / Docker Desktop
-- Java 21 (for local builds)
-- Maven
-- **GNU Make (modern version)**
+- Java 21 (`java -version`)
+- A PostgreSQL 16 database
+- The Maven wrapper (`./mvnw`) is included — no separate Maven install needed
 
-> macOS ships an outdated Make. Install and use the modern one:
->
-> ```bash
-> brew install make
-> gmake --version
-> ```
->
-> If you see `GNU Make 4.x`, you’re good.
->
-> You can alias it for convenience:
-> ```bash
-> echo 'alias make="gmake"' >> ~/.zshrc
-> source ~/.zshrc
-> ```
+## Run locally
 
----
-
-## 📂 Project structure
-
-```
-tanso-core/
-├── src/
-├── pom.xml
-├── Dockerfile
-└── Makefile
-```
-
----
-
-## 🚀 Common commands
-
-All commands should be run from the project root (`tanso-core/`).
-
-### 1️⃣ Login to ECR
-Authenticate Docker to your AWS ECR registry.
+The backend reads its datasource and signing secret from the environment (there are no
+insecure defaults). Point it at a Postgres instance and start it:
 
 ```bash
-gmake login
+# from apps/api/
+export SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:5432/tanso
+export SPRING_DATASOURCE_USERNAME=tanso
+export SPRING_DATASOURCE_PASSWORD=your_password
+export JWT_SECRET=$(openssl rand -base64 48)
+
+./mvnw spring-boot:run
 ```
 
-✅ You should see: `Login Succeeded`
+Liquibase creates and migrates the schema on startup, so an empty database is fine. The
+API listens on http://localhost:8080; health is at `/actuator/health`.
 
----
+## Run the tests
 
-### 2️⃣ Build the Docker image
-Build your app’s JAR and package it into a Docker image.
+The suite runs against a real PostgreSQL — see `src/test/resources/application-test.yaml`,
+which expects a database reachable at `localhost:5432/core_db`. Provide a database and a
+JWT secret, then:
 
 ```bash
-gmake build VERSION=2025-10-08
+export JWT_SECRET=test-secret
+./mvnw test
 ```
 
-- Builds and tags `tanso-core:2025-10-08` locally
-- Re-tags for ECR:
-  ```
-  435254857358.dkr.ecr.us-east-1.amazonaws.com/tanso-core:2025-10-08
-  ```
+Integration tests tagged `@Tag("manual")` are excluded from `./mvnw test`.
 
-Check your image:
-```bash
-docker images | grep tanso-core
+## Configuration
+
+Key environment variables (see `src/main/resources/application.yaml` for the full set):
+
+| Variable | Purpose |
+|---|---|
+| `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | Database connection |
+| `JWT_SECRET` | Signing secret for dashboard JWTs — required, no default |
+| `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins (default `http://localhost:3000`) |
+| `APP_MCP_ENABLED` | Enable the MCP server at `/mcp` (default `false`) |
+| `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Optional Stripe integration |
+
+## Layout
+
 ```
-
----
-
-### 3️⃣ Push the image to AWS ECR
-Upload your new image.
-
-```bash
-gmake push VERSION=2025-10-08
+apps/api/
+  src/main/java/com/tansoflow/tansocore/   controllers, services, filters, jobs, mcp
+  src/main/resources/                       application.yaml + Liquibase changelogs
+  src/test/                                 JUnit tests
+  pom.xml
+  Dockerfile
 ```
-
-Verify in **AWS Console → ECR → tanso-core → Images**.
-
----
-
-### 4️⃣ Tag for an environment
-Create stable tags that ECS uses (`staging`, `prod`).
-
-```bash
-# For staging
-gmake tag-env VERSION=2025-10-08 ENV=staging
-
-# For production
-gmake tag-env VERSION=2025-10-08 ENV=prod
-```
-
-Now you’ll have:
-```
-tanso-core:staging
-tanso-core:prod
-```
-
----
-
-### 5️⃣ Deploy to ECS
-Force ECS to pull and run the latest tagged image.
-
-```bash
-# Staging
-gmake deploy-staging
-
-# Production
-gmake deploy-prod
-```
-
-ECS will start new tasks automatically.
-
----
-
-## 🔄 Typical full flow
-
-```bash
-cd ~/projects/tanso-core
-
-# 1. Authenticate to ECR
-gmake login
-
-# 2. Build new version
-gmake build VERSION=2025-10-08
-
-# 3. Push to ECR
-gmake push VERSION=2025-10-08
-
-# 4. Tag image for environment
-gmake tag-env VERSION=2025-10-08 ENV=staging
-
-# 5. Trigger ECS rollout
-gmake deploy-staging
-```
-
-Optional for prod:
-
-```bash
-gmake tag-env VERSION=2025-10-08 ENV=prod
-gmake deploy-prod
-```
-
----
-
-## 🧠 Notes
-
-- `VERSION` can be any unique string (date, semantic version, or git hash).
-- Terraform defines all infrastructure (ECS, ALB, DB, etc.).  
-  The Makefile only ships new application code.
-- You do **not** need to run Terraform for each deploy — just use the Makefile.
-
----
-
-### ✅ Quick reference
-
-| Command | Purpose |
-|----------|----------|
-| `gmake login` | Log in to AWS ECR |
-| `gmake build VERSION=x` | Build image |
-| `gmake push VERSION=x` | Push image to ECR |
-| `gmake tag-env VERSION=x ENV=staging` | Tag image for environment |
-| `gmake deploy-staging` | Roll out staging ECS service |
-| `gmake deploy-prod` | Roll out production ECS service |
-
----
-
-### 🧰 Troubleshooting
-
-**Error:** `commands commence before first target`  
-→ Ensure Makefile lines use **real TAB characters** (not spaces).
-
-**Error:** `No VERSION provided`  
-→ Use `gmake build VERSION=2025-10-08` (always specify a version).

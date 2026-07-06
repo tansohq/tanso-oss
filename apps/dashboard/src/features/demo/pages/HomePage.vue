@@ -139,7 +139,7 @@
       <div class="pt-2">
         <p class="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">Resources</p>
         <div class="flex flex-wrap gap-x-6 gap-y-2">
-          <a href="https://tanso-core.readme.io/" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
+          <a href="https://github.com/tansohq/tanso-oss/tree/main/docs" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1">
             <BookOpen class="w-3.5 h-3.5" /> REST API Docs <ArrowUpRight class="w-3 h-3" />
           </a>
         </div>

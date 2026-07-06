@@ -1,5 +1,4 @@
-# docker compose file for backend service
-# author: DOUGLAS BAEK
+# Local dev compose for the backend service (Postgres + API).
 
 services:
   backend-webservice:
