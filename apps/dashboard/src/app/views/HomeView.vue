@@ -292,7 +292,7 @@
         </p>
         <div class="flex flex-wrap gap-x-6 gap-y-2">
           <a
-            href="https://github.com/tansohq/tanso-oss/tree/main/docs"
+            href="https://docs.tanso.dev"
             target="_blank"
             rel="noopener noreferrer"
             class="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors py-1"

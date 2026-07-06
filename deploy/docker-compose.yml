@@ -29,6 +29,8 @@ services:
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Off by default. Set to true to expose the /mcp endpoint for AI agents.
+      APP_MCP_ENABLED: ${APP_MCP_ENABLED:-false}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

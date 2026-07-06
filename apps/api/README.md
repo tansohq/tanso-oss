@@ -32,6 +32,11 @@ export JWT_SECRET=$(openssl rand -base64 48)
 Liquibase creates and migrates the schema on startup, so an empty database is fine. The
 API listens on http://localhost:8080; health is at `/actuator/health`.
 
+There is also a `docker` Spring profile (`SPRING_PROFILES_ACTIVE=docker`) used by the
+Docker Compose stack. Its datasource defaults point at the `postgres` service on the
+container network rather than `localhost`, so use the plain command above when running
+against a database on your host.
+
 ## Run the tests
 
 The suite runs against a real PostgreSQL — see `src/test/resources/application-test.yaml`,

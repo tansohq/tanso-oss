@@ -8,7 +8,7 @@ Enforce usage limits and gate features with two API calls. No Stripe required.
 
 ## Prerequisites
 
-You need a Tanso API key and at least one active plan with a feature. Get your key from [localhost:3000](http://localhost:3000) under **Settings > General**.
+You need a Tanso API key and at least one active plan with a feature. If you self-hosted with `deploy/setup.sh`, it printed an API key on first run — reuse that one. Otherwise, get a key from [localhost:3000](http://localhost:3000) under **Settings > General**.
 
 ```bash
 export TANSO_API_KEY="sk_test_..."
@@ -35,6 +35,8 @@ curl -X POST "http://localhost:8080/api/v1/client/subscriptions" \
   -d '{ "customerReferenceId": "user_123", "planId": "plan_uuid_here" }'
 ```
 
+> Copy `planId` from the **Plans** page in the dashboard, or from the `id` field of the create-plan API response. The subscribe call returns the new subscription's `id` in its response — save it if you need to update or cancel the subscription later.
+
 **TypeScript SDK:**
 ```typescript
 import { TansoClient } from '@tansohq/sdk';
@@ -43,6 +45,8 @@ const tanso = new TansoClient(process.env.TANSO_API_KEY);
 await tanso.customers.create({ externalClientCustomerId: 'user_123', email: 'jane@acme.com' });
 await tanso.subscriptions.create({ customerReferenceId: 'user_123', planKey: 'starter' });
 ```
+
+> **Field names:** the curl examples use the raw API fields (`customerReferenceId`, `planId`). The SDK accepts those same names as aliases for the `externalClientCustomerId` and `planKey` shown above, so either form works.
 
 ---
 

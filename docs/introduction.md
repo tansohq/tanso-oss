@@ -69,10 +69,10 @@ Then follow the **[Quickstart](./quickstart.md)**.
 
 ## LLM-Friendly Docs
 
-Tanso publishes docs optimized for AI coding assistants:
+Tanso publishes docs optimized for AI coding assistants. Every page is served as plain text — agent-ready, with no login required:
 
-- `./llms.txt` - concise summary
-- `./llms-full.txt` - complete reference
+- `./llms.txt` - a concise index: a link to each doc with a one-line description
+- `./llms-full.txt` - the full reference: every doc flattened into a single file
 
 The TypeScript SDK also provides full types for autocomplete.
 

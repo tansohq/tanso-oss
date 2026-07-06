@@ -147,7 +147,7 @@ const analyticsItems = [
 ]
 
 const bottomItems = [
-  { title: 'API Docs', url: 'https://github.com/tansohq/tanso-oss/tree/main/docs', icon: BookOpen },
+  { title: 'API Docs', url: 'https://docs.tanso.dev', icon: BookOpen },
   { title: 'Roadmap', url: 'https://github.com/tansohq/tanso-oss/issues', icon: MapIcon },
   { title: 'Give Feedback', url: 'https://github.com/tansohq/tanso-oss/issues', icon: MessageSquare }
 ]

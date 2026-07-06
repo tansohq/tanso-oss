@@ -32,6 +32,33 @@ npm install
 npm run dev
 ```
 
+## Running Tests
+
+Run these locally before opening a PR. CI runs the same checks on every pull request to
+`main`, and they must pass before a PR can merge.
+
+### Backend (apps/api)
+
+```bash
+cd apps/api
+./mvnw test
+```
+
+Requires a running PostgreSQL. The Docker Compose setup in `deploy/` provides one; see
+Development Setup above.
+
+### Frontend (apps/dashboard)
+
+```bash
+cd apps/dashboard
+npm ci
+npx vue-tsc --noEmit   # type-check
+npm run build          # type-checks and builds (runs vue-tsc, then Vite)
+```
+
+CI also builds the Docker images from `deploy/docker-compose.yml`, so make sure your
+changes build cleanly in both apps.
+
 ## Pull Request Guidelines
 
 - Keep PRs focused on a single change
