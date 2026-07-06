@@ -296,7 +296,9 @@ const operateItems = [
 const isSandbox = computed(() => environmentStore.isSandbox)
 const isDeveloperEnvironment = computed(() => environmentStore.isDeveloperEnvironment)
 const showEnvironmentToggle = computed(
-  () => env.environment === 'production' || env.environment === 'sandbox'
+  () =>
+    (env.environment === 'production' || env.environment === 'sandbox') &&
+    !!env.sandboxApiBaseUrl
 )
 const environmentLabel = computed(() => {
   if (env.environment === 'staging') return 'Staging'

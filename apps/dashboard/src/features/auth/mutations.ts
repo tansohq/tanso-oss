@@ -57,7 +57,7 @@ export function useSignupMutation() {
           })
         }
         track('user_signed_up')
-        if (env.environment === 'production') {
+        if (env.environment === 'production' && env.sandboxApiBaseUrl) {
           try {
             await environmentStore.switchToSandbox()
           } catch (error) {
