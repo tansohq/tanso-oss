@@ -16,14 +16,16 @@ Open-source billing, metering, and entitlement platform.
 ## Quick Start
 
 ```bash
-git clone https://github.com/tanso-io/tanso.git
-cd tanso/deploy
-cp .env.example .env        # edit JWT_SECRET and passwords
+git clone https://github.com/tansohq/tanso-oss.git
+cd tanso-oss/deploy
+cp .env.example .env        # set JWT_SECRET and the DB password
 docker compose up -d
-./setup.sh                   # creates admin account
+./setup.sh                   # creates the admin account
 ```
 
-Open http://localhost:3000 and log in with `admin@example.com` / `changeme`.
+Open http://localhost:3000 and log in as `admin@example.com`. `setup.sh` generates a
+random admin password and prints it once — copy it from the output. (To choose your
+own, set `ADMIN_PASSWORD` in `.env` before running `setup.sh`.)
 
 ## What You Can Do
 
@@ -40,13 +42,13 @@ Open http://localhost:3000 and log in with `admin@example.com` / `changeme`.
 apps/
   api/          Spring Boot backend (Java 21)
   dashboard/    Vue 3 frontend
-packages/
-  sdk-java/     Java client SDK
 deploy/
   docker-compose.yml
   setup.sh      First-run admin bootstrap
 docs/           API docs, quickstart, llms.txt
 ```
+
+The official client SDK is published on npm as [`@tansohq/sdk`](https://www.npmjs.com/package/@tansohq/sdk).
 
 ## Client API
 

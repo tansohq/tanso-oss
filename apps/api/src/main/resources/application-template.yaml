@@ -77,8 +77,6 @@ jobs:
     cron: 0 0 2 * * *
   subscriptionCycle:
     cron: 0 0 6 * * *
-  signupEmail:
-    cron: 0 */2 * * * *
   backgroundJobsWithFixedDelay:
     reconciliationDelay: 10000
 

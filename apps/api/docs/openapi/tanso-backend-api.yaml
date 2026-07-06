@@ -21,14 +21,14 @@ tags:
     description: Operations for managing monetization rules (linking plans and features)
   - name: Events
     description: Operations for viewing usage events
-  - name: Onboarding
-    description: Public onboarding and signup operations
+  - name: Signup
+    description: Public self-serve signup
 
 paths:
-  # Onboarding
+  # Signup
   /public/v1/signup:
     post:
-      tags: [Onboarding]
+      tags: [Signup]
       summary: Self-serve signup
       description: Creates a new organization, user, and registers them for monetization. Returns a JWT token for seamless login.
       requestBody:

@@ -319,8 +319,8 @@ async function switchEnvironment(target: 'production' | 'sandbox') {
 }
 
 const bottomItems = [
-  { title: 'Documentation', url: 'https://github.com/tanso-io/tanso', icon: BookOpen },
-  { title: 'Report Issue', url: 'https://github.com/tanso-io/tanso/issues', icon: MessageSquare }
+  { title: 'Documentation', url: 'https://github.com/tansohq/tanso-oss', icon: BookOpen },
+  { title: 'Report Issue', url: 'https://github.com/tansohq/tanso-oss/issues', icon: MessageSquare }
 ]
 
 function isActive(to: string) {

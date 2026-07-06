@@ -148,8 +148,8 @@ const analyticsItems = [
 
 const bottomItems = [
   { title: 'API Docs', url: 'https://tanso-core.readme.io/', icon: BookOpen },
-  { title: 'Roadmap', url: 'https://github.com/tanso-io/tanso/issues', icon: MapIcon },
-  { title: 'Give Feedback', url: 'https://github.com/tanso-io/tanso/issues', icon: MessageSquare }
+  { title: 'Roadmap', url: 'https://github.com/tansohq/tanso-oss/issues', icon: MapIcon },
+  { title: 'Give Feedback', url: 'https://github.com/tansohq/tanso-oss/issues', icon: MessageSquare }
 ]
 
 function isActive(to: string) {
