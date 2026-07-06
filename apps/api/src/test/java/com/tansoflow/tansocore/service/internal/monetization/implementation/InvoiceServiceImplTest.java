@@ -165,6 +165,82 @@ class InvoiceServiceImplTest {
     }
 
     @Test
+    void testCreateNewInvoice_ExcludesCreditCoveredUsage() {
+        // event1's usage was fully paid by prepaid credits at ingestion; only event2 should be billed.
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan plan = new Plan();
+        plan.setId(UUID.randomUUID());
+        plan.setPriceAmount(BigDecimal.ZERO);
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setPlan(plan);
+        subscription.setAccount(account);
+        subscription.setIsActive(true);
+
+        Feature feature = new Feature();
+        feature.setId(UUID.randomUUID());
+        feature.setKey("llm.generate");
+
+        PlanFeatureRule rule = new PlanFeatureRule();
+        rule.setFeature(feature);
+        Map<String, Object> pricing = new HashMap<>();
+        pricing.put("model", "usage");
+        pricing.put("price_per_unit", 0.01);
+        rule.setValue(pricing);
+
+        Instant start = Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
+        Instant end = Instant.now();
+
+        Event event1 = new Event();
+        event1.setEventName("llm.generate");
+        event1.setUsageUnits(new BigDecimal("100"));
+        event1.setRevenueAmount(new BigDecimal("1.00"));
+        Map<String, Object> ctx = new HashMap<>();
+        ctx.put("credit_deducted", new BigDecimal("100")); // all 100 units covered by credits
+        event1.setContext(ctx);
+
+        Event event2 = new Event();
+        event2.setEventName("llm.generate");
+        event2.setUsageUnits(new BigDecimal("50"));
+        event2.setRevenueAmount(new BigDecimal("0.50"));
+
+        when(eventRepository.findEventsForBillingBySubscription(eq(customer.getId()), eq(subscription.getId()), any(), eq(start), eq(end)))
+                .thenReturn(List.of(event1, event2));
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(eventRepository.findEventsForBillingUntagged(eq(customer.getId()), any(), eq(start), eq(end)))
+                .thenReturn(List.of());
+        when(planFeatureRuleRepository.getPlanFeatureRuleByPlanIn(any())).thenReturn(List.of(rule));
+
+        AccountSetting accountSetting = new AccountSetting();
+        accountSetting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.NONE);
+        when(accountSettingRepository.findAccountSettingById(account.getId())).thenReturn(accountSetting);
+
+        when(invoiceRepository.saveAndFlush(any(Invoice.class))).thenAnswer(i -> {
+            Invoice inv = i.getArgument(0);
+            inv.setId(UUID.randomUUID());
+            return inv;
+        });
+
+        CreateInvoiceParams params = new CreateInvoiceParams(
+                subscription, LocalDate.now(), InvoiceStatus.DUE, start, end,
+                BigDecimal.ZERO, "USD", InvoiceType.REGULAR);
+
+        Invoice result = invoiceService.createNewInvoice(params);
+
+        // 1.50 total usage - 1.00 covered by credits = 0.50 billed (not 1.50 double-charge)
+        assertEquals(0, new BigDecimal("0.50").compareTo(result.getAmount()));
+    }
+
+    @Test
     void testCreateNewInvoice_CreatesBasePriceItem() {
         // Setup
         Account account = new Account();

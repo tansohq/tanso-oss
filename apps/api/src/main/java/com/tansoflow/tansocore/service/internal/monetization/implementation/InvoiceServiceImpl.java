@@ -333,12 +333,52 @@ public class InvoiceServiceImpl implements InvoiceService {
             BigDecimal totalUsageAmount = usageItems.stream()
                     .map(InvoiceItem::getChargeAmount)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
-            
+
             invoice.setAmount(invoice.getAmount().add(totalUsageAmount));
             log.info("Added {} usage items totaling {}", usageItems.size(), totalUsageAmount);
+
+            // Usage already paid via prepaid credits (deducted at ingestion) must not be billed again.
+            // The Stripe path applies this in applyCreditOffset; the internal invoice applies it here.
+            BigDecimal creditCovered = sumCreditCoveredRevenue(
+                    invoice.getSubscription(), invoice.getInvoicePeriodStart(), invoice.getInvoicePeriodEnd());
+            if (creditCovered.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal offset = creditCovered.min(totalUsageAmount);
+                invoice.setAmount(invoice.getAmount().subtract(offset));
+                log.info("Applied {} in prepaid credits to the usage charge", offset);
+            }
         } else {
             log.info("No usage events found for customer {}", invoice.getSubscription().getCustomer().getId());
         }
+    }
+
+    // Revenue for usage already covered by prepaid credits at ingestion (context "credit_deducted"),
+    // so the internal invoice can exclude it. Read-only — does not touch credit pools.
+    private BigDecimal sumCreditCoveredRevenue(Subscription sub, Instant start, Instant end) {
+        List<Event> events = new ArrayList<>(eventRepository.findEventsForBillingBySubscription(
+                sub.getCustomer().getId(), sub.getId(),
+                List.of(EventType.ENTITLEMENT_CHECKED, EventType.CLIENT_TRACKED), start, end));
+        long activeSubCount = subscriptionRepository.findSubscriptionsByCustomer_Id(sub.getCustomer().getId())
+                .stream().filter(Subscription::getIsActive).count();
+        if (activeSubCount <= 1) {
+            events.addAll(eventRepository.findEventsForBillingUntagged(
+                    sub.getCustomer().getId(),
+                    List.of(EventType.ENTITLEMENT_CHECKED, EventType.CLIENT_TRACKED), start, end));
+        }
+
+        BigDecimal covered = BigDecimal.ZERO;
+        for (Event e : events) {
+            if (e.getContext() == null) continue;
+            Object creditDeducted = e.getContext().get("credit_deducted");
+            if (creditDeducted == null) continue;
+            BigDecimal creditUnits = new BigDecimal(creditDeducted.toString());
+            BigDecimal usage = e.getUsageUnits();
+            BigDecimal revenue = e.getRevenueAmount();
+            if (usage == null || usage.compareTo(BigDecimal.ZERO) <= 0 || revenue == null) continue;
+            // Credit deduction is 1:1 with usage units, so covered revenue is proportional to covered units.
+            covered = covered.add(revenue.multiply(creditUnits)
+                    .divide(usage, 6, java.math.RoundingMode.HALF_UP));
+        }
+        return covered;
     }
 
     @Override
