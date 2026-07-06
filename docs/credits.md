@@ -122,5 +122,5 @@ A **Plan Credit Allocation** defines how many credits of a given denomination ar
 ## What to Read Next
 
 - **[Billing & Invoicing](./billing-and-invoicing.md)** — Understand how credit consumption interacts with invoice generation and payment
-- **[Analytics](./analytics.md)** — See how credit usage is factored into your portfolio's net effective MRR and margin analysis
+- **Analytics** — See how credit usage is factored into your portfolio's net effective MRR and margin analysis
 - **[Product Catalog](./product-catalog.md)** — Attach credit allocations to plans so every subscriber is provisioned automatically at each renewal

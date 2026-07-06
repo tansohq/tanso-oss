@@ -44,7 +44,7 @@ The entitlement check evaluates three distinct conditions before returning a res
 
 This three-factor evaluation ensures that access control is always derived from a single, authoritative check — you do not need to separately track usage quotas or credit balances in your own system.
 
-> **Note:** If the customer record cannot be located for the given `customerReferenceId`, the API returns an **HTTP 204 No Content** response with an empty body. This distinction lets you differentiate between "customer exists but is not entitled" (`allowed: false`) and "customer not found" (empty 204) — an important debugging signal when troubleshooting access issues.
+> **Note:** If the customer record cannot be located for the given `customerReferenceId`, the API returns an **HTTP 404 Not Found** response with a JSON error body (`success: false`). This distinction lets you differentiate between "customer exists but is not entitled" (`200 OK` with `allowed: false`) and "customer not found" (`404`) — an important debugging signal when troubleshooting access issues.
 
 ---
 
@@ -152,7 +152,7 @@ Entitlements are managed automatically at every stage of the subscription lifecy
 
 When a plan or feature configuration changes in a way that affects multiple customers — disabling a feature, or changing which features are included in a plan — Tanso enqueues reconciliation jobs to update entitlements across all affected subscriptions. **A single catalog change propagates to your entire customer base without manual intervention** — no scripts to run, no customer-by-customer updates.
 
-The reconciliation worker runs continuously with approximately a 10-second polling interval, ensuring entitlement state converges quickly after any configuration change.
+The reconciliation worker runs continuously with approximately a 30-second polling interval, ensuring entitlement state converges quickly after any configuration change.
 
 ---
 

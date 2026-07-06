@@ -25,7 +25,7 @@ POST /api/v1/client/customers
 X-API-Key: sk_live_...
 
 {
-  "externalClientCustomerId": "org_7f3a9b",
+  "customerReferenceId": "org_7f3a9b",
   "firstName": "Jane",
   "lastName": "Smith",
   "email": "jane@acmecorp.com"

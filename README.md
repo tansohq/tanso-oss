@@ -59,7 +59,7 @@ curl http://localhost:8080/api/v1/client/entitlements/cust_123/api-calls \
 curl -X POST http://localhost:8080/api/v1/client/events \
   -H "X-API-Key: sk_test_your_key" \
   -H "Content-Type: application/json" \
-  -d '{"customerReferenceId":"cust_123","featureKey":"api-calls","units":1}'
+  -d '{"customerReferenceId":"cust_123","featureKey":"api-calls","eventName":"api_call","usageUnits":1}'
 ```
 
 ## MCP Server

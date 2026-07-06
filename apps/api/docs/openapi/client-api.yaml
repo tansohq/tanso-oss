@@ -10,8 +10,8 @@ info:
     `Authorization: Bearer YOUR_API_KEY`
   version: 0.2.3
 servers:
-  - url: https://api.tansoflow.com
-    description: Production server
+  - url: http://localhost:8080
+    description: Self-hosted Tanso instance
 
 security:
   - BearerAuth: []
@@ -315,12 +315,12 @@ paths:
         '404':
           description: Invoice not found.
 
-  /api/v1/client/billing/invoices/{subscriptionId}/stripe/checkout:
+  /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout:
     post:
       tags:
         - Billing
       summary: Create Stripe checkout session
-      description: Generates a hosted Stripe Checkout URL for a subscription payment.
+      description: Generates a hosted Stripe Checkout URL for a subscription payment. Tanso resolves the first DUE invoice for the subscription automatically.
       parameters:
         - name: subscriptionId
           in: path
@@ -520,11 +520,11 @@ components:
 
     CustomerRequest:
       type: object
-      required: [externalClientCustomerId]
+      required: [customerReferenceId]
       properties:
-        externalClientCustomerId:
+        customerReferenceId:
           type: string
-          description: External client reference ID for the customer.
+          description: Your own reference ID for the customer.
           example: "cust_12345"
         firstName:
           type: string

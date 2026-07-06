@@ -39,7 +39,6 @@ A **Plan** is a named bundle of features with a base price and a billing configu
 | `currency`       | ISO 4217 (e.g., `USD`)        | Billing currency for this plan                                            |
 | `intervalMonths` | Integer                       | Billing period length in months (1 = monthly, 3 = quarterly, 12 = annual) |
 | `billingTiming`  | `IN_ADVANCE` or `IN_ARREARS`  | When the invoice is due relative to the period it covers                  |
-| `billingModel`   | `standard` or `USAGE`         | Whether usage-based charges apply in addition to the base price           |
 | `status`         | `Draft`, `Active`, `Archived` | Lifecycle status of the plan                                              |
 | `metadata`       | JSON                          | Arbitrary custom fields                                                   |
 
@@ -91,14 +90,14 @@ Flat rate per usage unit.
 
 ### Usage Limits
 
-Any pricing model can include a `maxUsage` field that caps cumulative consumption. When reached, entitlement checks return `allowed: false`.
+Any pricing model can include a `max_usage` field that caps cumulative consumption. When reached, entitlement checks return `allowed: false`.
 
 ```json
 {
   "model": "usage",
   "usage_unit_type": "token",
   "price_per_unit": 0.0001,
-  "maxUsage": 1000000
+  "max_usage": 1000000
 }
 ```
 

@@ -18,7 +18,7 @@ The **Feature Key** (`featureKey`) links the event to a feature for billing and 
 
 **What happens if I ingest an event for a customer with no active subscription?**
 
-Tanso still records the event, but it is not used for billing since there is no active subscription to bill against. The event's `isEntitled` property will be `false`.
+Tanso still records the event, but it is not used for billing since there is no active subscription to bill against.
 
 ---
 
@@ -48,7 +48,7 @@ Yes. Upgrades take effect immediately with proration. Downgrades are scheduled f
 
 **How do I generate a Stripe Checkout session?**
 
-`POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout` — pass the **invoice ID**, not the subscription ID. To get the invoice ID, first retrieve invoices with `GET /api/v1/client/billing/invoices/{externalClientCustomerId}`.
+`POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout` — pass the **subscription ID**. Tanso resolves the first DUE invoice for that subscription automatically.
 
 ---
 

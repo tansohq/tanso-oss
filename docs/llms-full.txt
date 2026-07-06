@@ -105,7 +105,7 @@ Your backend sends usage events and checks entitlements at runtime. Your billing
 - **[Product Catalog](./product-catalog.md)** — Define features, plans, and pricing
 - **[Stripe Integration](./stripe-integration.md)** — Deep dive on billing modes and checkout
 - **[TypeScript SDK](https://www.npmjs.com/package/@tansohq/sdk)** — Official Node.js client
-- **[API Reference](https://tanso-core.readme.io/)** — Full endpoint documentation
+- **[API Reference](./clientAPI/openapi.yaml)** — Full endpoint documentation (OpenAPI spec)
 # Quickstart
 
 Get from zero to a working Stripe integration in 10 minutes.
@@ -329,20 +329,20 @@ This is the standard setup for teams going to production.
 
 ### Stripe Checkout Sessions
 
-Once Stripe is connected, your backend requests a hosted Checkout URL for a specific invoice and redirects your customer to complete payment. Tanso processes the Stripe webhook — entitlements activate automatically once payment clears.
+Once Stripe is connected, your backend requests a hosted Checkout URL for a subscription and redirects your customer to complete payment. Tanso processes the Stripe webhook — entitlements activate automatically once payment clears.
 
 ```
-POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout
+POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout
 ```
 
 **Authentication:** `X-API-Key: <your-api-key>`
 
-**Important:** The path parameter is `invoiceId`, not a subscription ID. A deprecated form of this endpoint used the subscription ID and now returns HTTP 403. Retrieve the invoice ID from the customer's invoice list first.
+**Important:** The path parameter is a `subscriptionId`. Tanso resolves the first DUE invoice for that subscription automatically. A deprecated `/invoices/subscription/{subscriptionId}/stripe/checkout` form now returns HTTP 403.
 
 **curl example:**
 
 ```bash
-curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/stripe/checkout \
+curl -X POST http://localhost:8080/api/v1/client/billing/subscriptions/a1b2c3d4-e5f6-7890-abcd-ef1234567890/stripe/checkout \
   -H "X-API-Key: sk_live_tanso_abc123"
 ```
 
@@ -368,13 +368,13 @@ curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e
 }
 ```
 
-**Response (invoice not found):**
+**Response (no due invoice):**
 
 ```json
 {
   "success": false,
   "error": {
-    "message": "Invoice not found"
+    "message": "No DUE invoice found for this subscription"
   }
 }
 ```
@@ -385,7 +385,7 @@ Redirect your customer to `data.url`. Stripe handles PCI compliance, card proces
 
 ```js
 const response = await fetch(
-  `https://api.tanso.dev/api/v1/client/billing/invoices/${invoiceId}/stripe/checkout`,
+  `http://localhost:8080/api/v1/client/billing/subscriptions/${subscriptionId}/stripe/checkout`,
   {
     method: 'POST',
     headers: { 'X-API-Key': process.env.TANSO_API_KEY },
@@ -437,7 +437,7 @@ POST /api/v1/client/billing/invoices/{invoiceId}/mark-paid
 **curl example:**
 
 ```bash
-curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/mark-paid \
+curl -X POST http://localhost:8080/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/mark-paid \
   -H "X-API-Key: sk_live_tanso_abc123"
 ```
 
@@ -1302,11 +1302,11 @@ Use this to confirm payment collected through your own mechanisms, or for testin
 ### Generate a Stripe Checkout Session
 
 ```http
-POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout
+POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout
 X-API-Key: sk_live_...
 ```
 
-Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to complete payment.
+Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to complete payment. Tanso resolves the first DUE invoice for the subscription automatically.
 
 ```json
 {
@@ -1317,7 +1317,7 @@ Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to comp
 }
 ```
 
-> **Important:** This endpoint takes an `invoiceId`, not a subscription ID. An earlier version used the subscription ID — that form is deprecated and returns HTTP 403.
+> **Important:** This endpoint takes a `subscriptionId`, not an invoice ID. An earlier `/invoices/subscription/{subscriptionId}/stripe/checkout` form is deprecated and returns HTTP 403.
 
 ---
 
@@ -1328,7 +1328,7 @@ Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to comp
 - **[Analytics](./analytics.md)** — Invoice data and cost models combined into per-customer margin intelligence
 # Analytics & Portfolio Intelligence
 
-> **Coming Soon** — Analytics is currently in early access. [Request access](http://localhost:3000) or [book a call](https://cal.com/katrina-laszlo/30-minute-meeting) to get started.
+> **Coming Soon** — Analytics is currently in early access. [Request access](http://localhost:3000) to get started.
 
 Most billing systems tell you what you collected. Tanso tells you what you actually made. The Analytics module computes per-customer margins from your configured cost models, classifies financial health, surfaces churn risk signals, and projects revenue trajectories.
 
@@ -1513,7 +1513,7 @@ Yes. Upgrades take effect immediately with proration. Downgrades are scheduled f
 
 **How do I generate a Stripe Checkout session?**
 
-`POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout` — pass the **invoice ID**, not the subscription ID. To get the invoice ID, first retrieve invoices with `GET /api/v1/client/billing/invoices/{externalClientCustomerId}`.
+`POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout` — pass the **subscription ID**. Tanso resolves the first DUE invoice for that subscription automatically.
 
 ---
 

@@ -4,8 +4,8 @@ info:
   description: Internal API for the Tanso UI and dashboard operations.
   version: 1.0.0
 servers:
-  - url: https://api.tansoflow.com
-    description: Production server
+  - url: http://localhost:8080
+    description: Self-hosted Tanso instance
 tags:
   - name: Account
     description: Account management, authentication, and API key operations

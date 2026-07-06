@@ -92,11 +92,11 @@ Use this to confirm payment collected through your own mechanisms, or for testin
 ### Generate a Stripe Checkout Session
 
 ```http
-POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout
+POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout
 X-API-Key: sk_live_...
 ```
 
-Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to complete payment.
+Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to complete payment. Tanso resolves the first DUE invoice for the subscription automatically.
 
 ```json
 {
@@ -107,7 +107,7 @@ Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to comp
 }
 ```
 
-> **Important:** This endpoint takes an `invoiceId`, not a subscription ID. An earlier version used the subscription ID — that form is deprecated and returns HTTP 403.
+> **Important:** This endpoint takes a `subscriptionId`, not an invoice ID. An earlier `/invoices/subscription/{subscriptionId}/stripe/checkout` form is deprecated and returns HTTP 403.
 
 ---
 
@@ -115,4 +115,4 @@ Returns a hosted Stripe Checkout URL. Redirect your customer to this URL to comp
 
 - **[Stripe Integration](./stripe-integration.md)** — Connect Stripe to automate payment collection
 - **[Credits](./credits.md)** — Pre-paid credit pools on top of billing
-- **[Analytics](./analytics.md)** — Invoice data and cost models combined into per-customer margin intelligence
+- **Analytics** — Invoice data and cost models combined into per-customer margin intelligence

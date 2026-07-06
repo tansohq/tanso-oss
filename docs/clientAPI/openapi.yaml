@@ -71,8 +71,8 @@ info:
     altText: Tanso
 
 servers:
-  - url: https://sandbox.api.tansoflow.com
-    description: Sandbox
+  - url: http://localhost:8080
+    description: Self-hosted Tanso instance
 
 security:
   - BearerAuth: []

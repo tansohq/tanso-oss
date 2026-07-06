@@ -2,7 +2,7 @@
 
 Enforce usage limits and gate features with two API calls. No Stripe required.
 
-> **AI coding assistant?** Feed it `http://localhost:3000/llms.txt` or `npm install @tansohq/sdk` for typed autocomplete.
+> **AI coding assistant?** Feed it `./llms.txt` or `npm install @tansohq/sdk` for typed autocomplete.
 
 ---
 
@@ -27,12 +27,12 @@ Use your own IDs. No sync required.
 curl -X POST "http://localhost:8080/api/v1/client/customers" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{ "externalClientCustomerId": "user_123", "email": "jane@acme.com" }'
+  -d '{ "customerReferenceId": "user_123", "email": "jane@acme.com" }'
 
 curl -X POST "http://localhost:8080/api/v1/client/subscriptions" \
   -H "X-API-Key: $TANSO_API_KEY" \
   -H "Content-Type: application/json" \
-  -d '{ "customerReferenceId": "user_123", "planKey": "starter" }'
+  -d '{ "customerReferenceId": "user_123", "planId": "plan_uuid_here" }'
 ```
 
 **TypeScript SDK:**
@@ -148,8 +148,8 @@ See [Stripe Integration](./stripe-integration.md) for details.
 
 ## LLM-Friendly Docs
 
-- `http://localhost:3000/llms.txt` - concise API summary for AI assistants
-- `http://localhost:3000/llms-full.txt` - complete docs in one file
+- `./llms.txt` - concise API summary for AI assistants
+- `./llms-full.txt` - complete docs in one file
 
 ---
 
@@ -161,4 +161,4 @@ See [Stripe Integration](./stripe-integration.md) for details.
 - [Usage Metering & Events](./usage-metering-and-events.md) - event schema, idempotency
 - [Credits](./credits.md) - pre-paid balances with rollover
 - [Stripe Integration](./stripe-integration.md) - checkout, webhooks, billing sync
-- [API Reference](https://tanso-core.readme.io/) - full endpoint docs
+- [API Reference](./clientAPI/openapi.yaml) - full endpoint docs (OpenAPI spec)

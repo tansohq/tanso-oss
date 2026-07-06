@@ -42,20 +42,20 @@ This is the standard setup for teams going to production.
 
 ### Stripe Checkout Sessions
 
-Once Stripe is connected, your backend requests a hosted Checkout URL for a specific invoice and redirects your customer to complete payment. Tanso processes the Stripe webhook — entitlements activate automatically once payment clears.
+Once Stripe is connected, your backend requests a hosted Checkout URL for a subscription and redirects your customer to complete payment. Tanso processes the Stripe webhook — entitlements activate automatically once payment clears.
 
 ```
-POST /api/v1/client/billing/invoices/{invoiceId}/stripe/checkout
+POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout
 ```
 
 **Authentication:** `X-API-Key: <your-api-key>`
 
-**Important:** The path parameter is `invoiceId`, not a subscription ID. A deprecated form of this endpoint used the subscription ID and now returns HTTP 403. Retrieve the invoice ID from the customer's invoice list first.
+**Important:** The path parameter is a `subscriptionId`. Tanso resolves the first DUE invoice for that subscription automatically. A deprecated `/invoices/subscription/{subscriptionId}/stripe/checkout` form now returns HTTP 403.
 
 **curl example:**
 
 ```bash
-curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/stripe/checkout \
+curl -X POST http://localhost:8080/api/v1/client/billing/subscriptions/a1b2c3d4-e5f6-7890-abcd-ef1234567890/stripe/checkout \
   -H "X-API-Key: sk_live_tanso_abc123"
 ```
 
@@ -81,13 +81,13 @@ curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e
 }
 ```
 
-**Response (invoice not found):**
+**Response (no due invoice):**
 
 ```json
 {
   "success": false,
   "error": {
-    "message": "Invoice not found"
+    "message": "No DUE invoice found for this subscription"
   }
 }
 ```
@@ -98,7 +98,7 @@ Redirect your customer to `data.url`. Stripe handles PCI compliance, card proces
 
 ```js
 const response = await fetch(
-  `https://api.tanso.dev/api/v1/client/billing/invoices/${invoiceId}/stripe/checkout`,
+  `http://localhost:8080/api/v1/client/billing/subscriptions/${subscriptionId}/stripe/checkout`,
   {
     method: 'POST',
     headers: { 'X-API-Key': process.env.TANSO_API_KEY },
@@ -150,7 +150,7 @@ POST /api/v1/client/billing/invoices/{invoiceId}/mark-paid
 **curl example:**
 
 ```bash
-curl -X POST https://api.tanso.dev/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/mark-paid \
+curl -X POST http://localhost:8080/api/v1/client/billing/invoices/inv_a1b2c3d4-e5f6-7890-abcd-ef1234567890/mark-paid \
   -H "X-API-Key: sk_live_tanso_abc123"
 ```
 

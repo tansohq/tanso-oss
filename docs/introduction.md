@@ -71,8 +71,8 @@ Then follow the **[Quickstart](./quickstart.md)**.
 
 Tanso publishes docs optimized for AI coding assistants:
 
-- `http://localhost:3000/llms.txt` - concise summary
-- `http://localhost:3000/llms-full.txt` - complete reference
+- `./llms.txt` - concise summary
+- `./llms-full.txt` - complete reference
 
 The TypeScript SDK also provides full types for autocomplete.
 
@@ -85,4 +85,4 @@ The TypeScript SDK also provides full types for autocomplete.
 - **[Product Catalog](./product-catalog.md)** - features, plans, pricing models
 - **[Entitlements](./entitlements.md)** - real-time feature gating
 - **[Stripe Integration](./stripe-integration.md)** - add payment collection when ready
-- **[API Reference](https://tanso-core.readme.io/)** - full endpoint docs
+- **[API Reference](./clientAPI/openapi.yaml)** - full endpoint docs (OpenAPI spec)
