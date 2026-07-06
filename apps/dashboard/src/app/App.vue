@@ -6,18 +6,9 @@
   >
     <Monitor class="w-12 h-12 text-muted-foreground/40 mb-6" />
     <h1 class="text-xl font-semibold tracking-tight mb-2">Tanso is built for desktop</h1>
-    <p class="text-sm text-muted-foreground max-w-xs mb-8">
+    <p class="text-sm text-muted-foreground max-w-xs">
       Head to your computer to manage plans, subscriptions, and billing.
     </p>
-    <a
-      href="https://cal.com/katrina-laszlo/30-minute-meeting"
-      target="_blank"
-      rel="noopener noreferrer"
-      class="inline-flex items-center justify-center gap-2 rounded-md bg-foreground text-background px-5 py-2.5 text-sm font-medium shadow hover:bg-foreground/90 transition-colors"
-    >
-      <Calendar class="w-4 h-4" />
-      Book a Call With Us
-    </a>
   </div>
 
   <!-- Desktop app -->
@@ -57,7 +48,7 @@ import SideNav from '@/shared/components/SideNav.vue'
 import { Toaster } from '@/components/ui/toast'
 import { SidebarProvider, SidebarInset, SidebarTrigger } from '@/components/ui/sidebar'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { Loader2, Monitor, Calendar } from 'lucide-vue-next'
+import { Loader2, Monitor } from 'lucide-vue-next'
 import { useMediaQuery } from '@vueuse/core'
 
 const route = useRoute()

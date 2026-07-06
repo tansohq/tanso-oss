@@ -8,7 +8,7 @@
     </div>
     <div class="flex items-center gap-3">
       <a
-        href="https://cal.com/katrina-laszlo/30-minute-meeting"
+        href="https://docs.tanso.dev"
         target="_blank"
         rel="noopener noreferrer"
         class="rounded-md border border-background/50 bg-transparent px-4 py-1.5 text-sm font-medium text-background hover:bg-background/10 transition-colors"
@@ -17,7 +17,7 @@
       </a>
       <a
         v-if="isAuthenticated"
-        href="https://cal.com/katrina-laszlo/30-minute-meeting"
+        href="https://github.com/tansohq/tanso-oss/issues"
         target="_blank"
         rel="noopener noreferrer"
         class="rounded-md bg-background px-4 py-1.5 text-sm font-medium text-foreground hover:bg-background/90 transition-colors"
