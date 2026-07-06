@@ -613,12 +613,9 @@ public class InvoiceServiceImpl implements InvoiceService {
             }
 
             if (invoice.getDueDate().isBefore(processingDateInstant) || invoice.getDueDate().equals(processingDateInstant)) {
-                if (isInvoiceOverdue(invoice, processingDate)) {
-                    invoice.setStatus(InvoiceStatus.DUE.name());
-                    invoiceRepository.save(invoice);
-                } else {
-                    log.debug("Invoice is not overdue yet for id: {}", invoice.getId());
-                }
+                // PENDING → DUE at the due date. The grace period is applied later, on the DUE → PAST_DUE transition.
+                invoice.setStatus(InvoiceStatus.DUE.name());
+                invoiceRepository.save(invoice);
             }
         }
     }

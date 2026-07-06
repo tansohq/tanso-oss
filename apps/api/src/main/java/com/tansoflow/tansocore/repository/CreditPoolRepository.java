@@ -47,7 +47,7 @@ public interface CreditPoolRepository extends JpaRepository<CreditPool, UUID> {
             @Param("accountId") UUID accountId,
             @Param("denomination") String denomination);
 
-    @Modifying
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
         UPDATE credit_pools
         SET balance = balance + :delta,

@@ -1,5 +1,6 @@
 package com.tansoflow.tansocore.model.monetization.pricing;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
@@ -31,6 +32,7 @@ public abstract class PricingModel {
     private String resetMode = "reset";
 
     @JsonProperty("max_usage")
+    @JsonAlias("maxUsage")
     private BigDecimal maxUsage;
 
     public abstract BigDecimal calculateCost(BigDecimal usageUnits);

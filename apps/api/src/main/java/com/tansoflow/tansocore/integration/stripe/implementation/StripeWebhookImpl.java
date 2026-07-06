@@ -42,11 +42,15 @@ import com.tansoflow.tansocore.service.internal.monetization.EntitlementService;
 import com.tansoflow.tansocore.service.internal.monetization.InvoiceService;
 import com.tansoflow.tansocore.service.internal.monetization.PlanService;
 import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService;
+import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -81,6 +85,13 @@ public class StripeWebhookImpl implements StripeWebhook {
     private final PlanService planService;
     private final SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
 
+    // Self-reference through the Spring proxy so each event handler runs in its own
+    // REQUIRES_NEW transaction (self-invoked methods bypass the proxy and would otherwise
+    // share this method's transaction, ignoring their @Transactional settings).
+    @Autowired
+    @Lazy
+    private StripeWebhookImpl self;
+
     @Override
     @Transactional
     public void ingestWebhookRequest(String body, HttpHeaders headers, String accountId) throws Exception {
@@ -111,14 +122,12 @@ public class StripeWebhookImpl implements StripeWebhook {
             return;
         }
 
-        StripeWebhookEvent webhookEvent = new StripeWebhookEvent();
-        webhookEvent.setEventId(event.getId());
-        webhookEvent.setEventType(event.getType());
-        stripeWebhookEventRepository.save(webhookEvent);
-
         StripeMode stripeMode = getStripeMode(UUID.fromString(accountId));
 
-        // Deserialize the nested object inside the event
+        // Dispatch each handler through the proxy (self.) so it runs in its own
+        // REQUIRES_NEW transaction. On failure, log with a stack trace and rethrow so the
+        // endpoint returns non-2xx and Stripe redelivers. The idempotency row is saved only
+        // after a handler succeeds (below), so a failed event is not skipped on redelivery.
         try {
             switch (event.getType()) {
                 case "invoice.created" -> {
@@ -126,11 +135,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Invoice created. Invoice Id: {}", invoice.getId());
 
                     if (stripeMode.isStripeIntegration()) {
-                        handleFullSyncInvoiceCreated(invoice, accountId);
+                        self.handleFullSyncInvoiceCreated(invoice, accountId);
                     } else if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenInvoiceCreated(invoice, accountId);
+                        self.handleStripeDrivenInvoiceCreated(invoice, accountId);
                     } else {
-                        handleInvoiceCreated(invoice);
+                        self.handleInvoiceCreated(invoice);
                     }
                 }
                 case "invoice.paid", "invoice.payment_succeeded" -> {
@@ -138,11 +147,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Invoice paid or payment succeeded. Invoice Id: {}", invoice.getId());
 
                     if (stripeMode.isStripeIntegration()) {
-                        handleFullSyncInvoicePaid(invoice, accountId);
+                        self.handleFullSyncInvoicePaid(invoice, accountId);
                     } else if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenInvoicePaid(invoice, accountId);
+                        self.handleStripeDrivenInvoicePaid(invoice, accountId);
                     } else {
-                        handlePaymentInvoicePaid(invoice);
+                        self.handlePaymentInvoicePaid(invoice);
                     }
                 }
                 case "invoice.payment_failed" -> {
@@ -150,11 +159,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Invoice payment failed. Invoice Id: {}", invoice.getId());
 
                     if (stripeMode.isStripeIntegration()) {
-                        handleFullSyncInvoicePaymentFailed(invoice);
+                        self.handleFullSyncInvoicePaymentFailed(invoice);
                     } else if (stripeMode == StripeMode.PAYMENT_PASS_THROUGH) {
-                        handlePaymentPassThroughInvoicePaymentFailed(invoice);
+                        self.handlePaymentPassThroughInvoicePaymentFailed(invoice);
                     } else if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenInvoicePaymentFailed(invoice);
+                        self.handleStripeDrivenInvoicePaymentFailed(invoice);
                     }
                 }
                 case "customer.subscription.created" -> {
@@ -162,9 +171,9 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Subscription created. Subscription Id: {}", stripeSub.getId());
 
                     if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenSubscriptionCreated(stripeSub, accountId);
+                        self.handleStripeDrivenSubscriptionCreated(stripeSub, accountId);
                     } else if (stripeMode.isStripeIntegration()) {
-                        handleStripeIntegrationSubscriptionCreated(stripeSub, accountId);
+                        self.handleStripeIntegrationSubscriptionCreated(stripeSub, accountId);
                     }
                 }
                 case "customer.subscription.deleted" -> {
@@ -172,9 +181,9 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Subscription deleted. Subscription Id: {}", stripeSub.getId());
 
                     if (stripeMode.isStripeIntegration()) {
-                        handleFullSyncSubscriptionDeleted(stripeSub, accountId);
+                        self.handleFullSyncSubscriptionDeleted(stripeSub, accountId);
                     } else if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenSubscriptionDeleted(stripeSub);
+                        self.handleStripeDrivenSubscriptionDeleted(stripeSub);
                     }
                 }
                 case "customer.subscription.updated" -> {
@@ -182,9 +191,9 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Subscription updated. Subscription Id: {}", stripeSub.getId());
 
                     if (stripeMode.isStripeIntegration()) {
-                        handleFullSyncSubscriptionUpdated(stripeSub, accountId);
+                        self.handleFullSyncSubscriptionUpdated(stripeSub, accountId);
                     } else if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenSubscriptionUpdated(stripeSub);
+                        self.handleStripeDrivenSubscriptionUpdated(stripeSub);
                     }
                 }
                 case "customer.created" -> {
@@ -192,23 +201,30 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Customer created. Customer Id: {}", stripeCustomer.getId());
 
                     if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenCustomerCreated(stripeCustomer, accountId);
+                        self.handleStripeDrivenCustomerCreated(stripeCustomer, accountId);
                     }
                 }
                 case "checkout.session.completed" -> {
                     Session session = deserializeEvent(event, Session.class);
-                    handleSessionsComplete(session);
+                    self.handleSessionsComplete(session);
                 }
                 default -> log.info("Unhandled event type: {}", event.getType());
             }
         } catch (Exception e) {
-            log.error("Error occurred while deserializing stripe object:", e);
+            log.error("Webhook handler failed for event {} (type {}); rethrowing so Stripe redelivers",
+                    event.getId(), event.getType(), e);
             throw e;
         }
 
+        // Handler succeeded — mark the event processed so redeliveries are skipped as duplicates.
+        StripeWebhookEvent webhookEvent = new StripeWebhookEvent();
+        webhookEvent.setEventId(event.getId());
+        webhookEvent.setEventType(event.getType());
+        stripeWebhookEventRepository.save(webhookEvent);
     }
 
-    private void handleInvoiceCreated(Invoice invoiceObject) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleInvoiceCreated(Invoice invoiceObject) {
         String accountId = invoiceObject.getMetadata().get("tanso_account_id");
         String subscriptionId = invoiceObject.getMetadata().get("tanso_subscription_id");
 
@@ -240,7 +256,8 @@ public class StripeWebhookImpl implements StripeWebhook {
 
     }
 
-    private void handleSessionsComplete(Session session) throws StripeException {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleSessionsComplete(Session session) throws StripeException {
         if ("setup".equals(session.getMode())) {
             String setupIntentId = session.getSetupIntent();
             if (setupIntentId == null) throw new IllegalStateException("Missing setup_intent on session");
@@ -253,8 +270,8 @@ public class StripeWebhookImpl implements StripeWebhook {
         }
     }
 
-    @Transactional
-    protected void handlePaymentInvoicePaid(Invoice invoiceObject) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handlePaymentInvoicePaid(Invoice invoiceObject) {
         String accountId = invoiceObject.getMetadata().get("tanso_account_id");
         String subscriptionId = invoiceObject.getMetadata().get("tanso_subscription_id");
         String invoiceId = invoiceObject.getMetadata().get("tanso_invoice_id");
@@ -303,8 +320,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * For PAYMENT_PASS_THROUGH: When a Stripe invoice payment fails, mark the linked Tanso invoice as PAST_DUE.
      */
-    @Transactional
-    protected void handlePaymentPassThroughInvoicePaymentFailed(Invoice invoiceObject) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handlePaymentPassThroughInvoicePaymentFailed(Invoice invoiceObject) {
         String accountId = extractMetadata(invoiceObject, "tanso_account_id");
         String invoiceId = extractMetadata(invoiceObject, "tanso_invoice_id");
 
@@ -345,8 +362,8 @@ public class StripeWebhookImpl implements StripeWebhook {
                 if (sub != null) {
                     return sub;
                 }
-            } catch (Exception e) {
-                log.warn("Subscription {} not found for FULL_SYNC invoice mirror: {}", subscriptionId, e.getMessage());
+            } catch (ResourceNotFoundException e) {
+                log.warn("Subscription {} not found for FULL_SYNC invoice mirror, falling back to bridge lookup: {}", subscriptionId, e.getMessage());
             }
         }
 
@@ -368,8 +385,8 @@ public class StripeWebhookImpl implements StripeWebhook {
      * For accumulate-mode plans: freeze the draft, calculate the correct charge, add a line item,
      * finalize, and pay the invoice programmatically.
      */
-    @Transactional
-    protected void handleFullSyncInvoiceCreated(Invoice stripeInvoice, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleFullSyncInvoiceCreated(Invoice stripeInvoice, String accountId) throws StripeException {
         Subscription subscription = resolveSubscription(stripeInvoice, accountId);
         if (subscription == null) {
             log.warn("FULL_SYNC invoice.created: could not resolve subscription for stripe invoice {}", stripeInvoice.getId());
@@ -401,7 +418,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             handleAccumulateModeInvoiceCreated(stripeInvoice, subscription, accountId, periodStart, periodEnd);
         } else {
             // Non-accumulate: mirror Stripe's amountDue as-is (existing behavior)
-            BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountDue()).movePointLeft(2);
+            BigDecimal amount = fromStripeMinorUnits(stripeInvoice.getAmountDue(), stripeInvoice.getCurrency());
 
             var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount, InvoiceStatus.DUE,
                     periodStart, periodEnd);
@@ -415,12 +432,12 @@ public class StripeWebhookImpl implements StripeWebhook {
         var stripeInvoiceEntity = stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoice.getId());
         com.tansoflow.tansocore.entity.Invoice tansoInvoice = stripeInvoiceEntity.getInvoice();
 
-        BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountDue()).movePointLeft(2);
+        BigDecimal amount = fromStripeMinorUnits(stripeInvoice.getAmountDue(), stripeInvoice.getCurrency());
 
         List<InvoiceService.SyncLineItem> lineItems = new ArrayList<>();
         if (stripeInvoice.getLines() != null && stripeInvoice.getLines().getData() != null) {
             for (var line : stripeInvoice.getLines().getData()) {
-                BigDecimal lineAmount = BigDecimal.valueOf(line.getAmount()).movePointLeft(2);
+                BigDecimal lineAmount = fromStripeMinorUnits(line.getAmount(), stripeInvoice.getCurrency());
                 String description = line.getDescription() != null ? line.getDescription() : "Stripe line item";
                 lineItems.add(new InvoiceService.SyncLineItem(lineAmount, description));
             }
@@ -431,7 +448,7 @@ public class StripeWebhookImpl implements StripeWebhook {
     }
 
     private void handleAccumulateModeInvoiceCreated(Invoice stripeInvoice, Subscription subscription,
-                                                     String accountId, Instant periodStart, Instant periodEnd) {
+                                                     String accountId, Instant periodStart, Instant periodEnd) throws StripeException {
         UUID accountUuid = UUID.fromString(accountId);
         try {
             // Freeze the draft so it doesn't auto-finalize
@@ -490,10 +507,10 @@ public class StripeWebhookImpl implements StripeWebhook {
                     stripeInvoice.getId(), invoiceDto.getId(), totalInvoiceAmount,
                     hasBasePrice ? basePriceAmount : BigDecimal.ZERO, netCharge, creditOffset);
         } catch (StripeException e) {
-            log.error("FULL_SYNC (accumulate): Failed to process Stripe invoice {} for account {}. " +
-                    "Invoice remains as draft in Stripe and can be corrected manually. Error: {}",
-                    stripeInvoice.getId(), accountId, e.getMessage(), e);
-            // Do NOT create tanso-core mirror invoice — the Stripe draft is still recoverable
+            log.error("FULL_SYNC (accumulate): Failed to process Stripe invoice {} for account {}; " +
+                    "rolling back and rethrowing so Stripe redelivers and the charge is retried cleanly",
+                    stripeInvoice.getId(), accountId, e);
+            throw e;
         }
     }
 
@@ -546,8 +563,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * For FULL_SYNC: When a Stripe invoice is paid, mark the mirrored Tanso invoice as PAID and grant entitlements.
      */
-    @Transactional
-    protected void handleFullSyncInvoicePaid(Invoice stripeInvoice, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleFullSyncInvoicePaid(Invoice stripeInvoice, String accountId) throws StripeException {
         if (!stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId())) {
             // If the invoice is already paid/finalized (e.g. invoice.paid arrived before invoice.created),
             // and this is an accumulate-mode plan, skip draft manipulation — create the mirror directly
@@ -599,7 +616,7 @@ public class StripeWebhookImpl implements StripeWebhook {
      * Used when invoice.paid webhook arrives before invoice.created (race condition).
      */
     private void createMirrorInvoiceFromPaidStripeInvoice(Invoice stripeInvoice, Subscription subscription, String accountId) {
-        BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountPaid()).movePointLeft(2);
+        BigDecimal amount = fromStripeMinorUnits(stripeInvoice.getAmountPaid(), stripeInvoice.getCurrency());
 
         Instant periodStart = subscription.getCurrentPeriodStart();
         Instant periodEnd = subscription.getCurrentPeriodEnd();
@@ -623,8 +640,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * For FULL_SYNC: When a Stripe invoice payment fails, update the Tanso invoice status.
      */
-    @Transactional
-    protected void handleFullSyncInvoicePaymentFailed(Invoice stripeInvoice) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleFullSyncInvoicePaymentFailed(Invoice stripeInvoice) throws StripeException {
         if (!stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId())) {
             log.warn("FULL_SYNC: No linked Tanso invoice for failed Stripe invoice {}", stripeInvoice.getId());
             return;
@@ -640,22 +657,19 @@ public class StripeWebhookImpl implements StripeWebhook {
             // If a pending upgrade caused this invoice, revert Stripe to the old plan's price
             Subscription subscription = tansoInvoice.getSubscription();
             if (subscription != null) {
-                subscriptionScheduledChangeRepository
-                        .findPendingUpgradeBySubscription(subscription)
-                        .ifPresent(ssc -> {
-                            try {
-                                // Tanso subscription still has OLD plan — syncing price reverts Stripe
-                                stripeSyncService.updateStripeSubscriptionPrice(
-                                        subscription.getId(), subscription.getAccount().getId(), false);
-                                ssc.setStatus("FAILED");
-                                subscriptionScheduledChangeRepository.save(ssc);
-                                log.info("STRIPE_INTEGRATION: Reverted upgrade for subscription {}, payment failed",
-                                        subscription.getId());
-                            } catch (Exception e) {
-                                log.error("STRIPE_INTEGRATION: Failed to revert upgrade for subscription {}: {}",
-                                        subscription.getId(), e.getMessage(), e);
-                            }
-                        });
+                Optional<SubscriptionScheduledChange> pendingUpgrade =
+                        subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription);
+                if (pendingUpgrade.isPresent()) {
+                    SubscriptionScheduledChange ssc = pendingUpgrade.get();
+                    // Tanso subscription still has OLD plan — syncing price reverts Stripe.
+                    // Let a failure here surface so the whole handler rolls back and Stripe redelivers.
+                    stripeSyncService.updateStripeSubscriptionPrice(
+                            subscription.getId(), subscription.getAccount().getId(), false);
+                    ssc.setStatus("FAILED");
+                    subscriptionScheduledChangeRepository.save(ssc);
+                    log.info("STRIPE_INTEGRATION: Reverted upgrade for subscription {}, payment failed",
+                            subscription.getId());
+                }
             }
         }
     }
@@ -663,8 +677,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * For FULL_SYNC: When a Stripe subscription is deleted, deactivate the Tanso subscription.
      */
-    @Transactional
-    protected void handleFullSyncSubscriptionDeleted(com.stripe.model.Subscription stripeSub, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleFullSyncSubscriptionDeleted(com.stripe.model.Subscription stripeSub, String accountId) {
         Subscription subscription = resolveSubscriptionFromStripeSubMetadataOrBridge(stripeSub, accountId);
         if (subscription == null) {
             log.warn("STRIPE_INTEGRATION: subscription.deleted — could not resolve Tanso subscription for Stripe sub {}", stripeSub.getId());
@@ -684,8 +698,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * For FULL_SYNC: When a Stripe subscription is updated, reflect status changes and sync period dates.
      */
-    @Transactional
-    protected void handleFullSyncSubscriptionUpdated(com.stripe.model.Subscription stripeSub, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleFullSyncSubscriptionUpdated(com.stripe.model.Subscription stripeSub, String accountId) {
         Subscription subscription = resolveSubscriptionFromStripeSubMetadataOrBridge(stripeSub, accountId);
         if (subscription == null) {
             log.debug("STRIPE_INTEGRATION: subscription.updated — could not resolve Tanso subscription for Stripe sub {}", stripeSub.getId());
@@ -729,8 +743,8 @@ public class StripeWebhookImpl implements StripeWebhook {
      * STRIPE_DRIVEN: When a new subscription is created in Stripe, auto-create a Tanso Subscription
      * by resolving the customer and product via bridge tables.
      */
-    @Transactional
-    protected void handleStripeDrivenSubscriptionCreated(com.stripe.model.Subscription stripeSub, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenSubscriptionCreated(com.stripe.model.Subscription stripeSub, String accountId) throws StripeException {
         if (stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId())) {
             log.info("STRIPE_DRIVEN: Subscription {} already mapped, skipping", stripeSub.getId());
             return;
@@ -749,11 +763,13 @@ public class StripeWebhookImpl implements StripeWebhook {
                 handleStripeDrivenCustomerCreated(stripeCustomerObj, accountId);
                 stripeCustomer = stripeCustomerRepository.findByStripeCustomerExternalIdAndAccount(
                         stripeSub.getCustomer(), account);
-            } catch (StripeException e) {
-                log.error("STRIPE_DRIVEN: Failed to retrieve Stripe customer {} for auto-creation: {}", stripeSub.getCustomer(), e.getMessage(), e);
+            } catch (Exception e) {
+                log.error("STRIPE_DRIVEN: Failed to retrieve Stripe customer {} for auto-creation: {}",
+                        stripeSub.getCustomer(), e.getMessage(), e);
             }
             if (stripeCustomer == null) {
-                log.error("STRIPE_DRIVEN: Could not auto-create customer for Stripe customer {}, skipping subscription {}", stripeSub.getCustomer(), stripeSub.getId());
+                log.error("STRIPE_DRIVEN: Could not auto-create customer for Stripe customer {}, skipping subscription {}",
+                        stripeSub.getCustomer(), stripeSub.getId());
                 return;
             }
         }
@@ -792,8 +808,8 @@ public class StripeWebhookImpl implements StripeWebhook {
      * create the corresponding Tanso subscription and grant entitlements.
      * For IN_ARREARS subscriptions (already created via orchestrator), the idempotency check skips.
      */
-    @Transactional
-    protected void handleStripeIntegrationSubscriptionCreated(com.stripe.model.Subscription stripeSub, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeIntegrationSubscriptionCreated(com.stripe.model.Subscription stripeSub, String accountId) throws StripeException {
         // Idempotency: skip if bridge already exists (IN_ARREARS subs are created by orchestrator first)
         if (stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId())) {
             log.info("STRIPE_INTEGRATION: Subscription {} already mapped, skipping", stripeSub.getId());
@@ -818,8 +834,10 @@ public class StripeWebhookImpl implements StripeWebhook {
         try {
             tansoCustomer = customerService.validateAndRetrieveCustomer(tansoCustomerId, accountId);
         } catch (Exception e) {
-            log.error("STRIPE_INTEGRATION: Customer {} not found for subscription {}: {}", tansoCustomerId, stripeSub.getId(), e.getMessage());
-            return;
+            // Fail closed: surface so Stripe redelivers instead of silently dropping a paid subscription.
+            log.error("STRIPE_INTEGRATION: Customer {} not found for subscription {}", tansoCustomerId, stripeSub.getId(), e);
+            throw new IllegalStateException(
+                    "STRIPE_INTEGRATION: Customer " + tansoCustomerId + " not found for subscription " + stripeSub.getId(), e);
         }
 
         Plan plan = planService.retrievePlan(account, UUID.fromString(tansoPlanId));
@@ -856,8 +874,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * STRIPE_DRIVEN: Sync period dates and status changes from Stripe.
      */
-    @Transactional
-    protected void handleStripeDrivenSubscriptionUpdated(com.stripe.model.Subscription stripeSub) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenSubscriptionUpdated(com.stripe.model.Subscription stripeSub) {
         StripeSubscription bridge = stripeSubscriptionRepository
                 .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
         if (bridge == null) {
@@ -891,8 +909,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * STRIPE_DRIVEN: Cancel Tanso subscription and revoke entitlements.
      */
-    @Transactional
-    protected void handleStripeDrivenSubscriptionDeleted(com.stripe.model.Subscription stripeSub) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenSubscriptionDeleted(com.stripe.model.Subscription stripeSub) {
         StripeSubscription bridge = stripeSubscriptionRepository
                 .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
         if (bridge == null) {
@@ -914,8 +932,8 @@ public class StripeWebhookImpl implements StripeWebhook {
      * STRIPE_DRIVEN: When Stripe creates an invoice (from a subscription), mirror it in Tanso.
      * Resolves subscription via bridge tables (not metadata).
      */
-    @Transactional
-    protected void handleStripeDrivenInvoiceCreated(Invoice stripeInvoice, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenInvoiceCreated(Invoice stripeInvoice, String accountId) {
         String stripeSubId = extractStripeSubscriptionId(stripeInvoice);
         if (stripeSubId == null) {
             log.debug("STRIPE_DRIVEN: invoice.created has no subscription, skipping");
@@ -936,7 +954,7 @@ public class StripeWebhookImpl implements StripeWebhook {
         }
 
         Subscription subscription = bridge.getSubscription();
-        BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountDue()).movePointLeft(2);
+        BigDecimal amount = fromStripeMinorUnits(stripeInvoice.getAmountDue(), stripeInvoice.getCurrency());
 
         // Extract period from line items
         Instant periodStart = subscription.getCurrentPeriodStart();
@@ -961,8 +979,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * STRIPE_DRIVEN: When a Stripe invoice is paid, mirror it if needed, mark as PAID, and process credit grants.
      */
-    @Transactional
-    protected void handleStripeDrivenInvoicePaid(Invoice stripeInvoice, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenInvoicePaid(Invoice stripeInvoice, String accountId) {
         String stripeSubId = extractStripeSubscriptionId(stripeInvoice);
         if (stripeSubId == null) {
             log.debug("STRIPE_DRIVEN: invoice.paid has no subscription, skipping");
@@ -993,8 +1011,11 @@ public class StripeWebhookImpl implements StripeWebhook {
         try {
             creditService.processCreditGrantsForSubscription(subscription);
         } catch (Exception e) {
-            log.error("STRIPE_DRIVEN: Failed to process credit grant for subscription {} on invoice.paid: {}",
-                    subscription.getId(), e.getMessage(), e);
+            // Fail closed: surface so Stripe redelivers rather than leaving a paid invoice with no credits granted.
+            log.error("STRIPE_DRIVEN: Failed to process credit grant for subscription {} on invoice.paid",
+                    subscription.getId(), e);
+            throw new IllegalStateException(
+                    "STRIPE_DRIVEN: Failed to process credit grant for subscription " + subscription.getId(), e);
         }
 
         log.info("STRIPE_DRIVEN: Processed invoice.paid for subscription {} from Stripe invoice {}", subscription.getId(), stripeInvoice.getId());
@@ -1003,8 +1024,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * STRIPE_DRIVEN: When invoice payment fails, mark the mirrored invoice as PAST_DUE.
      */
-    @Transactional
-    protected void handleStripeDrivenInvoicePaymentFailed(Invoice stripeInvoice) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenInvoicePaymentFailed(Invoice stripeInvoice) {
         String stripeSubId = extractStripeSubscriptionId(stripeInvoice);
         log.warn("STRIPE_DRIVEN: Invoice payment failed for Stripe invoice {} (subscription: {})",
                 stripeInvoice.getId(), stripeSubId != null ? stripeSubId : "unknown");
@@ -1023,8 +1044,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     /**
      * STRIPE_DRIVEN: When a customer is created in Stripe, auto-create a Tanso Customer and bridge record.
      */
-    @Transactional
-    protected void handleStripeDrivenCustomerCreated(com.stripe.model.Customer stripeCustomer, String accountId) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void handleStripeDrivenCustomerCreated(com.stripe.model.Customer stripeCustomer, String accountId) {
         Account account = accountRepository.findById(UUID.fromString(accountId)).orElse(null);
         if (account == null) return;
 
@@ -1125,8 +1146,8 @@ public class StripeWebhookImpl implements StripeWebhook {
         if (subscriptionId != null) {
             try {
                 return subscriptionService.getSubscriptionById(subscriptionId, accountId);
-            } catch (Exception e) {
-                log.debug("Could not resolve subscription {} from metadata: {}", subscriptionId, e.getMessage());
+            } catch (ResourceNotFoundException e) {
+                log.debug("Could not resolve subscription {} from metadata, falling back to bridge lookup: {}", subscriptionId, e.getMessage());
             }
         }
 
@@ -1193,5 +1214,19 @@ public class StripeWebhookImpl implements StripeWebhook {
             }
         }
         return null;
+    }
+
+    // Stripe currencies with no minor unit (amount is already in the smallest unit).
+    // https://docs.stripe.com/currencies#zero-decimal
+    private static final java.util.Set<String> STRIPE_ZERO_DECIMAL_CURRENCIES = java.util.Set.of(
+            "bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga",
+            "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf");
+
+    // Converts a Stripe amount in the smallest currency unit back into a major-unit amount,
+    // honoring zero-decimal currencies (e.g. JPY has no minor unit, so no division by 100).
+    private static BigDecimal fromStripeMinorUnits(long minorAmount, String currency) {
+        String code = currency == null ? "usd" : currency.toLowerCase();
+        int exponent = STRIPE_ZERO_DECIMAL_CURRENCIES.contains(code) ? 0 : 2;
+        return BigDecimal.valueOf(minorAmount).movePointLeft(exponent);
     }
 }

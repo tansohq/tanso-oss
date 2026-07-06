@@ -200,6 +200,9 @@ public class CreditServiceImpl implements CreditService {
         if (request.getCustomerId() != null) {
             Customer customer = customerRepository.findById(UUID.fromString(request.getCustomerId()))
                     .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + request.getCustomerId()));
+            if (!customer.getAccount().getId().equals(account.getId())) {
+                throw new ResourceNotFoundException("Customer not found for account: " + accountId);
+            }
             pool.setCustomer(customer);
         }
 
@@ -274,8 +277,11 @@ public class CreditServiceImpl implements CreditService {
         }
 
         if (request.getSubscriptionId() != null) {
-            Subscription sub = subscriptionRepository.findById(UUID.fromString(request.getSubscriptionId()))
-                    .orElseThrow(() -> new ResourceNotFoundException("Subscription not found: " + request.getSubscriptionId()));
+            Subscription sub = subscriptionRepository.findSubscriptionByUuidAndAccountId(
+                    UUID.fromString(request.getSubscriptionId()), account.getId());
+            if (sub == null) {
+                throw new ResourceNotFoundException("Subscription not found: " + request.getSubscriptionId());
+            }
             grant.setSubscription(sub);
         }
 
@@ -325,16 +331,39 @@ public class CreditServiceImpl implements CreditService {
                     + ", requested=" + request.getAmount());
         }
 
-        // FIFO deduction from grants
-        deductFromGrants(pool.getId(), request.getAmount());
-
         UUID subscriptionId = request.getSubscriptionId() != null ? UUID.fromString(request.getSubscriptionId()) : null;
         UUID customerId = request.getCustomerId() != null ? UUID.fromString(request.getCustomerId()) : null;
 
-        // Update pool balance
-        CreditTransaction tx = updatePoolBalanceWithRetry(pool.getId(), request.getAmount().negate(),
-                CreditTransactionType.DEDUCTION, null, subscriptionId, customerId,
-                request.getEventId(), null, request.getDescription(), request.getIdempotencyKey());
+        // FIFO deduction: one ledger transaction per grant drawn from, each linked to that grant,
+        // so a reversal can restore the exact grant.remaining it deducted.
+        List<CreditGrant> activeGrants = creditGrantRepository.findActiveGrantsByPoolIdOrderByCreatedAsc(pool.getId());
+        BigDecimal remaining = request.getAmount();
+        String idempotencyKey = request.getIdempotencyKey();
+        CreditTransaction tx = null;
+
+        for (CreditGrant grant : activeGrants) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+
+            BigDecimal deductFromGrant = remaining.min(grant.getRemaining());
+            if (deductFromGrant.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            grant.setRemaining(grant.getRemaining().subtract(deductFromGrant));
+            creditGrantRepository.save(grant);
+
+            tx = updatePoolBalanceWithRetry(pool.getId(), deductFromGrant.negate(),
+                    CreditTransactionType.DEDUCTION, grant, subscriptionId, customerId,
+                    request.getEventId(), null, request.getDescription(), idempotencyKey);
+            idempotencyKey = null; // key is unique per account, so it lives on a single ledger row
+
+            remaining = remaining.subtract(deductFromGrant);
+        }
+
+        // Any amount not backed by a grant (overdraft on a non-hard-limit pool) still moves the balance.
+        if (tx == null || remaining.compareTo(BigDecimal.ZERO) != 0) {
+            tx = updatePoolBalanceWithRetry(pool.getId(), remaining.negate(),
+                    CreditTransactionType.DEDUCTION, null, subscriptionId, customerId,
+                    request.getEventId(), null, request.getDescription(), idempotencyKey);
+        }
 
         log.info("Deducted {} from pool {}", request.getAmount(), pool.getId());
         return creditMapper.creditTransactionToDto(tx);
@@ -350,6 +379,14 @@ public class CreditServiceImpl implements CreditService {
 
         if (!original.getAccount().getId().toString().equals(accountId)) {
             throw new ResourceNotFoundException("Transaction not found for account: " + accountId);
+        }
+
+        boolean alreadyReversed = creditTransactionRepository.findByCreditPoolId(original.getCreditPool().getId())
+                .stream()
+                .anyMatch(t -> CreditTransactionType.REVERSAL.name().equals(t.getTransactionType())
+                        && original.getId().equals(t.getReversedTransactionId()));
+        if (alreadyReversed) {
+            throw new IllegalStateException("Transaction already reversed: " + transactionId);
         }
 
         BigDecimal reversalAmount = original.getAmount().negate();
@@ -569,6 +606,7 @@ public class CreditServiceImpl implements CreditService {
                 BigDecimal cap = pool.getRolloverCap() != null ? pool.getRolloverCap() : BigDecimal.ZERO;
                 BigDecimal excess = pool.getBalance().subtract(cap);
                 if (excess.compareTo(BigDecimal.ZERO) > 0) {
+                    expireExcessFromGrants(pool, excess);
                     updatePoolBalanceWithRetry(poolId, excess.negate(), CreditTransactionType.EXPIRATION,
                             null, null, null, null, null,
                             "Period rollover: CAPPED at " + cap, null);
@@ -691,7 +729,11 @@ public class CreditServiceImpl implements CreditService {
             return;
         }
 
-        String idempotencyKey = "upgrade_delta_" + subscriptionId + "_" + denomination + "_" + Instant.now().toEpochMilli();
+        long periodEpochMilli = subscription.getCurrentPeriodStart() != null
+                ? subscription.getCurrentPeriodStart().toEpochMilli()
+                : subscription.getCreatedAt().toEpochMilli();
+        String idempotencyKey = "upgrade_delta_" + subscriptionId + "_" + denomination
+                + "_" + periodEpochMilli + "_" + deltaAmount.toPlainString();
 
         CreditGrantRequest grantRequest = new CreditGrantRequest();
         grantRequest.setCreditPoolId(pool.getId().toString());
@@ -732,6 +774,18 @@ public class CreditServiceImpl implements CreditService {
         for (CreditGrant grant : activeGrants) {
             grant.setRemaining(BigDecimal.ZERO);
             creditGrantRepository.save(grant);
+        }
+    }
+
+    private void expireExcessFromGrants(CreditPool pool, BigDecimal excess) {
+        List<CreditGrant> activeGrants = creditGrantRepository.findActiveGrantsByPoolIdOrderByCreatedAsc(pool.getId());
+        BigDecimal remaining = excess;
+        for (CreditGrant grant : activeGrants) {
+            if (remaining.compareTo(BigDecimal.ZERO) <= 0) break;
+            BigDecimal reduce = remaining.min(grant.getRemaining());
+            grant.setRemaining(grant.getRemaining().subtract(reduce));
+            creditGrantRepository.save(grant);
+            remaining = remaining.subtract(reduce);
         }
     }
 

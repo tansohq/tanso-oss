@@ -4,8 +4,11 @@ import com.tansoflow.tansocore.repository.EntitlementReconcileJobRepository;
 import com.tansoflow.tansocore.service.internal.monetization.PlanFeatureRuleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -20,6 +23,10 @@ public class EntitlementReconcileJobWorker {
     private final PlanFeatureRuleService planFeatureRuleService;
     private static final int MAX_LENGTH_ERROR_MSG = 2000;
 
+    @Autowired
+    @Lazy
+    private EntitlementReconcileJobWorker self;
+
     @Scheduled(fixedDelayString = "${jobs.backgroundJobsWithFixedDelay.reconciliationDelay}" )
     @Transactional
     public void processNextJob() {
@@ -33,7 +40,9 @@ public class EntitlementReconcileJobWorker {
                 UUID planId    = job.getPlan().getId();
                 UUID featureId = job.getFeature().getId();
 
-                planFeatureRuleService.reconcilePlanFeature(accountId, planId, featureId, null);
+                // Run the reconcile in its own transaction: a failure rolls back only that work,
+                // leaving this outer transaction free to persist the FAILED status below.
+                self.reconcile(accountId, planId, featureId);
 
                 job.setStatus("COMPLETED");
             } catch (Exception ex) {
@@ -44,6 +53,11 @@ public class EntitlementReconcileJobWorker {
             job.setModifiedAt(Instant.now());
             jobRepo.save(job);
         });
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void reconcile(UUID accountId, UUID planId, UUID featureId) {
+        planFeatureRuleService.reconcilePlanFeature(accountId, planId, featureId, null);
     }
 
     private String truncate(String msg) {

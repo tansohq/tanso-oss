@@ -51,7 +51,11 @@ public interface SubscriptionService {
 
     void processScheduledDowngrades();
 
+    void processSingleScheduledDowngrade(UUID scheduledChangeId);
+
     void processSubscriptionCycles();
+
+    void processSingleSubscriptionCycle(UUID subscriptionId);
 
     void processCancellations();
 

@@ -45,11 +45,14 @@ import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService
 import com.tansoflow.tansocore.util.DateUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -86,6 +89,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final InvoiceMapper invoiceMapper;
     private final CreditService creditService;
     private final PlanCreditAllocationRepository planCreditAllocationRepository;
+
+    @Autowired
+    @Lazy
+    private SubscriptionService self;
 
     @Transactional
     @Override
@@ -463,15 +470,14 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             }
 
         }
-        invoiceService.markInvoiceAsPaid(invoice);
         subscriptionRepository.save(subscription);
 
+        // markInvoiceAsPaid runs exactly once, via EventOrchestrator on InvoicePaidEvent (AFTER_COMMIT, REQUIRES_NEW)
         eventPublisher.publishEvent(new InvoicePaidEvent(UUID.fromString(accountId)
                 , UUID.fromString(invoiceId)));
     }
 
     @Override
-    @Transactional
     public void processSubscriptionCycles() {
         int pageCount = 0;
         Pageable pageable = PageRequest.of(0, 500);
@@ -486,7 +492,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
             for (Subscription sub : page.getContent()) {
                 try {
-                    processSingleSubscriptionCycle(sub.getId());
+                    self.processSingleSubscriptionCycle(sub.getId());
                 } catch (Exception e) {
                     log.error("Failed cycle rollover for subscription {} {}", sub.getId(), e.getMessage(), e);
                 }
@@ -505,7 +511,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         }
     }
 
-    @Transactional
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleSubscriptionCycle(UUID subscriptionId) {
         Instant now = Instant.now();
 
@@ -628,6 +635,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 sub.setCancelledAt(Instant.now());
             }
             subscriptionRepository.save(sub);
+            // Period has ended: revoke entitlements so isEntitled() denies access from now on
+            entitlementService.processEntitlementRevokeForSubscription(sub);
         }
         log.info("Deactivated {} expired subscriptions with credit clawback", expiredSubs.size());
     }
@@ -701,6 +710,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+                } else {
+                    throw new IllegalArgumentException("Unsupported plan upgrade for subscription " + currentSubscription.getId()
+                            + ": cannot upgrade from an IN_ADVANCE plan to an " + newPlan.getBillingTiming() + " plan");
                 }
             } else if (subscribedPlan.getBillingTiming().equals(BillingTiming.IN_ARREARS.name())) {
                     currentSubscription.setPlan(newPlan);
@@ -799,7 +811,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
             for (SubscriptionScheduledChange ssc : page.getContent()) {
                 try {
-                    downgradeSubscription(ssc);
+                    self.processSingleScheduledDowngrade(ssc.getId());
                 } catch (Exception e) {
                     log.error("Failed downgrade for ssc {} {}", ssc.getId(), e.getMessage(), e);
                 }
@@ -858,12 +870,22 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         return subscriptionMapper.subscriptionEntityListToSubscriptionDtoList(subscriptions);
     }
 
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void processSingleScheduledDowngrade(UUID scheduledChangeId) {
+        SubscriptionScheduledChange ssc = subscriptionScheduledChangeRepository.findById(scheduledChangeId)
+                .orElseThrow(() -> new IllegalStateException("Scheduled change not found: " + scheduledChangeId));
+        downgradeSubscription(ssc);
+    }
+
     private void downgradeSubscription(SubscriptionScheduledChange ssc) {
         UUID changeId = ssc.getId();
         Instant now = Instant.now();
 
         if (ssc.getSubscription().getPlan().equals(ssc.getToPlan())) {
-            // already changed mark as CANCELLED
+            // already at the target plan — mark terminal so the job stops re-picking it
+            ssc.setStatus(SubscriptionScheduledChangeStatus.CANCELLED.name());
+            subscriptionScheduledChangeRepository.save(ssc);
             return;
         }
 

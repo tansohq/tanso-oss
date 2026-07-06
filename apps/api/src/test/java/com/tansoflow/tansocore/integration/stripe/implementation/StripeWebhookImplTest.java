@@ -142,7 +142,7 @@ class StripeWebhookImplTest {
     // ── Period advancement tests ──────────────────────────────────────────────
 
     @Test
-    void handleFullSyncInvoiceCreated_UpdatesSubscriptionPeriodFromStripeInvoice() {
+    void handleFullSyncInvoiceCreated_UpdatesSubscriptionPeriodFromStripeInvoice() throws Exception {
         Invoice stripeInvoice = createStripeInvoiceWithPeriod(
                 "inv_001", 5000L,
                 Instant.parse("2025-02-01T00:00:00Z").getEpochSecond(),
@@ -165,7 +165,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleFullSyncInvoiceCreated_AccumulateMode_UsesCorrectPeriodForChargeCalculation() {
+    void handleFullSyncInvoiceCreated_AccumulateMode_UsesCorrectPeriodForChargeCalculation() throws Exception {
         Instant newPeriodStart = Instant.parse("2025-02-01T00:00:00Z");
         Instant newPeriodEnd = Instant.parse("2025-03-01T00:00:00Z");
 
@@ -217,7 +217,7 @@ class StripeWebhookImplTest {
     // ── invoice.paid race condition tests ─────────────────────────────────────
 
     @Test
-    void handleFullSyncInvoicePaid_AccumulateMode_AlreadyPaid_CreatesMirrorDirectly() {
+    void handleFullSyncInvoicePaid_AccumulateMode_AlreadyPaid_CreatesMirrorDirectly() throws Exception {
         Invoice stripeInvoice = createStripeInvoiceWithPeriod(
                 "inv_003", 3500L,
                 Instant.parse("2025-02-01T00:00:00Z").getEpochSecond(),
@@ -255,7 +255,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleFullSyncInvoicePaid_NonAccumulateMode_FallsBackToInvoiceCreated() {
+    void handleFullSyncInvoicePaid_NonAccumulateMode_FallsBackToInvoiceCreated() throws Exception {
         Invoice stripeInvoice = createStripeInvoiceWithPeriod(
                 "inv_004", 5000L,
                 Instant.parse("2025-02-01T00:00:00Z").getEpochSecond(),
@@ -426,7 +426,7 @@ class StripeWebhookImplTest {
     // ── STRIPE_DRIVEN webhook handler tests ─────────────────────────────────
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_CreatesSubscriptionAndEntitlements() {
+    void handleStripeDrivenSubscriptionCreated_CreatesSubscriptionAndEntitlements() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_sd_001", "cus_sd_001", "prod_sd_001", "active");
 
         StripeCustomer stripeCustomer = new StripeCustomer();
@@ -451,7 +451,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_AlreadyMapped_Skips() {
+    void handleStripeDrivenSubscriptionCreated_AlreadyMapped_Skips() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_sd_002", "cus_sd_001", "prod_sd_001", "active");
 
         when(stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_002"))
@@ -464,7 +464,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_NoMappedCustomer_Skips() {
+    void handleStripeDrivenSubscriptionCreated_NoMappedCustomer_Skips() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_sd_003", "cus_unknown", "prod_sd_001", "active");
 
         when(stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_003"))
@@ -479,7 +479,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_NoMappedPlan_Skips() {
+    void handleStripeDrivenSubscriptionCreated_NoMappedPlan_Skips() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_sd_004", "cus_sd_001", "prod_unmapped", "active");
 
         StripeCustomer stripeCustomer = new StripeCustomer();
@@ -724,7 +724,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_IdempotentWhenBridgeExists() {
+    void handleStripeDrivenSubscriptionCreated_IdempotentWhenBridgeExists() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_sd_idempotent", "cus_sd_001", "prod_sd_001", "active");
 
         when(stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_idempotent"))
@@ -815,7 +815,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenSubscriptionCreated_UnmappedCustomer_AutoCreates() {
+    void handleStripeDrivenSubscriptionCreated_UnmappedCustomer_AutoCreates() throws Exception {
         com.stripe.model.Subscription stripeSub = createStripeSubscription("sub_auto_001", "cus_auto_001", "prod_sd_001", "active");
 
         StripeProduct stripeProduct = new StripeProduct();

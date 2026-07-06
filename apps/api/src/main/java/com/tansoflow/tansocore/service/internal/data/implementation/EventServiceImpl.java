@@ -216,7 +216,7 @@ public class EventServiceImpl implements EventService {
         // Resolve featureId from featureKey/entitlementId before native ID check
         if (eventDto.getFeatureId() == null) {
             if (eventDto.getEntitlementId() != null) {
-                entitlementRepository.findById(eventDto.getEntitlementId()).flatMap(entitlement ->
+                entitlementRepository.findByIdAndAccountId(eventDto.getEntitlementId(), account.getId()).flatMap(entitlement ->
                         featureRepository.findByKeyAndAccountId(entitlement.getFeatureKey(), account.getId()))
                         .ifPresent(f -> eventDto.setFeatureId(f.getId()));
             } else if (eventDto.getFeatureKey() != null) {
@@ -258,8 +258,11 @@ public class EventServiceImpl implements EventService {
         // Max usage enforcement
         if (billingEligible && resolvedCtx != null && resolvedCtx.pricingModel() != null && resolvedCtx.pricingModel().hasMaxUsage()
                 && eventDto.getCustomerId() != null && eventDto.getFeatureId() != null && resolvedCtx.subscription() != null) {
+            Instant usageWindowStart = resolvedCtx.pricingModel().isAccumulateMode()
+                    ? resolvedCtx.subscription().getCreatedAt()
+                    : resolvedCtx.subscription().getCurrentPeriodStart();
             BigDecimal cumulative = eventRepository.sumUsageUnitsBySubscriptionAndFeatureIdSince(
-                    eventDto.getCustomerId(), eventDto.getSubscriptionId(), eventDto.getFeatureId(), resolvedCtx.subscription().getCreatedAt(), Instant.now());
+                    eventDto.getCustomerId(), eventDto.getSubscriptionId(), eventDto.getFeatureId(), usageWindowStart, Instant.now());
             if (cumulative.compareTo(resolvedCtx.pricingModel().getMaxUsage()) >= 0) {
                 log.info("Max usage limit reached for customer {} on feature {}: cumulative={}, max={}",
                         eventDto.getCustomerId(), eventDto.getFeatureId(), cumulative, resolvedCtx.pricingModel().getMaxUsage());
@@ -282,11 +285,28 @@ public class EventServiceImpl implements EventService {
         Event event = eventMapper.eventDtoToEventEntity(eventDto);
         event.setAccount(account);
 
+        // Idempotent duplicate: detect before insert so the happy path never relies on catching a
+        // constraint violation, which would mark the transaction rollback-only and fail commit.
+        if (eventRepository.existsByAccountIdAndEventIdempotencyKey(account.getId(), eventDto.getEventIdempotencyKey())) {
+            log.info("Duplicate event for idempotency key {} on account {}; returning idempotent success",
+                    eventDto.getEventIdempotencyKey(), account.getId());
+            return resultBuilder.build();
+        }
+
         try {
             eventRepository.saveAndFlush(event);
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
-            log.warn("Concurrent insert detected for event idempotency key: {}", eventDto.getEventIdempotencyKey());
-            return resultBuilder.build();
+            String cause = e.getMostSpecificCause().getMessage();
+            if (cause != null && cause.contains("uq_events_account_event_idempotency_key")) {
+                // Concurrent duplicate lost the race; transaction is already rollback-only, so reject
+                // and let the caller retry — the retry hits the pre-check above and succeeds idempotently.
+                log.warn("Concurrent duplicate insert for idempotency key {} on account {}; rejecting for retry",
+                        eventDto.getEventIdempotencyKey(), account.getId());
+            } else {
+                log.error("Data integrity violation persisting event with idempotency key {} on account {}: {}",
+                        eventDto.getEventIdempotencyKey(), account.getId(), e.getMessage(), e);
+            }
+            throw e;
         }
 
         // Synchronous credit deduction for events with usage (includes atomic hard limit check)
@@ -533,15 +553,17 @@ public class EventServiceImpl implements EventService {
 
             if (links.isEmpty()) return;
 
-            // Atomic hard limit check: sum available balance across all pools with hard limits
+            // Atomic hard limit check: mirror CreditServiceImpl.checkHardLimitForSubscription — when any
+            // linked pool enforces a hard limit, block if the summed balance across ALL linked pools cannot
+            // cover the usage (deduction below draws from every active pool, not only hard-limit ones).
             BigDecimal totalAvailable = BigDecimal.ZERO;
             boolean anyHardLimit = false;
             for (CreditPoolSubscription link : links) {
                 var pool = link.getCreditPool();
                 if (pool.getHardLimit()) {
                     anyHardLimit = true;
-                    totalAvailable = totalAvailable.add(pool.getBalance());
                 }
+                totalAvailable = totalAvailable.add(pool.getBalance());
             }
             if (anyHardLimit && totalAvailable.compareTo(eventDto.getUsageUnits()) < 0) {
                 eventDto.getContext().put("credit_blocked", true);
@@ -655,11 +677,13 @@ public class EventServiceImpl implements EventService {
         if (eventDto.getFeatureId() != null && eventDto.getCustomerId() != null) {
             Subscription activeSub = null;
 
-            // When subscriptionId is provided, use that specific subscription
+            // When subscriptionId is provided, use that specific subscription (scoped to the account)
             if (eventDto.getSubscriptionId() != null) {
-                activeSub = subscriptionRepository.findById(eventDto.getSubscriptionId())
-                        .filter(Subscription::getIsActive)
-                        .orElse(null);
+                Subscription requestedSub = subscriptionRepository.findSubscriptionByUuidAndAccountId(
+                        eventDto.getSubscriptionId(), account.getId());
+                if (requestedSub != null && Boolean.TRUE.equals(requestedSub.getIsActive())) {
+                    activeSub = requestedSub;
+                }
             }
 
             // Fall back to first active subscription for the customer
@@ -752,8 +776,8 @@ public class EventServiceImpl implements EventService {
                                 log.info("Calculated revenue={} cost={} for event",
                                         eventDto.getRevenueAmount(), eventDto.getCostAmount());
                             } catch (Exception e) {
-                                log.error("Failed to calculate cost for event: {}", e.getMessage(), e);
-                                eventDto.getContext().put("sys_cost_calculation_failed", "true");
+                                log.error("Rule calculation failed for event, rejecting: {}", e.getMessage(), e);
+                                throw e;
                             }
                         }
 

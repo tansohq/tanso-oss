@@ -33,6 +33,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -107,6 +108,7 @@ class SubscriptionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        ReflectionTestUtils.setField(subscriptionService, "self", subscriptionService);
         subscriptionId = UUID.randomUUID();
         account = new Account();
         account.setId(UUID.randomUUID());

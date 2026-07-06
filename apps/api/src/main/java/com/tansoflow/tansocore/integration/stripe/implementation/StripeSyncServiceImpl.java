@@ -224,7 +224,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                     .setCustomer(stripeCustomerId)
                     .setCurrency(currency)
                     .setInvoice(stripeInvoice.getId())
-                    .setAmount(invoice.getAmount().movePointRight(2).longValueExact())
+                    .setAmount(toStripeMinorUnits(invoice.getAmount(), currency))
                     .setDescription("Invoice " + invoice.getId())
                     .putMetadata("tanso_invoice_id", invoice.getId().toString())
                     .putMetadata("tanso_subscription_id", subscription.getId().toString())
@@ -238,7 +238,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                         .setCustomer(stripeCustomerId)
                         .setCurrency(currency)
                         .setInvoice(stripeInvoice.getId())
-                        .setAmount(item.getChargeAmount().movePointRight(2).longValueExact())
+                        .setAmount(toStripeMinorUnits(item.getChargeAmount(), currency))
                         .setDescription(item.getDescription())
                         .putMetadata("tanso_invoice_id", invoice.getId().toString())
                         .putMetadata("tanso_subscription_id", subscription.getId().toString())
@@ -301,7 +301,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     }
 
     @Override
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Product createStripeProduct(String planId, String accountId) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(UUID.fromString(accountId));
         Plan plan = planService.retrievePlan(UUID.fromString(accountId), UUID.fromString(planId));
@@ -457,16 +457,17 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     public Price createStripePrice(Plan plan, String productId) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(plan.getAccount().getId());
 
+        String currency = plan.getCurrency() == null ? "usd" : plan.getCurrency().toLowerCase();
         BigDecimal amount = plan.getPriceAmount();
         if (amount.scale() > 2) {
             throw new IllegalArgumentException("Price amount cannot have more than 2 decimal places");
         }
-        long amountInCents = amount.movePointRight(2).longValueExact();
+        long amountInCents = toStripeMinorUnits(amount, currency);
 
         PriceCreateParams.Builder priceParamsBuilder = PriceCreateParams.builder()
-                .setCurrency("usd")// or your preferred currency
+                .setCurrency(currency)
                 .setProduct(productId)
-                .setUnitAmount(amountInCents);// Convert to cents
+                .setUnitAmount(amountInCents);// Convert to smallest currency unit
 
         // Make it RECURRING for subscriptions
         priceParamsBuilder.setRecurring(
@@ -623,6 +624,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     public void createStripeProductWithPrices(UUID planId, UUID accountId) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         Plan plan = planService.retrievePlan(UUID.fromString(accountId.toString()), planId);
+        String currency = plan.getCurrency() == null ? "usd" : plan.getCurrency().toLowerCase();
 
         // Ensure product exists
         StripeProduct stripeProduct = stripeProductPlansRepository.findStripeProductByPlan(plan);
@@ -680,10 +682,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
             for (GraduatedPricingModel.PriceTier tier : graduatedModel.getTiers()) {
                 PriceCreateParams.Tier.Builder tierBuilder = PriceCreateParams.Tier.builder()
-                        .setUnitAmount(tier.getPricePerUnit().movePointRight(2).longValueExact());
+                        .setUnitAmountDecimal(toStripeMinorUnitsDecimal(tier.getPricePerUnit(), currency));
 
                 if (tier.getFlatFee() != null && tier.getFlatFee().compareTo(BigDecimal.ZERO) > 0) {
-                    tierBuilder.setFlatAmount(tier.getFlatFee().movePointRight(2).longValueExact());
+                    tierBuilder.setFlatAmountDecimal(toStripeMinorUnitsDecimal(tier.getFlatFee(), currency));
                 }
 
                 if (tier.getUpTo() == null || "inf".equalsIgnoreCase(tier.getUpTo().toString())) {
@@ -696,7 +698,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
             }
 
             PriceCreateParams priceParams = PriceCreateParams.builder()
-                    .setCurrency("usd")
+                    .setCurrency(currency)
                     .setProduct(productId)
                     .setBillingScheme(PriceCreateParams.BillingScheme.TIERED)
                     .setTiersMode(PriceCreateParams.TiersMode.GRADUATED)
@@ -715,12 +717,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         } else if (hasUsagePricing) {
             // Per-unit metered pricing
-            long amountInCents = usageModel.getRate().movePointRight(2).longValueExact();
-
             PriceCreateParams priceParams = PriceCreateParams.builder()
-                    .setCurrency("usd")
+                    .setCurrency(currency)
                     .setProduct(productId)
-                    .setUnitAmount(amountInCents)
+                    .setUnitAmountDecimal(toStripeMinorUnitsDecimal(usageModel.getRate(), currency))
                     .setRecurring(
                             PriceCreateParams.Recurring.builder()
                                     .setInterval(PriceCreateParams.Recurring.Interval.MONTH)
@@ -1062,7 +1062,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         InvoiceItemCreateParams itemParams = InvoiceItemCreateParams.builder()
                 .setCustomer(stripeInvoice.getCustomer())
                 .setInvoice(stripeInvoiceId)
-                .setAmount(amount.movePointRight(2).longValueExact())
+                .setAmount(toStripeMinorUnits(amount, currency))
                 .setCurrency(currency != null ? currency.toLowerCase() : "usd")
                 .setDescription(description)
                 .putMetadata("tanso_accumulate_charge", "true")
@@ -1081,5 +1081,31 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         stripeClient.v1().invoices().pay(stripeInvoiceId);
         log.info("Paid Stripe invoice {} for account {}", stripeInvoiceId, accountId);
+    }
+
+    // Stripe currencies with no minor unit (amount is already in the smallest unit).
+    // https://docs.stripe.com/currencies#zero-decimal
+    private static final java.util.Set<String> STRIPE_ZERO_DECIMAL_CURRENCIES = java.util.Set.of(
+            "bif", "clp", "djf", "gnf", "jpy", "kmf", "krw", "mga",
+            "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf");
+
+    private static int stripeMinorUnitExponent(String currency) {
+        String code = currency == null ? "usd" : currency.toLowerCase();
+        return STRIPE_ZERO_DECIMAL_CURRENCIES.contains(code) ? 0 : 2;
+    }
+
+    // Converts a major-unit amount (e.g. dollars) into Stripe's integer smallest unit
+    // (e.g. cents), honoring zero-decimal currencies. Rounds to the smallest unit so
+    // sub-unit amounts do not throw instead of being charged.
+    private static long toStripeMinorUnits(BigDecimal amount, String currency) {
+        return amount.movePointRight(stripeMinorUnitExponent(currency))
+                .setScale(0, java.math.RoundingMode.HALF_UP)
+                .longValueExact();
+    }
+
+    // Like toStripeMinorUnits but preserves sub-unit precision for per-unit rates
+    // (used with Stripe's *_amount_decimal fields, which accept fractional smallest units).
+    private static BigDecimal toStripeMinorUnitsDecimal(BigDecimal amount, String currency) {
+        return amount.movePointRight(stripeMinorUnitExponent(currency));
     }
 }

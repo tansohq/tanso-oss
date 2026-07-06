@@ -172,8 +172,8 @@ class CreditServiceImplTest {
                 eq(account.getId()), any(String.class)))
                 .thenReturn(false);
 
-        when(subscriptionRepository.findById(subscription.getId()))
-                .thenReturn(Optional.of(subscription));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), account.getId()))
+                .thenReturn(subscription);
 
         when(creditPoolRepository.findById(any(UUID.class))).thenAnswer(i -> {
             CreditPool p = new CreditPool();
@@ -272,8 +272,8 @@ class CreditServiceImplTest {
         when(creditGrantRepository.existsByAccountIdAndIdempotencyKeyAndDeletedAtIsNull(
                 eq(account.getId()), any(String.class)))
                 .thenReturn(false);
-        when(subscriptionRepository.findById(subscription.getId()))
-                .thenReturn(Optional.of(subscription));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), account.getId()))
+                .thenReturn(subscription);
         when(creditPoolRepository.findByIdAndAccountId(existingPool.getId(), account.getId()))
                 .thenReturn(Optional.of(existingPool));
         when(creditPoolRepository.findById(existingPool.getId()))
@@ -321,8 +321,8 @@ class CreditServiceImplTest {
         when(creditGrantRepository.existsByAccountIdAndIdempotencyKeyAndDeletedAtIsNull(
                 eq(account.getId()), any(String.class)))
                 .thenReturn(false);
-        when(subscriptionRepository.findById(subscription.getId()))
-                .thenReturn(Optional.of(subscription));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), account.getId()))
+                .thenReturn(subscription);
         when(creditPoolRepository.findByIdAndAccountId(existingPool.getId(), account.getId()))
                 .thenReturn(Optional.of(existingPool));
         when(creditPoolRepository.findById(existingPool.getId()))
@@ -428,8 +428,8 @@ class CreditServiceImplTest {
         when(creditGrantRepository.existsByAccountIdAndIdempotencyKeyAndDeletedAtIsNull(
                 eq(account.getId()), any(String.class)))
                 .thenReturn(false);
-        when(subscriptionRepository.findById(subscription.getId()))
-                .thenReturn(Optional.of(subscription));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), account.getId()))
+                .thenReturn(subscription);
         when(creditPoolRepository.findByIdAndAccountId(existingPool.getId(), account.getId()))
                 .thenReturn(Optional.of(existingPool));
         when(creditPoolRepository.findById(existingPool.getId()))

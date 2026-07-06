@@ -48,8 +48,8 @@ public class RuleCalculationUtil {
             }
             return config;
         } catch (Exception e) {
-            log.warn("Failed to extract RuleConfig: {}", e.getMessage());
-            return null;
+            log.error("Failed to extract RuleConfig from rule value {}: {}", value, e.getMessage(), e);
+            throw new IllegalStateException("Malformed plan feature rule configuration", e);
         }
     }
 
@@ -67,8 +67,8 @@ public class RuleCalculationUtil {
             }
             return mapper.convertValue(costMap, CostModel.class);
         } catch (Exception e) {
-            log.warn("Failed to extract CostModel from flat map: {}", e.getMessage());
-            return null;
+            log.error("Failed to extract CostModel from flat map {}: {}", value, e.getMessage(), e);
+            throw new IllegalStateException("Malformed plan feature rule cost configuration", e);
         }
     }
 
