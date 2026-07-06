@@ -121,8 +121,14 @@ watch(
           if (rule?.data?.value?.model) {
             models.set(f.id, rule.data.value.model as string)
           }
-        } catch {
-          // No rule — feature is included
+        } catch (error) {
+          // A 404 means the feature genuinely has no pricing rule (included).
+          // Any other failure is a real error and must not be silently treated
+          // as "included" — log it so the usage-based indicator can't hide a fault.
+          const status = (error as { response?: { status?: number } })?.response?.status
+          if (status !== 404) {
+            console.error(`Failed to fetch pricing rule for plan ${props.plan.id} feature ${f.id}:`, error)
+          }
         }
       })
     )

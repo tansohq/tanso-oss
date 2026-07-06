@@ -135,8 +135,9 @@ const errorMessage = ref<string | null>(null)
 const { mutateAsync, isPending } = useMutation({
   mutationFn: (data: { customerId: string; customerData: UpdateCustomer }) =>
     updateCustomer(data.customerId, data.customerData),
-  onSuccess: () => {
+  onSuccess: (_data, variables) => {
     queryClient.invalidateQueries({ queryKey: ['customers'] })
+    queryClient.invalidateQueries({ queryKey: ['customer', variables.customerId] })
   }
 })
 

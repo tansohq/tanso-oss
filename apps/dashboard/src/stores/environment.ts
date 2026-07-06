@@ -14,7 +14,7 @@ export const useEnvironmentStore = defineStore('environment', () => {
   // and should always report sandbox
   const isSandboxBuild = env.environment === 'sandbox'
 
-  const defaultEnv: Environment = env.environment === 'production' ? 'sandbox' : 'production'
+  const defaultEnv: Environment = 'production'
 
   const activeEnvironment = ref<Environment>(
     isSandboxBuild
@@ -119,21 +119,23 @@ export const useEnvironmentStore = defineStore('environment', () => {
   function initialize() {
     if (isSandboxBuild) return // sandbox build always uses its own backend
 
-    if (activeEnvironment.value === 'sandbox' && sandboxToken.value) {
-      const decoded = decodeJWT(sandboxToken.value)
-      if (!decoded || isTokenExpired(decoded)) {
-        // Sandbox token expired — fall back to production
+    if (activeEnvironment.value === 'sandbox') {
+      const token = sandboxToken.value
+      const decoded = token ? decodeJWT(token) : null
+      if (!token || !decoded || isTokenExpired(decoded)) {
+        // No valid sandbox token — fall back to production so the UI label
+        // matches the production data the API client is serving
         setSandboxToken(null)
         setEnvironment('production')
         return
       }
 
       api.setBaseUrl(env.sandboxApiBaseUrl || env.apiBaseUrl)
-      api.setToken(sandboxToken.value, { persist: false })
+      api.setToken(token, { persist: false })
 
       // Update auth store refs to reflect sandbox user
       const authStore = useAuthStore()
-      authStore.updateActiveToken(sandboxToken.value)
+      authStore.updateActiveToken(token)
     }
     // Production is the default — auth store handles its own token
   }

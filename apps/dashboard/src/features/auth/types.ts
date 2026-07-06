@@ -13,22 +13,6 @@ export interface SignupRequest {
   password: string
 }
 
-export interface OnboardingPlan {
-  id: string
-  key: string
-  name: string
-  description: string
-  priceAmount: number
-  intervalMonths: string
-  billingTiming: string
-  metadata?: Record<string, unknown> | null
-}
-
-export interface OnboardingPlansResponse {
-  success: boolean
-  data: OnboardingPlan[]
-}
-
 export interface DecodedToken {
   sub: string
   account_id: string

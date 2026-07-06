@@ -23,15 +23,15 @@ export function useCreateFeatureMutation() {
   })
 }
 
-export function useUpdateFeatureMutation(uuid: string) {
+export function useUpdateFeatureMutation() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
   return useMutation({
-    mutationFn: (data: UpdateFeature) => updateFeature(uuid, data),
-    onSuccess: () => {
+    mutationFn: ({ uuid, data }: { uuid: string; data: UpdateFeature }) => updateFeature(uuid, data),
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['features'] })
-      queryClient.invalidateQueries({ queryKey: ['feature', uuid] })
+      queryClient.invalidateQueries({ queryKey: ['feature', variables.uuid] })
     },
     onError: (error) => {
       console.error('Failed to update feature:', error)

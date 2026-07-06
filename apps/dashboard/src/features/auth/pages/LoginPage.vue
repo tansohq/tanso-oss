@@ -152,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
@@ -169,7 +169,7 @@ import { useTracking } from '@/lib/tracking'
 const PRODUCTION_SIGNUP_URL = '/signup'
 const route = useRoute()
 const environmentStore = useEnvironmentStore()
-const isSandbox = environmentStore.isSandbox
+const isSandbox = computed(() => environmentStore.isSandbox)
 
 const { track } = useTracking()
 const showPassword = ref(false)

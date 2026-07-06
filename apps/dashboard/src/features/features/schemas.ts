@@ -34,3 +34,8 @@ export const createFeatureSchema = z.object({
 })
 
 export const updateFeatureSchema = createFeatureSchema
+
+export const featureDrawerEditSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  description: z.string()
+})

@@ -60,8 +60,8 @@ export function useSignupMutation() {
         if (env.environment === 'production') {
           try {
             await environmentStore.switchToSandbox()
-          } catch {
-            // If sandbox switch fails, continue in production
+          } catch (error) {
+            console.error('Failed to switch to sandbox after signup, continuing in production:', error)
           }
         }
         router.push('/')

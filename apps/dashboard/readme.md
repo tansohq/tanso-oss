@@ -113,13 +113,13 @@ VITE_TANSO_BACKEND_URL=<backend-api-url>
 VITE_TANSO_BACKEND_URL=http://localhost:8080
 
 # Staging
-VITE_TANSO_BACKEND_URL=https://stg.api.tansohq.com
+VITE_TANSO_BACKEND_URL=https://staging.your-tanso-host.example.com
 
 # Sandbox
-VITE_TANSO_BACKEND_URL=https://sandbox.api.tansohq.com
+VITE_TANSO_BACKEND_URL=https://sandbox.your-tanso-host.example.com
 
 # Production
-VITE_TANSO_BACKEND_URL=https://api.tansohq.com
+VITE_TANSO_BACKEND_URL=https://your-tanso-host.example.com
 ```
 
 ---

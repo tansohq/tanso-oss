@@ -268,8 +268,13 @@ watch(
           tiers,
           maxUsage: typeof value?.max_usage === 'number' ? value.max_usage : null
         })
-      } catch {
-        // Rule fetch failed, use model from usage data
+      } catch (error) {
+        // A 404 means no explicit rule; fall back to the model from usage data.
+        // Any other failure is a real error and must be logged, not swallowed.
+        const status = (error as { response?: { status?: number } })?.response?.status
+        if (status !== 404) {
+          console.error(`Failed to fetch pricing rule for plan ${props.planId} feature ${g.featureId}:`, error)
+        }
         newMap.set(g.featureId, {
           featureId: g.featureId,
           model: g.model,

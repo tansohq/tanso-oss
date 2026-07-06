@@ -584,6 +584,7 @@ async function processImportFile(file: File) {
     const res = await fetchCsvUploads()
     csvUploads.value = res.data
   } catch (e) {
+    console.error('Failed to upload CSV:', e)
     importError.value = e instanceof Error ? e.message : 'Failed to upload file.'
   } finally {
     isImportUploading.value = false
@@ -596,6 +597,7 @@ async function deleteImportUpload(id: string) {
     await deleteCsvUpload(id)
     csvUploads.value = csvUploads.value.filter((u) => u.id !== id)
   } catch (e) {
+    console.error('Failed to delete CSV upload:', e)
     importError.value = e instanceof Error ? e.message : 'Failed to delete file.'
   } finally {
     deletingId.value = null

@@ -324,6 +324,7 @@ import { useAccountApiKeyQuery } from '@/features/account/queries'
 import { useAccountSettingsQuery } from '@/features/integrations/queries'
 import CopyButton from '@/components/CopyButton.vue'
 import { useEnvironmentStore } from '@/stores/environment'
+import { api } from '@/lib/api'
 
 const environmentStore = useEnvironmentStore()
 const isSandbox = computed(() => environmentStore.isSandbox)
@@ -363,9 +364,13 @@ const maskedApiKey = computed(() => {
 })
 
 // MCP endpoint and server name
-const mcpEndpoint = computed(() =>
-  isSandbox.value ? 'http://localhost:8080/mcp' : 'http://localhost:8080/mcp'
-)
+const mcpEndpoint = computed(() => {
+  // Derive from the API client so hosted deploys point at the real backend host
+  // instead of localhost. Reference isSandbox so this recomputes when the
+  // environment switches — the client's base URL is swapped to match it.
+  void isSandbox.value
+  return `${api.getBaseUrl()}/mcp`
+})
 const mcpServerName = computed(() => (isSandbox.value ? 'tanso-sandbox' : 'tanso-prod'))
 
 const llmsUrl = '/llms-mcp.txt'

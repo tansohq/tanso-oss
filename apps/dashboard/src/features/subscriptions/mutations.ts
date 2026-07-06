@@ -11,6 +11,7 @@ export function useCreateSubscriptionMutation() {
     mutationFn: (data: CreateSubscription) => createSubscription(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions'] })
     },
     onError: (error) => {
       console.error('Failed to create subscription:', error)
@@ -32,6 +33,7 @@ export function useActivateSubscriptionMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions'] })
     },
     onError: (error) => {
       console.error('Failed to activate subscription:', error)
@@ -54,6 +56,7 @@ export function useCancelSubscriptionMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions'] })
     },
     onError: (error) => {
       console.error('Failed to cancel subscription:', error)
@@ -75,6 +78,7 @@ export function useUndoScheduledCancellationMutation() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['subscriptions'] })
       queryClient.invalidateQueries({ queryKey: ['subscription'] })
+      queryClient.invalidateQueries({ queryKey: ['customer-subscriptions'] })
     },
     onError: (error) => {
       console.error('Failed to undo scheduled cancellation:', error)

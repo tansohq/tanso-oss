@@ -109,7 +109,11 @@
               <Loader2 class="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
 
-            <Table v-else-if="plansUsingFeature.length > 0">
+            <p v-if="!isPlansLoading && planFetchHadError" class="text-sm text-amber-600 mb-3">
+              Some plans couldn't be loaded, so this list may be incomplete.
+            </p>
+
+            <Table v-if="!isPlansLoading && plansUsingFeature.length > 0">
               <TableHeader>
                 <TableRow>
                   <TableHead>Plan Name</TableHead>
@@ -133,7 +137,7 @@
               </TableBody>
             </Table>
 
-            <p v-else class="text-sm text-muted-foreground text-center py-8">
+            <p v-else-if="!isPlansLoading && !planFetchHadError" class="text-sm text-muted-foreground text-center py-8">
               This feature isn't used by any plans.
             </p>
           </CardContent>
@@ -312,6 +316,7 @@ const allPlans = computed<Plan[]>(() => {
 // Fetch plan features to find which plans use this feature
 const planFeatureMap = ref<Map<string, PlanWithPricing>>(new Map())
 const isFetchingPlanFeatures = ref(false)
+const planFetchHadError = ref(false)
 let planFeaturesFetchId = 0
 
 watch(
@@ -329,6 +334,7 @@ watch(
 
     const fetchId = ++planFeaturesFetchId
     isFetchingPlanFeatures.value = true
+    let hadError = false
     const newMap = new Map<string, PlanWithPricing>()
 
     const promises = plans.map(async (plan) => {
@@ -344,8 +350,11 @@ watch(
 
           newMap.set(plan.id, { plan, pricingLabel })
         }
-      } catch {
-        // Plan features fetch failed, skip
+      } catch (error) {
+        // A failed fetch is not the same as "this plan doesn't use the feature" —
+        // record it so we can flag the list as potentially incomplete.
+        hadError = true
+        console.error(`Failed to fetch plan features for plan ${plan.id}:`, error)
       }
     })
 
@@ -353,6 +362,7 @@ watch(
     // Only apply results if this is still the latest fetch
     if (fetchId === planFeaturesFetchId) {
       planFeatureMap.value = newMap
+      planFetchHadError.value = hadError
       isFetchingPlanFeatures.value = false
     }
   },
@@ -381,8 +391,10 @@ const deleteMutation = isDemo.value
   : useDeleteFeatureMutation()
 const isDeleting = computed(() => deleteMutation.isPending.value)
 
-// Update mutation needs a reactive featureId; we create it fresh on save
-const isUpdating = ref(false)
+const updateMutation = isDemo.value
+  ? { isPending: ref(false), mutateAsync: async () => {} }
+  : useUpdateFeatureMutation()
+const isUpdating = computed(() => updateMutation.isPending.value)
 
 // Initialize edit form when dialog opens
 watch(
@@ -409,15 +421,15 @@ function openEditDialog() {
 async function handleSaveEdit() {
   if (!feature.value || !canSaveEdit.value) return
 
-  isUpdating.value = true
-  const mutation = useUpdateFeatureMutation(feature.value.id)
-
   try {
-    await mutation.mutateAsync({
-      name: editName.value.trim(),
-      key: editKey.value.trim(),
-      description: editDescription.value.trim(),
-      isEnabled: editIsEnabled.value
+    await updateMutation.mutateAsync({
+      uuid: feature.value.id,
+      data: {
+        name: editName.value.trim(),
+        key: editKey.value.trim(),
+        description: editDescription.value.trim(),
+        isEnabled: editIsEnabled.value
+      }
     })
 
     toast({
@@ -432,8 +444,6 @@ async function handleSaveEdit() {
       description: 'Failed to update feature. Please try again.',
       variant: 'destructive'
     })
-  } finally {
-    isUpdating.value = false
   }
 }
 

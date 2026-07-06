@@ -178,7 +178,6 @@ import { computed, ref, watch } from 'vue'
 import { useMutation, useQueryClient } from '@tanstack/vue-query'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
-import { z } from 'zod'
 import { toast } from '@/components/ui/toast/use-toast'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -199,6 +198,7 @@ import { formatDateTime } from '@/lib/formatters'
 import CopyButton from '@/components/CopyButton.vue'
 import MetadataEditor from '@/shared/components/MetadataEditor.vue'
 import { updateFeature } from '../api'
+import { featureDrawerEditSchema } from '../schemas'
 import type { Feature } from '../types'
 
 const props = defineProps<{
@@ -216,14 +216,8 @@ const isEditing = ref(false)
 const errorMessage = ref<string | null>(null)
 const metadata = ref<Record<string, unknown> | null>(null)
 
-// Schema for editing (only name and description)
-const editSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  description: z.string()
-})
-
 const { defineField, handleSubmit, errors, setValues } = useForm({
-  validationSchema: toTypedSchema(editSchema)
+  validationSchema: toTypedSchema(featureDrawerEditSchema)
 })
 
 const [name] = defineField('name')
@@ -232,8 +226,9 @@ const [description] = defineField('description')
 const { mutateAsync, isPending } = useMutation({
   mutationFn: (data: { uuid: string; featureData: { name: string; description: string; key: string; isEnabled: boolean; metadata?: Record<string, unknown> | null } }) =>
     updateFeature(data.uuid, data.featureData),
-  onSuccess: () => {
+  onSuccess: (_data, variables) => {
     queryClient.invalidateQueries({ queryKey: ['features'] })
+    queryClient.invalidateQueries({ queryKey: ['feature', variables.uuid] })
   }
 })
 

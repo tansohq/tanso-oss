@@ -1,9 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { env } from '@/lib/env'
-import { checkSubscriptionStatus } from '@/lib/subscriptionCache'
-
-const PRODUCTION_SIGNUP_URL = '/signup'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -197,12 +194,6 @@ const router = createRouter({
       component: () => import('@/features/settings/pages/SettingsPage.vue'),
       meta: { requiresAuth: true }
     },
-    {
-      path: '/select-plan',
-      name: 'select-plan',
-      component: () => import('@/features/settings/pages/SelectPlanPage.vue'),
-      meta: { requiresAuth: true, skipSubscriptionCheck: true }
-    },
     // Example app routes (preview of customer-facing experience)
     {
       path: '/example-app',
@@ -247,10 +238,10 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, _from, next) => {
-  // In sandbox BUILD, redirect signup to production (don't use the user's toggled
-  // environment — that would loop when a production-domain user has sandbox selected)
+  // Signup isn't offered on sandbox BUILDs — send users to login instead of
+  // hard-redirecting to /signup, which would reload back into this guard and loop.
   if (to.name === 'signup' && env.environment === 'sandbox') {
-    window.location.href = PRODUCTION_SIGNUP_URL
+    next({ name: 'login' })
     return
   }
 
@@ -266,7 +257,6 @@ router.beforeEach(async (to, _from, next) => {
 
   const authStore = useAuthStore()
   const requiresAuth = to.meta.requiresAuth !== false
-  const skipSubscriptionCheck = to.meta.skipSubscriptionCheck === true
 
   // Check authentication first
   if (requiresAuth && !authStore.isAuthenticated) {
@@ -278,16 +268,6 @@ router.beforeEach(async (to, _from, next) => {
   if ((to.name === 'login' || to.name === 'signup') && authStore.isAuthenticated) {
     next({ name: 'home' })
     return
-  }
-
-  // Check subscription status for authenticated routes
-  if (requiresAuth && authStore.isAuthenticated && !skipSubscriptionCheck) {
-    const hasActiveSubscription = await checkSubscriptionStatus()
-
-    if (!hasActiveSubscription) {
-      next({ name: 'select-plan' })
-      return
-    }
   }
 
   next()

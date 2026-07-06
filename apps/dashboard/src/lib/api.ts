@@ -25,6 +25,10 @@ class ApiClient {
 
   setToken(token: string | null, { persist = true }: { persist?: boolean } = {}) {
     this.token = token
+    if (token) {
+      // A new session was established — allow a future expiry to fire logout again
+      this.logoutFired = false
+    }
     if (persist) {
       try {
         if (token) {
@@ -73,13 +77,18 @@ class ApiClient {
         // Response may not have JSON body
       }
 
-      if (response.status === 401 && this.onUnauthorized && !this.logoutFired) {
+      // A 401 on an authenticated endpoint means the session expired — fire the
+      // logout handler once (deduped across concurrent requests). A 401 from a
+      // public endpoint (e.g. login/signup) is a failed credential check, not a
+      // session expiry, so it must surface as a rejected request without logout.
+      if (
+        response.status === 401 &&
+        !endpoint.startsWith('/public/') &&
+        this.onUnauthorized &&
+        !this.logoutFired
+      ) {
         this.logoutFired = true
         this.onUnauthorized()
-        return undefined as T
-      }
-      if (response.status === 401) {
-        return undefined as T
       }
 
       // Handle nested error structures: { error: { detail: "...", message: "..." } } or { message: "..." }
