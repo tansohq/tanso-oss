@@ -1,0 +1,36 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250825-1
+      author: doug
+      changes:
+        - createTable:
+            tableName: entitlementMetas
+            columns:
+              - column:
+                  name: entitlement_meta_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: isActive
+                  type: boolean
+                  defaultValueBoolean: false
+
+        - addColumn:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: entitlement_meta_id
+                  type: UUID
+                  constraints:
+                    foreignKeyName: fk_entitlements_entitlement_metas
+                    referencedTableName: entitlementMetas
+                    referencedColumnNames: entitlement_meta_id
+
+        - dropColumn:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: meta

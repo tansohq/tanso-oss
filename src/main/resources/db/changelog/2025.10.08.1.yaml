@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251008-1"
+      author: doug
+      changes:
+        - renameColumn:
+            tableName: entitlement_metas
+            oldColumnName: isActive
+            newColumnName: is_active

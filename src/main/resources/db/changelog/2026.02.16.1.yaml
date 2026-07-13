@@ -1,0 +1,486 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260216-1"
+      author: tanso
+      changes:
+        # ─── Table 1: credit_pools ───
+        - createTable:
+            tableName: credit_pools
+            columns:
+              - column:
+                  name: credit_pool_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_pools_account
+                    references: accounts(account_id)
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_credit_pools_customer
+                    references: customers(customer_id)
+              - column:
+                  name: name
+                  type: VARCHAR(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: denomination
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: balance
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_granted
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_consumed
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_expired
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: total_reversed
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hard_limit
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: ACTIVE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rollover_policy
+                  type: VARCHAR(20)
+                  defaultValue: NONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: rollover_cap
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: metadata
+                  type: JSONB
+                  defaultValue: '{}'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: BIGINT
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: archived_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+
+        - addUniqueConstraint:
+            tableName: credit_pools
+            columnNames: account_id, name
+            constraintName: uc_credit_pools_account_name
+
+        - createIndex:
+            tableName: credit_pools
+            indexName: idx_credit_pools_account_customer
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: customer_id
+
+        # ─── Table 2: credit_pool_subscriptions ───
+        - createTable:
+            tableName: credit_pool_subscriptions
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: credit_pool_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_cps_credit_pool
+                    references: credit_pools(credit_pool_id)
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_cps_subscription
+                    references: subscriptions(subscription_id)
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_cps_account
+                    references: accounts(account_id)
+              - column:
+                  name: draw_priority
+                  type: INTEGER
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: draw_limit
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: total_drawn
+                  type: DECIMAL(18,4)
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: archived_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+
+        - addUniqueConstraint:
+            tableName: credit_pool_subscriptions
+            columnNames: credit_pool_id, subscription_id
+            constraintName: uc_cps_pool_subscription
+
+        - createIndex:
+            tableName: credit_pool_subscriptions
+            indexName: idx_cps_subscription
+            columns:
+              - column:
+                  name: subscription_id
+
+        # ─── Table 3: credit_grants ───
+        - createTable:
+            tableName: credit_grants
+            columns:
+              - column:
+                  name: credit_grant_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: credit_pool_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_grants_pool
+                    references: credit_pools(credit_pool_id)
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_grants_account
+                    references: accounts(account_id)
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_credit_grants_subscription
+                    references: subscriptions(subscription_id)
+              - column:
+                  name: invoice_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_credit_grants_invoice
+                    references: invoices(invoice_id)
+              - column:
+                  name: grant_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: remaining
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: metadata
+                  type: JSONB
+                  defaultValue: '{}'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: voided_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: deleted_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+              - column:
+                  name: archived_at
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: true
+
+        - createIndex:
+            tableName: credit_grants
+            indexName: idx_credit_grants_pool
+            columns:
+              - column:
+                  name: credit_pool_id
+
+        - createIndex:
+            tableName: credit_grants
+            indexName: idx_credit_grants_expiring
+            columns:
+              - column:
+                  name: expires_at
+
+        - addUniqueConstraint:
+            tableName: credit_grants
+            columnNames: account_id, idempotency_key
+            constraintName: uc_credit_grants_idempotency
+
+        # ─── Table 4: credit_transactions (append-only ledger) ───
+        - createTable:
+            tableName: credit_transactions
+            columns:
+              - column:
+                  name: credit_transaction_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: credit_pool_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_tx_pool
+                    references: credit_pools(credit_pool_id)
+              - column:
+                  name: credit_grant_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_credit_tx_grant
+                    references: credit_grants(credit_grant_id)
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_credit_tx_account
+                    references: accounts(account_id)
+              - column:
+                  name: subscription_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: event_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: invoice_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+              - column:
+                  name: transaction_type
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance_before
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: balance_after
+                  type: DECIMAL(18,4)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: VARCHAR(500)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: reversed_transaction_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_credit_tx_reversed
+                    references: credit_transactions(credit_transaction_id)
+              - column:
+                  name: metadata
+                  type: JSONB
+                  defaultValue: '{}'
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+        - createIndex:
+            tableName: credit_transactions
+            indexName: idx_credit_tx_pool_created
+            columns:
+              - column:
+                  name: credit_pool_id
+              - column:
+                  name: created_at
+                  descending: true
+
+        - createIndex:
+            tableName: credit_transactions
+            indexName: idx_credit_tx_account_created
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: created_at
+                  descending: true
+
+        - createIndex:
+            tableName: credit_transactions
+            indexName: idx_credit_tx_event
+            columns:
+              - column:
+                  name: event_id
+
+        - addUniqueConstraint:
+            tableName: credit_transactions
+            columnNames: account_id, idempotency_key
+            constraintName: uc_credit_tx_idempotency

@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250831-2
+      author: doug
+      changes:
+        - addColumn:
+            tableName: entitlementMetas
+            columns:
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false

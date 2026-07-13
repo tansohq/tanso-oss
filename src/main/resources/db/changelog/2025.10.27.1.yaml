@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251027-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: subscriptions
+            columns:
+              - column: { name: current_period_start, type: timestamp }
+              - column: { name: current_period_end, type: timestamp }
+              - column: { name: cancel_mode, type: varchar(16) }
+              - column: { name: cancel_effective_at, type: timestamp }
+              - column: { name: cancelled_at, type: timestamp }
+        - createIndex:
+            tableName: subscriptions
+            indexName: idx_sub_current_period_end
+            columns:
+              - column: { name: current_period_end }
+        - createIndex:
+            tableName: subscriptions
+            indexName: idx_sub_cancel_effective
+            columns:
+              - column: { name: cancel_effective_at }

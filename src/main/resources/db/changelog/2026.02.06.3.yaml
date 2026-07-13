@@ -1,0 +1,44 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260206-3"
+      author: tanso
+      changes:
+        - createTable:
+            tableName: stripe_meters
+            columns:
+              - column:
+                  name: stripe_meter_id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: feature_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_meters_feature
+                    references: features(feature_id)
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_stripe_meters_account
+                    references: accounts(account_id)
+              - column:
+                  name: stripe_meter_external_id
+                  type: text
+              - column:
+                  name: stripe_meter_event_name
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp with time zone
+                  defaultValueComputed: now()
+              - column:
+                  name: modified_at
+                  type: timestamp with time zone

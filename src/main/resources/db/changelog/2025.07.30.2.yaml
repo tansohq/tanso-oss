@@ -1,0 +1,55 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250730-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: plan_feature_rules
+            columns:
+              - column:
+                  name: plan_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: feature_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: type
+                  type: varchar(255) # stored as string, interpreted by backend
+              - column:
+                  name: value
+                  type: jsonb # stored as string, interpreted by backend
+              - column:
+                  name: is_enabled
+                  type: boolean
+                  defaultValueBoolean: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: plan_feature_rules
+            columnNames: plan_id, feature_id
+        - addForeignKeyConstraint:
+            baseTableName: plan_feature_rules
+            baseColumnNames: plan_id
+            referencedTableName: plans
+            referencedColumnNames: plan_id
+            constraintName: fk_plan_feature_rules_plan
+        - addForeignKeyConstraint:
+            baseTableName: plan_feature_rules
+            baseColumnNames: feature_id
+            referencedTableName: features
+            referencedColumnNames: feature_id
+            constraintName: fk_plan_feature_rules_feature

@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260319-1"
+      author: dbaek
+      comment: "Add native ID resolution boolean columns to events table"
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: customer_is_native
+                  type: boolean
+                  constraints:
+                    nullable: true
+              - column:
+                  name: feature_is_native
+                  type: boolean
+                  constraints:
+                    nullable: true
+              - column:
+                  name: subscription_is_native
+                  type: boolean
+                  constraints:
+                    nullable: true
+              - column:
+                  name: entitlement_is_native
+                  type: boolean
+                  constraints:
+                    nullable: true
+              - column:
+                  name: invoice_is_native
+                  type: boolean
+                  constraints:
+                    nullable: true

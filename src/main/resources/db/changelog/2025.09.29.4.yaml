@@ -1,0 +1,35 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20250929-4"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_subscriptions_accounts
+                    references: accounts(account_id)
+        - addColumn:
+            tableName: invoices
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_invoices_accounts
+                    references: accounts(account_id)
+        - addColumn:
+            tableName: invoice_items
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_invoice_items_accounts
+                    references: accounts(account_id)

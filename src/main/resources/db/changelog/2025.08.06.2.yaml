@@ -1,0 +1,52 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250806-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: addresses
+            columns:
+              - column:
+                  name: address_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: street
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: city
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: state
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: postal_code
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: country
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false

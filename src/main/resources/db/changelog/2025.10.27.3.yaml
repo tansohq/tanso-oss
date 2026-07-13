@@ -1,0 +1,28 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251027-3"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: plans
+            columns:
+              - column:
+                  name: billing_timing
+                  type: varchar(64)
+                  constraints:
+                    nullable: true
+        - renameColumn:
+            tableName: plans
+            oldColumnName: plan_type
+            newColumnName: billing_model
+        - addColumn:
+            tableName: subscriptions
+            columns:
+              - column:
+                  name: billing_anchor_day
+                  type: smallint
+                  constraints:
+                    nullable: true
+        - dropColumn:
+            tableName: subscriptions
+            columnName: type

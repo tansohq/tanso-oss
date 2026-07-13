@@ -1,0 +1,68 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260228-1
+      author: tanso
+      changes:
+        - createTable:
+            tableName: audit_log
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: action
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actor_user_id
+                  type: uuid
+              - column:
+                  name: actor_account_id
+                  type: uuid
+              - column:
+                  name: target_entity_type
+                  type: varchar(100)
+              - column:
+                  name: target_entity_id
+                  type: varchar(255)
+              - column:
+                  name: detail
+                  type: text
+              - column:
+                  name: ip_address
+                  type: varchar(45)
+              - column:
+                  name: request_id
+                  type: varchar(36)
+              - column:
+                  name: created_at
+                  type: timestamptz
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false
+
+        - createIndex:
+            indexName: idx_audit_log_actor_account_id
+            tableName: audit_log
+            columns:
+              - column:
+                  name: actor_account_id
+
+        - createIndex:
+            indexName: idx_audit_log_action
+            tableName: audit_log
+            columns:
+              - column:
+                  name: action
+
+        - createIndex:
+            indexName: idx_audit_log_created_at
+            tableName: audit_log
+            columns:
+              - column:
+                  name: created_at

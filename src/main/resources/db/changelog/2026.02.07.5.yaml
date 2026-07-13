@@ -1,0 +1,23 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260207-1"
+      author: tanso
+      changes:
+        - addColumn:
+            tableName: plans
+            columns:
+              - column:
+                  name: status
+                  type: varchar(20)
+                  defaultValue: "DRAFT"
+                  constraints:
+                    nullable: false
+        # Backfill: existing plans are already live, so mark them ACTIVE.
+        # New plans created after this migration will default to DRAFT.
+        - update:
+            tableName: plans
+            columns:
+              - column:
+                  name: status
+                  value: "ACTIVE"
+            where: "status = 'DRAFT'"

@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251202-1"
+      author: doug
+      changes:
+        - addUniqueConstraint:
+            tableName: external_api_keys
+            columnNames: account_id, external_api_entity_name, key_type
+            constraintName: uq_external_api_keys_account_entity_type

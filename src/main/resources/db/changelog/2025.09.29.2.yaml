@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20250929-2"
+      author: doug
+      changes:
+        - addDefaultValue:
+            tableName: subscriptions
+            columnName: is_active
+            defaultValueBoolean: false
+

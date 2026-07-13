@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20250930-3"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: last_accessed
+                  type: timestamp
+                  constraints:
+                    nullable: true

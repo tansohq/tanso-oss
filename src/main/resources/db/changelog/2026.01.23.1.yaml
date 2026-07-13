@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260123-1"
+      author: doug
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: feature_id
+                  type: uuid
+                  remarks: "The UUID of the feature associated with this event. Non-FK for performance/decoupling."
+                  constraints:
+                    nullable: true
+
+      rollback:
+        - dropColumn:
+            tableName: events
+            columnName: feature_id

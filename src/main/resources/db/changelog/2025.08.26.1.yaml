@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250826-1
+      author: doug
+      changes:
+        - dropUniqueConstraint:
+            tableName: entitlements
+            constraintName: uq_entitlements_customer_feature
+

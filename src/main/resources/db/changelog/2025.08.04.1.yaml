@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250804-2
+      author: doug
+      changes:
+        - createTable:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: entitlement_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: feature_key
+                  type: varchar(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_entitlements_customer
+                    referencedTableName: customers
+                    referencedColumnNames: customer_id
+              - column:
+                  name: meta
+                  type: jsonb
+                  constraints:
+                    nullable: true
+              - column:
+                  name: created_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: TIMESTAMP
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+        - addUniqueConstraint:
+            tableName: entitlements
+            columnNames: customer_id, feature_key
+            constraintName: uq_entitlements_customer_feature
+
+        - createIndex:
+            tableName: entitlements
+            indexName: idx_entitlements_feature_key
+            columns:
+              - column:
+                  name: feature_key

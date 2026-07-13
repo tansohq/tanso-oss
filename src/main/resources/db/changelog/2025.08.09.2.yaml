@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250809-2
+      author: doug
+      changes:
+        - addColumn:
+            tableName: entitlements
+            columns:
+              - column:
+                  name: subscription_id
+                  type: uuid
+                  constraints:
+                    nullable: true
+        - addForeignKeyConstraint:
+            baseColumnNames: subscription_id
+            baseTableName: entitlements
+            constraintName: fk_entitlements_subscription
+            referencedColumnNames: subscription_id
+            referencedTableName: subscriptions

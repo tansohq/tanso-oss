@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251211-1"
+      author: doug
+      changes:
+        - dropColumn:
+            tableName: stripe_subscriptions
+            columnName: stripe_product_id
+        - dropColumn:
+            tableName: stripe_subscriptions
+            columnName: stripe_price_id

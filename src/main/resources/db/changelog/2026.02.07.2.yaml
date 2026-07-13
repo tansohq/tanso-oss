@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260207-2"
+      author: tanso
+      changes:
+        - addColumn:
+            tableName: plans
+            columns:
+              - column:
+                  name: currency
+                  type: varchar(3)
+                  defaultValue: "USD"

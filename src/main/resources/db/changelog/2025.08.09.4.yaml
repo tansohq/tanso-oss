@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250809-4
+      author: doug
+      changes:
+        - modifyDataType:
+            tableName: stripe_customers
+            columnName: stripe_customer_id
+            newDataType: UUID
+        - addDefaultValue:
+            tableName: stripe_customers
+            columnName: stripe_customer_id
+            defaultValueComputed: gen_random_uuid()
+        - addColumn:
+            tableName: stripe_customers
+            columns:
+              - column:
+                  name: stripe_customer_external_id
+                  type: text

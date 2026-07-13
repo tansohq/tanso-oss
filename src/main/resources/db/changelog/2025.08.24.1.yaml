@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250824-1
+      author: doug
+      changes:
+        - dropForeignKeyConstraint:
+            baseTableName: stripe_webhooks
+            constraintName: fk_stripe_webhooks_account_api_key
+        - renameColumn:
+            tableName: stripe_webhooks
+            oldColumnName: api_key_id
+            newColumnName: external_api_key_id
+        - addForeignKeyConstraint:
+            baseTableName: stripe_webhooks
+            baseColumnNames: external_api_key_id
+            referencedTableName: external_api_keys
+            referencedColumnNames: external_api_key_id
+            constraintName: fk_stripe_webhooks_external_api_keys
+

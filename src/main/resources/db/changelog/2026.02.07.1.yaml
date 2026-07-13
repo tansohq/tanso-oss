@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260207-1"
+      author: tanso
+      changes:
+        - createTable:
+            tableName: stripe_webhook_events
+            columns:
+              - column:
+                  name: event_id
+                  type: varchar(255)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: varchar(100)
+              - column:
+                  name: processed_at
+                  type: timestamp with time zone
+                  defaultValueComputed: now()
+                  

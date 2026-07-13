@@ -1,0 +1,8 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260207-4"
+      author: tanso
+      changes:
+        - dropColumn:
+            tableName: account_settings
+            columnName: stripe_enabled

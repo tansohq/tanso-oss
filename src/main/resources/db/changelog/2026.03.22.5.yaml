@@ -1,0 +1,17 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260322-5
+      author: doug
+      comment: "Move intake_data from account_settings to users (intake is per-user, not per-account)"
+      changes:
+        - addColumn:
+            tableName: users
+            columns:
+              - column:
+                  name: intake_data
+                  type: JSONB
+                  constraints:
+                    nullable: true
+        - dropColumn:
+            tableName: account_settings
+            columnName: intake_data

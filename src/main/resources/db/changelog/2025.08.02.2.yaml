@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250802-2
+      author: doug
+      changes:
+        - addColumn:
+            tableName: features
+            columns:
+              - column:
+                  name: is_enabled
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

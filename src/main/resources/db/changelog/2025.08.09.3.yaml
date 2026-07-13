@@ -1,0 +1,46 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20250809-3
+      author: doug
+      changes:
+        - renameTable:
+            oldTableName: stripe_products_plans
+            newTableName: stripe_products
+        - dropPrimaryKey:
+            tableName: stripe_products
+            constraintName: stripe_products_plans_pkey
+        - dropColumn:
+            tableName: stripe_products
+            columnName: stripe_product_id
+        - renameColumn:
+            tableName: stripe_products
+            oldColumnName: stripe_products_plans_id
+            newColumnName: stripe_product_id
+        - addPrimaryKey:
+            tableName: stripe_products
+            constraintName: stripe_products_pkey
+            columnNames: stripe_product_id
+        - dropForeignKeyConstraint:
+            baseTableName: stripe_products
+            constraintName: fk_stripe_products_plans_plan
+        - addForeignKeyConstraint:
+            baseTableName: stripe_products
+            baseColumnNames: plan_id
+            referencedTableName: plans
+            referencedColumnNames: plan_id
+            constraintName: fk_stripe_products_plan
+        - addColumn:
+            tableName: stripe_products
+            columns:
+              - column:
+                  name: stripe_product_external_id
+                  type: text
+        - addForeignKeyConstraint:
+            baseTableName: stripe_subscriptions
+            baseColumnNames: stripe_product_id
+            referencedTableName: stripe_products
+            referencedColumnNames: stripe_product_id
+            constraintName: fk_stripe_subscriptions_stripe_products
+
+            
+            

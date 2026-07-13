@@ -1,0 +1,16 @@
+FROM maven:3.8.5-openjdk-17 AS build
+MAINTAINER DOUGLAS BAEK
+ARG PROJECT_NAME
+ENV JAR_NAME=$PROJECT_NAME
+
+WORKDIR /$PROJECT_NAME
+# COPY . /$PROJECT_NAME
+
+COPY ./target/$PROJECT_NAME.jar /$PROJECT_NAME
+
+# RUN mvn clean package -DskipTests
+
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "java -jar ${JAR_NAME}.jar"]
+# ENTRYPOINT ["sh", "-c", "java -jar target/${JAR_NAME}.jar"]
+

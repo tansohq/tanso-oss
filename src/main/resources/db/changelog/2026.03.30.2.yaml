@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260330-2
+      author: tanso
+      comment: "Make external_client_customer_id nullable — Observe customers linked via stripe_customers bridge table don't need it"
+      changes:
+        - dropNotNullConstraint:
+            tableName: customers
+            columnName: external_client_customer_id
+            columnDataType: varchar(255)

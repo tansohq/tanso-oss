@@ -1,0 +1,175 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260109-1"
+      author: doug
+      changes:
+        - createTable:
+            tableName: events
+            columns:
+              - column:
+                  name: event_id
+                  type: uuid
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+
+              - column:
+                  name: account_id
+                  type: uuid
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_events_accounts
+                    referencedTableName: accounts
+                    referencedColumnNames: account_id
+
+              # Idempotency key (client-provided preferred; can be generated if missing)
+              - column:
+                  name: event_idempotency_key
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+
+              # Flow/correlation id
+              - column:
+                  name: flow_id
+                  type: varchar(64)
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: event_name
+                  type: varchar(128)
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: occurred_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+
+              # these tie to customer, subscription, entitlement, etc. but may not be present
+              - column:
+                  name: customer_id
+                  type: uuid
+                  remarks: "References customers.customer_id (no FK enforced)"
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: subscription_id
+                  type: uuid
+                  remarks: "References subscriptions.subscription_id (no FK enforced)"
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: entitlement_id
+                  type: uuid
+                  remarks: "References entitlements.entitlement_id (no FK enforced)"
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: invoice_id
+                  type: uuid
+                  remarks: "References invoices.invoice_id (no FK enforced)"
+                  constraints:
+                    nullable: true
+
+              # Tanso-defined / validated semantics (featureKey, quantity, ai, etc.)
+              - column:
+                  name: properties
+                  type: jsonb
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+
+              # Customer-defined extras (opaque passthrough)
+              - column:
+                  name: meta
+                  type: jsonb
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+
+              # Request/environment metadata (optional but useful)
+              - column:
+                  name: context
+                  type: jsonb
+                  defaultValueComputed: "'{}'::jsonb"
+                  constraints:
+                    nullable: false
+
+              # If accepted but couldn't fully validate/derive
+              - column:
+                  name: ingest_error
+                  type: text
+                  constraints:
+                    nullable: true
+
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+        - addUniqueConstraint:
+            tableName: events
+            columnNames: account_id, event_idempotency_key
+            constraintName: uq_events_account_event_idempotency_key
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: occurred_at }
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_event_name_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: event_name }
+              - column: { name: occurred_at }
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_flow_id_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: flow_id }
+              - column: { name: occurred_at }
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_subscription_id_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: subscription_id }
+              - column: { name: occurred_at }
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_customer_id_occurred_at
+            columns:
+              - column: { name: account_id }
+              - column: { name: customer_id }
+              - column: { name: occurred_at }
+
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_invoice_id
+            columns:
+              - column: { name: account_id }
+              - column: { name: invoice_id }

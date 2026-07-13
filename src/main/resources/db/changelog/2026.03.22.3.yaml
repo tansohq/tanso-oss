@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260322-3
+      author: doug
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: onboarding_progress
+                  type: JSONB
+                  constraints:
+                    nullable: true

@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251008-2"
+      author: doug
+      changes:
+        - modifyDataType:
+            tableName: invoices
+            columnName: currency
+            newDataType: varchar(3)

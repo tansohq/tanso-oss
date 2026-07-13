@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260317-1"
+      author: doug
+      comment: "Add model, model_provider, cost_units columns to events for structured cost input"
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: model
+                  type: varchar(128)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: model_provider
+                  type: varchar(64)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: cost_units
+                  type: decimal(18,4)
+                  constraints:
+                    nullable: true
+        - createIndex:
+            tableName: events
+            indexName: idx_events_account_model_occurred
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: model
+              - column:
+                  name: occurred_at

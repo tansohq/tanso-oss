@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260401-1"
+      author: "dbaek"
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: input_tokens
+                  type: decimal(18,4)
+              - column:
+                  name: output_tokens
+                  type: decimal(18,4)

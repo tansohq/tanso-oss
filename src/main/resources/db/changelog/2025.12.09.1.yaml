@@ -1,0 +1,39 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251209-1"
+      author: doug
+      changes:
+        - createTable:
+            tableName: stripe_invoices
+            columns:
+              - column:
+                  name: stripe_invoice_id
+                  type: UUID
+                  defaultValueComputed: "gen_random_uuid()"
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+              - column:
+                  name: stripe_invoice_external_id
+                  type: TEXT
+              - column:
+                  name: invoice_id
+                  type: UUID
+                  constraints:
+                    nullable: true
+                    foreignKeyName: fk_stripe_invoices_invoices
+                    references: invoices(invoice_id)
+              - column:
+                  name: created_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: timestamp
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+
+

@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251203-2"
+      author: doug
+      changes:
+        - createTable:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+                    primaryKey: true
+                    foreignKeyName: fk_account_settings_account
+                    references: accounts(account_id)
+              - column:
+                  name: stripe_enabled
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

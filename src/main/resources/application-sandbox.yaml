@@ -1,0 +1,128 @@
+# Activate with: SPRING_PROFILES_ACTIVE=sandbox
+#
+# NOTE: Replace every "your-domain.com" placeholder below (webhook endpoint,
+# CORS origins) with your own domain, and set the account/plan IDs and secrets
+# via environment variables before deploying.
+app:
+  stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:https://sandbox.api.your-domain.com/public/stripe/ingest/webhook}
+  dogfooding-enabled: false
+  master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://sandbox.dashboard.your-domain.com,https://dashboard.your-domain.com}
+  api-key-prefix: sk_test_
+  mcp:
+    enabled: ${APP_MCP_ENABLED:true}
+  resend:
+    api-key: ${RESEND_API_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-ttl-seconds: 86400
+    issuer: tanso-core
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:true}
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}           # e.g. jdbc:postgresql://<rds-endpoint>:5432/<db>
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD} # from Secrets Manager
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:10}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: ${DB_CONN_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate     # never create in prod; rely on Liquibase
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+        show_sql: false
+
+  sql:
+    init:
+      mode: never
+
+  liquibase:
+    enabled: true
+    change-log: db/changelog/tanso-db-changelog-master.yaml
+    contexts: sandbox              # ensure any dev-only changesets are excluded
+    default-schema: public
+    drop-first: false
+
+  jackson:
+    time-zone: UTC
+
+# Scheduled jobs — keep cron in UTC to avoid DST surprises
+jobs:
+  invoicePending:
+    cron: 0 0 1 * * *
+  invoiceDue:
+    cron: 0 0 4 * * *
+  invoiceCancelled:
+    cron: 0 0 5 * * *
+  subscriptionCancellation:
+    cron: 0 0 2 * * *
+  subscriptionCycle:
+    cron: 0 0 6 * * *
+  backgroundJobsWithFixedDelay:
+    reconciliationDelay: 10000
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+logging:
+  level:
+    root: INFO
+    liquibase: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.web: INFO
+
+management:
+  #  server:
+  #    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: tanso-core
+  info:
+    env:
+      enabled: true
+
+# External secrets / config (set via env in ECS):
+# STRIPE_WEBHOOK_SECRET
+# STRIPE_API_KEY
+# APP_WEBHOOK_ENDPOINT
+# SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
+# Any Firestore or other provider creds if enabled
+
+# Optional: tighten CORS only if you expose client-facing endpoints from this service
+# (Otherwise leave off and handle at API gateway/ALB/WAF level)
+# tanso:
+#   cors:
+#     allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.yourdomain.com}

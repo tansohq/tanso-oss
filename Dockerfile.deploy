@@ -1,0 +1,15 @@
+FROM maven:3-eclipse-temurin-21
+# Maintained by Douglas Baek
+ARG PROJECT_NAME
+ENV JAR_NAME=$PROJECT_NAME
+
+WORKDIR /$PROJECT_NAME
+
+COPY . /$PROJECT_NAME
+
+RUN mvn clean package -DskipTests
+RUN echo "PACKAGE DIRECTORY ROOT"
+RUN ls
+RUN echo "PACKAGE DIRECTORY JAR PATH"
+RUN ls target
+ENTRYPOINT ["sh", "-c", "java -jar target/${JAR_NAME}.jar"]

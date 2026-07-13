@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260218-5-add-hard-limit-to-plan-credit-allocations"
+      author: "tanso"
+      changes:
+        - addColumn:
+            tableName: plan_credit_allocations
+            columns:
+              - column:
+                  name: hard_limit
+                  type: boolean

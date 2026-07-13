@@ -1,0 +1,122 @@
+# Activate with: SPRING_PROFILES_ACTIVE=staging
+#
+# NOTE: Replace every "your-domain.com" placeholder below (webhook endpoint,
+# CORS origins) with your own domain, and set the account/plan IDs and secrets
+# via environment variables before deploying.
+
+app:
+  stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:https://stg.api.your-domain.com/public/stripe/ingest/webhook}
+  dogfooding-enabled: false
+  master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://stg.dashboard.your-domain.com}
+  api-key-prefix: sk_test_
+  default-free-plan-id: ${DEFAULT_FREE_PLAN_ID:}
+  mcp:
+    enabled: true
+  resend:
+    api-key: ${RESEND_API_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-ttl-seconds: 7200   # 2 hours
+    issuer: tanso-core
+
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}           # e.g. jdbc:postgresql://<stg-rds-endpoint>:5432/<db>
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD} # from Secrets Manager (staging)
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:8}
+      minimum-idle: ${DB_POOL_MIN:2}
+      connection-timeout: ${DB_CONN_TIMEOUT_MS:30000}
+      idle-timeout: ${DB_IDLE_TIMEOUT_MS:600000}
+      max-lifetime: ${DB_MAX_LIFETIME_MS:1800000}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate                  # rely on Liquibase
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        # Toggle these via env if you need deeper SQL insight temporarily
+        format_sql: ${HIBERNATE_FORMAT_SQL:false}
+        show_sql: ${HIBERNATE_SHOW_SQL:false}
+
+  sql:
+    init:
+      mode: never
+
+  liquibase:
+    enabled: true
+    change-log: db/changelog/tanso-db-changelog-master.yaml
+    contexts: staging                    # use staging-specific contexts if you have any
+    default-schema: public
+    drop-first: false
+
+  jackson:
+    time-zone: UTC
+
+# Keep UTC to avoid DST surprises; same schedule as prod unless you want offset runs
+jobs:
+  invoicePending:
+    cron: 0 0 1 * * *
+  invoiceDue:
+    cron: 0 0 4 * * *
+  invoiceCancelled:
+    cron: 0 0 5 * * *
+  subscriptionCancellation:
+    cron: 0 0 2 * * *
+  subscriptionCycle:
+    cron: 0 0 6 * * *
+  backgroundJobsWithFixedDelay:
+    reconciliationDelay: 10000
+
+logging:
+  level:
+    root: INFO
+    liquibase: INFO
+    org.hibernate.SQL: ${LOG_SQL_LEVEL:WARN}
+    org.springframework.web: INFO
+
+management:
+  #  server:
+  #    port: ${MANAGEMENT_PORT:9090}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  metrics:
+    tags:
+      application: tanso-core-staging
+  info:
+    env:
+      enabled: true
+
+# Typical staging env vars to set in ECS task:
+# SPRING_PROFILES_ACTIVE=staging
+# SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
+# STRIPE_WEBHOOK_SECRET (staging endpoint)
+# STRIPE_API_KEY (test key)
+# APP_WEBHOOK_ENDPOINT=https://staging-api.yourdomain.com/api/webhooks
+# Optional toggles:
+# HIBERNATE_SHOW_SQL=false, HIBERNATE_FORMAT_SQL=false, LOG_SQL_LEVEL=WARN
+# MANAGEMENT_PORT=9090

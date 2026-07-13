@@ -1,0 +1,57 @@
+databaseChangeLog:
+  - changeSet:
+      id: 20260331-2
+      author: kat
+      changes:
+        - createTable:
+            tableName: ai_csv_uploads
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: file_name
+                  type: VARCHAR(255)
+              - column:
+                  name: headers
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: csv_content
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: row_count
+                  type: INT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: ai_csv_uploads
+            baseColumnNames: account_id
+            constraintName: fk_ai_csv_uploads_account
+            referencedTableName: accounts
+            referencedColumnNames: account_id
+            onDelete: CASCADE
+        - createIndex:
+            tableName: ai_csv_uploads
+            indexName: idx_ai_csv_uploads_account
+            columns:
+              - column:
+                  name: account_id

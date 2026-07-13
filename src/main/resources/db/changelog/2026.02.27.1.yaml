@@ -1,0 +1,26 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260227-1"
+      author: doug
+      comment: "Add revenue_amount and revenue_unit columns to disambiguate COGS from revenue"
+      changes:
+        - addColumn:
+            tableName: events
+            columns:
+              - column:
+                  name: revenue_amount
+                  type: "numeric(18,2)"
+              - column:
+                  name: revenue_unit
+                  type: "varchar(32)"
+        - sql:
+            sql: "UPDATE events SET revenue_amount = cost_amount, revenue_unit = cost_unit, cost_amount = NULL WHERE cost_amount IS NOT NULL"
+      rollback:
+        - sql:
+            sql: "UPDATE events SET cost_amount = revenue_amount WHERE revenue_amount IS NOT NULL AND cost_amount IS NULL"
+        - dropColumn:
+            tableName: events
+            columnName: revenue_amount
+        - dropColumn:
+            tableName: events
+            columnName: revenue_unit

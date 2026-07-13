@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251002-3"
+      author: doug
+      changes:
+        - dropUniqueConstraint:
+            tableName: features
+            constraintName: uq_features_account_key_active
+        - sql:
+            sql: |
+              CREATE UNIQUE INDEX ux_features_account_key_active
+              ON features (account_id, key)
+              WHERE is_deleted = false;

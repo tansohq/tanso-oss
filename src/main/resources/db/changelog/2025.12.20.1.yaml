@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251220-1"
+      author: doug
+      changes:
+        - dropUniqueConstraint:
+            tableName: plans
+            constraintName: plans_name_key
+        - addUniqueConstraint:
+            tableName: plans
+            columnNames: name, account_id
+            constraintName: plans_name_account_id_key

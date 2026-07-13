@@ -1,0 +1,33 @@
+# Build output
+target/
+*.jar
+*.war
+
+# Logs
+logs-generated/
+*.log
+
+# Local / generated config & secrets — never commit
+application-local.yaml
+application-local.yml
+*.local.yaml
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+/.claude/
+/docs/
+/postman/

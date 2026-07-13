@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260203-1"
+      author: doug
+      changes:
+        - insert:
+            tableName: accounts
+            columns:
+              - column: {name: account_id, value: "00000000-0000-0000-0000-000000000000"}
+              - column: {name: name, value: "Tanso Platform"}
+              - column: {name: created_at, valueComputed: "now()"}
+
+        - insert:
+            tableName: account_api_keys
+            columns:
+              - column: {name: api_key_id, value: "00000000-0000-0000-0000-000000000031"}
+              - column: {name: account_id, value: "00000000-0000-0000-0000-000000000000"}
+              - column: {name: key_type, value: "secret"}
+              # !! CHANGE ME !! Placeholder master API key. Rotate to your own
+              # secret value after seeding; anyone with this value can act as the
+              # master account.
+              - column: {name: key_value, value: "sk_live_CHANGE_ME_generate_your_own_master_key"}
+              - column: {name: is_active, value: true}
+              - column: {name: expires_at, value: "2099-01-01 00:00:00"}
+              - column: {name: created_at, valueComputed: "now()"}

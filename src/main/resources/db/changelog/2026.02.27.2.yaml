@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260227-2-add-currency-to-account-settings"
+      author: "tanso"
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: currency
+                  type: varchar(3)
+                  defaultValue: 'USD'
+                  constraints:
+                    nullable: false

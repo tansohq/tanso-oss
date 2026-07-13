@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251203-1"
+      author: doug
+      changes:
+        - dropTable:
+            tableName: stripe_webhooks

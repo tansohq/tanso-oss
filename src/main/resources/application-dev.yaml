@@ -1,0 +1,89 @@
+# Activate with: SPRING_PROFILES_ACTIVE=dev
+
+app:
+  # Keep this in env in prod so you can rotate/mask in logs
+  stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:https://example.com/public/stripe/ingest/webhook}
+  mcp:
+    enabled: true
+  resend:
+    api-key: ${RESEND_API_KEY:}
+  openai:
+    api-key: ${OPENAI_API_KEY:}
+
+security:
+  jwt:
+    # Local dev only. Provide your own via JWT_SECRET; this fallback is NOT secret and must never be used outside local dev.
+    secret: ${JWT_SECRET:local-dev-insecure-jwt-secret-change-me-0123456789abcdef}
+    access-token-ttl-seconds: 7200   # 2 hours
+    issuer: tanso-core
+
+server:
+  port: 8080
+  ssl:
+    enabled: false
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+  main:
+    allow-bean-definition-overriding: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/core_db
+    username: dev_user
+    password: dev_pass
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
+        jdbc:
+          time_zone: UTC
+
+  liquibase:
+    enabled: true
+    change-log: db/changelog/tanso-db-changelog-master.yaml
+    contexts: dev
+    default-schema: public
+    drop-first: false
+
+  jackson:
+    time-zone: UTC
+
+  devtools:
+    livereload:
+      enabled: false
+
+  sql:
+    init:
+      mode: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.orm.jdbc.bind: trace
+    org.springframework.security: info

@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20251123-1"
+      author: doug
+      changes:
+        - addUniqueConstraint:
+            tableName: entitlement_reconcile_jobs
+            columnNames: account_id, plan_id, feature_id
+            constraintName: uq_ent_rec_jobs_account_plan_feature
