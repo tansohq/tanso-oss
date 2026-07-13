@@ -19,8 +19,12 @@ subscription business, as a service you can self-host.
   cancel immediately or at end of period.
 - **Usage & metering** — high-throughput, idempotent event ingestion.
 - **Entitlements** — low-latency gating of capabilities based on subscription state.
+- **Credits** — prepaid credit pools per customer, with grants, deductions,
+  expirations, and full transaction history.
 - **Billing & payments** — invoice generation and cycle rollover, synchronized
   with [Stripe](https://stripe.com).
+- **Agent-native (MCP)** — an optional MCP server so AI agents can operate the
+  platform directly, with an explicit consent gate on actions that spend money.
 
 ## Tech stack
 
@@ -101,6 +105,36 @@ supply them via environment variables. The common ones:
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.
+
+---
+
+## Agents & MCP
+
+Tanso Core ships an [MCP](https://modelcontextprotocol.io) server so AI agents
+can operate the platform directly — check credit balances, inspect
+entitlements, manage subscriptions, generate billing insights — using the same
+authenticated, account-scoped access as any other client. There's no separate,
+weaker path for agents.
+
+Tools that spend money or make hard-to-reverse changes (generating AI
+insights, creating Stripe resources, billing operations) require the caller to
+pass `confirmAction: true` before they execute.
+
+Disabled by default. To enable:
+
+```yaml
+app:
+  mcp:
+    enabled: true
+spring:
+  ai:
+    mcp:
+      server:
+        enabled: true
+```
+
+The server exposes `/mcp`. See `McpServerConfig` and
+`src/main/java/com/tansoflow/tansocore/mcp/tools/` for the full tool catalog.
 
 ---
 

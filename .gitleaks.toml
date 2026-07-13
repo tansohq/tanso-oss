@@ -1,0 +1,18 @@
+title = "Tanso Core gitleaks config"
+
+# Tanso issues its own API keys prefixed sk_test_/sk_live_ (same convention
+# Stripe uses), which trips gitleaks' generic Stripe rule. Allowlist the
+# fixture values used in local dev/test seed scripts and tests.
+[allowlist]
+description = "Known-fake fixture keys, not real Stripe secrets"
+regexes = [
+  '''sk_test_828df0fc77874c219f353417fbca1ef4''',
+  '''sk_live_CHANGE_ME_generate_your_own_master_key''',
+  '''sk_test_12345''',
+]
+paths = [
+  '''scripts/create-test-account\.sql''',
+  '''scripts/seed_tanso_master_account\.sql''',
+  '''src/main/resources/db/changelog/2026\.02\.03\.1\.yaml''',
+  '''src/test/java/com/tansoflow/tansocore/controller/tanso/account/AccountControllerTest\.java''',
+]

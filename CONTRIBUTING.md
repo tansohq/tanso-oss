@@ -65,8 +65,7 @@ Open a [GitHub issue](../../issues). For bugs, please include:
 
 ## Security
 
-**Do not open a public issue for security vulnerabilities.** Instead, email
-**me@dougbaek.com** with the details, and we'll coordinate a fix and disclosure.
+See [SECURITY.md](SECURITY.md) for how to report vulnerabilities.
 
 ## Questions
 
