@@ -17,7 +17,6 @@
  */
 package com.tansoflow.tansocore.entity;
 
-import com.tansoflow.tansocore.model.api.external.PlatformMode;
 import com.tansoflow.tansocore.model.api.external.StripeMode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -72,12 +71,6 @@ public class AccountSetting {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency = "USD";
 
-    @NotNull
-    @Enumerated(EnumType.STRING)
-    @ColumnDefault("'OBSERVE'")
-    @Column(name = "platform_mode", nullable = false, length = 20)
-    private PlatformMode platformMode = PlatformMode.OBSERVE;
-
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "default_cost_config")
     private Map<String, Object> defaultCostConfig;
@@ -88,10 +81,6 @@ public class AccountSetting {
 
     public boolean isStripeEnabled() {
         return stripeMode != StripeMode.NONE;
-    }
-
-    public boolean isObserveMode() {
-        return platformMode == PlatformMode.OBSERVE;
     }
 
 }

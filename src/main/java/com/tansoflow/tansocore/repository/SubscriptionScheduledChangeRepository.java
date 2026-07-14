@@ -36,12 +36,7 @@ public interface SubscriptionScheduledChangeRepository extends JpaRepository<Sub
             "WHERE ssc.effectiveAt <= :effectiveAt " +
             "AND (ssc.status = 'PENDING' " +
             "OR ssc.status = 'FAILED') " +
-            "AND ssc.type = 'DOWNGRADE' " +
-            "AND NOT EXISTS (" +
-            "  SELECT 1 FROM AccountSetting acs " +
-            "  WHERE acs.accounts.id = ssc.subscription.account.id " +
-            "    AND acs.platformMode = 'OBSERVE'" +
-            ")")
+            "AND ssc.type = 'DOWNGRADE'")
     Page<SubscriptionScheduledChange> findScheduledSubscriptionsForDowngrade(Instant effectiveAt, Pageable pageable);
 
     @Modifying
