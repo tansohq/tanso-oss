@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src=".github/assets/logo.jpg" alt="Tanso" width="88" />
+
 # Tanso Core
 
 **Open-source monetization engine for B2B AI products** — for teams that sell
