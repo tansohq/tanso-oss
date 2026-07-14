@@ -35,8 +35,14 @@ jobs:
           distribution: temurin
           cache: maven
 
+      # The repo ships the mvnw script but not .mvn/wrapper, so use the
+      # runner's Maven. The CI database starts empty, so let Liquibase
+      # apply the schema for integration tests (application-test.yaml
+      # disables it for local runs against an already-migrated dev DB).
       - name: Build and test
-        run: ./mvnw -B clean verify
+        run: mvn -B clean verify
+        env:
+          SPRING_LIQUIBASE_ENABLED: "true"
 
   gitleaks:
     name: Secret scan
@@ -46,7 +52,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Run the gitleaks binary directly — the gitleaks-action requires a
+      # paid license key for organization repos.
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.24.3/gitleaks_8.24.3_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --redact --no-banner --verbose
