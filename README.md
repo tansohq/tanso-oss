@@ -1,8 +1,23 @@
+<div align="center">
+
+<img src=".github/assets/logo.jpg" alt="Tanso" width="88" />
+
 # Tanso Core
 
-**Tanso Core** is an open-source monetization engine for B2B AI products —
-built for teams that sell credits or usage and whose inference costs are big
-enough that margin per customer is a real question.
+**Open-source monetization engine for B2B AI products** — for teams that sell
+credits or usage and whose inference costs are big enough that margin per
+customer is a real question.
+
+[Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Features](#features) · [Agents & MCP](#agents--mcp) · [Contributing](CONTRIBUTING.md)
+
+[![CI](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml)
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
+[![Java 21](https://img.shields.io/badge/Java-21-b07219)](https://openjdk.org/projects/jdk/21/)
+[![Spring Boot 3.5](https://img.shields.io/badge/Spring%20Boot-3.5-6db33f)](https://spring.io/projects/spring-boot)
+
+</div>
+
+## Why Tanso
 
 Every metered event carries its cost: input/output tokens, model, provider,
 and what that usage cost you — alongside what you billed for it. Billing tools
@@ -14,8 +29,6 @@ The same ledger enforces in real time: entitlement checks, usage caps, and
 credit limits are applied when the event is ingested, not reconciled at
 invoice time. Billing state lives in Tanso — Stripe is the payment adapter,
 not the source of truth.
-
-> Licensed under the **GNU AGPL-3.0**. See [LICENSE](LICENSE).
 
 ---
 
