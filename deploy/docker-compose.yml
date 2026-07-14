@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:17.5
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-tanso}
+      POSTGRES_USER: ${POSTGRES_USER:-tanso}
+      # Placeholder — set a real POSTGRES_PASSWORD in deploy/.env
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tanso}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-tanso}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-tanso}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      # Required — the app fails to start without it (no insecure default shipped)
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set — e.g. openssl rand -base64 48}
+      STRIPE_API_KEY: ${STRIPE_API_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+      # Optional MCP server for AI agents — both must be true to expose /mcp
+      APP_MCP_ENABLED: ${APP_MCP_ENABLED:-false}
+      SPRING_AI_MCP_SERVER_ENABLED: ${SPRING_AI_MCP_SERVER_ENABLED:-false}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
