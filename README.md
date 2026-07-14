@@ -1,9 +1,19 @@
 # Tanso Core
 
-**Tanso Core** is an open-source B2B SaaS monetization engine. It provides the
-infrastructure to manage customer lifecycles, flexible billing models, usage
-metering, and real-time feature entitlements — the plumbing behind a
-subscription business, as a service you can self-host.
+**Tanso Core** is an open-source monetization engine for B2B AI products —
+built for teams that sell credits or usage and whose inference costs are big
+enough that margin per customer is a real question.
+
+Every metered event carries its cost: input/output tokens, model, provider,
+and what that usage cost you — alongside what you billed for it. Billing tools
+meter usage but don't know your costs; observability tools know your costs but
+don't bill. Tanso does both in one ledger, so you can see margin per customer,
+per feature, per model.
+
+The same ledger enforces in real time: entitlement checks, usage caps, and
+credit limits are applied when the event is ingested, not reconciled at
+invoice time. Billing state lives in Tanso — Stripe is the payment adapter,
+not the source of truth.
 
 > Licensed under the **GNU AGPL-3.0**. See [LICENSE](LICENSE).
 
@@ -41,7 +51,26 @@ subscription business, as a service you can self-host.
 
 ---
 
-## Getting started
+## Quick start (Docker)
+
+One path from clone to a running, seeded instance — Docker is the only
+prerequisite:
+
+```bash
+git clone https://github.com/tansohq/tanso-oss.git
+cd tanso-oss/deploy
+cp .env.example .env     # set JWT_SECRET (e.g. openssl rand -base64 48)
+docker compose up -d --build
+./setup.sh               # seeds a test account and prints credentials
+```
+
+The API listens on [http://localhost:8080](http://localhost:8080) with docs at
+`/swagger-ui.html`. `setup.sh` prints a test login and API key — change them
+before exposing the instance to anything real.
+
+---
+
+## Getting started (manual)
 
 ### Prerequisites
 
@@ -151,6 +180,7 @@ tanso-core/
 ├── src/main/resources/
 │   ├── application-*.yaml    # per-profile config
 │   └── db/changelog/         # Liquibase migrations
+├── deploy/            # docker-compose quickstart (see Quick start)
 ├── scripts/           # SQL seed & helper scripts
 ├── docs/openapi/      # OpenAPI specs
 ├── compose.yaml       # local Docker stack
