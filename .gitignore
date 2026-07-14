@@ -21,6 +21,10 @@ application-local.yml
 *.ipr
 *.iws
 .vscode/
+.classpath
+.factorypath
+.project
+.settings/
 
 # Claude Code local settings
 .claude/settings.local.json
@@ -31,3 +35,4 @@ Thumbs.db
 /.claude/
 /docs/
 /postman/
+.gstack/
