@@ -20,7 +20,6 @@ package com.tansoflow.tansocore.controller.tanso.account;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.AccountSetting;
-import com.tansoflow.tansocore.model.api.external.PlatformMode;
 import com.tansoflow.tansocore.model.api.external.StripeMode;
 import com.tansoflow.tansocore.model.event.service.StripeModeChangedEvent;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -106,19 +105,6 @@ public class AccountSettingsController {
         if (request.getStripeCheckoutCancelUrl() != null) {
             setting.setStripeCheckoutCancelUrl(request.getStripeCheckoutCancelUrl());
         }
-        if (request.getPlatformMode() != null && request.getPlatformMode() != setting.getPlatformMode()) {
-            if (setting.getPlatformMode() == PlatformMode.FULL) {
-                throw new IllegalArgumentException("Cannot switch from Full to Observe mode");
-            }
-            PlatformMode oldMode = setting.getPlatformMode();
-            setting.setPlatformMode(request.getPlatformMode());
-
-            UUID actorUserId = userContext.getUserId() != null ? UUID.fromString(userContext.getUserId()) : null;
-            UUID actorAccountId = UUID.fromString(userContext.getAccountId());
-            auditHelper.audit("PLATFORM_MODE_CHANGED", actorUserId, actorAccountId,
-                    "AccountSetting", actorAccountId.toString(),
-                    oldMode + " -> " + request.getPlatformMode());
-        }
         if (request.getDefaultCostConfig() != null) {
             DefaultCostConfigDto dcc = request.getDefaultCostConfig();
             if (dcc.getModelCosts() != null) {
@@ -156,7 +142,6 @@ public class AccountSettingsController {
         dto.setStripeCheckoutSuccessUrl(setting.getStripeCheckoutSuccessUrl());
         dto.setStripeCheckoutCancelUrl(setting.getStripeCheckoutCancelUrl());
         dto.setCurrency(setting.getCurrency());
-        dto.setPlatformMode(setting.getPlatformMode());
         if (setting.getDefaultCostConfig() != null) {
             dto.setDefaultCostConfig(objectMapper.convertValue(
                     setting.getDefaultCostConfig(), DefaultCostConfigDto.class));
@@ -171,7 +156,6 @@ public class AccountSettingsController {
         private String stripeCheckoutSuccessUrl;
         private String stripeCheckoutCancelUrl;
         private String currency;
-        private PlatformMode platformMode;
         private DefaultCostConfigDto defaultCostConfig;
     }
 
@@ -181,7 +165,6 @@ public class AccountSettingsController {
         private String currency;
         private String stripeCheckoutSuccessUrl;
         private String stripeCheckoutCancelUrl;
-        private PlatformMode platformMode;
         private DefaultCostConfigDto defaultCostConfig;
     }
 

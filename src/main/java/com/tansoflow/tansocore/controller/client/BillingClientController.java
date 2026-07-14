@@ -18,7 +18,6 @@
 package com.tansoflow.tansocore.controller.client;
 
 import com.stripe.exception.StripeException;
-import com.tansoflow.tansocore.auth.RequiresFullPlatformMode;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.Invoice;
@@ -66,7 +65,6 @@ public class BillingClientController {
     private final StripeSyncService stripeSyncService;
     private final AccountService accountService;
 
-    @RequiresFullPlatformMode
     @PostMapping("/invoices/{invoiceId}/mark-paid")
     @Operation(summary = "Mark invoice as paid", description = "Manually marks an invoice as paid and activates the associated subscription", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
@@ -89,7 +87,6 @@ public class BillingClientController {
         return ResponseEntity.ok(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/invoices/subscription/{subscriptionId}/stripe/checkout")
     @Operation(summary = "Create Stripe checkout session (DEPRECATED)", description = "Generates a Stripe Checkout URL for a specific subscription. This endpoint is deprecated, use /invoices/{invoiceId}/stripe/checkout instead.", security = @SecurityRequirement(name = "Bearer"), deprecated = true)
     @ApiResponses(value = {
@@ -104,7 +101,6 @@ public class BillingClientController {
         return ResponseEntity.status(403).body(apiResponse);
     }
 
-    @RequiresFullPlatformMode
     @PostMapping("/subscriptions/{subscriptionId}/stripe/checkout")
     @Operation(summary = "Create Stripe checkout session for subscription", description = "Finds the first DUE invoice for a subscription and generates a Stripe Checkout URL for payment", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {

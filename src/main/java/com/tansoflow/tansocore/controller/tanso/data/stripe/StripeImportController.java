@@ -19,13 +19,11 @@ package com.tansoflow.tansocore.controller.tanso.data.stripe;
 
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.integration.stripe.StripeImportService;
-import com.tansoflow.tansocore.integration.stripe.StripeObserveSyncService;
 import com.tansoflow.tansocore.model.data.stripe.request.StripeDiscoverRequest;
 import com.tansoflow.tansocore.model.data.stripe.request.StripeImportStartRequest;
 import com.tansoflow.tansocore.model.data.stripe.request.StripeMapProductRequest;
 import com.tansoflow.tansocore.model.data.stripe.response.StripeDiscoveryResponse;
 import com.tansoflow.tansocore.model.data.stripe.response.StripeImportStatusResponse;
-import com.tansoflow.tansocore.model.data.stripe.response.StripeObserveSyncResponse;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -54,7 +52,6 @@ import java.util.UUID;
 @Tag(name = "Stripe Import", description = "Operations for importing existing Stripe data into Tanso")
 public class StripeImportController {
     private final StripeImportService stripeImportService;
-    private final StripeObserveSyncService stripeObserveSyncService;
 
     @PostMapping("/discover")
     @Operation(summary = "Discover Stripe objects", description = "Lists products, customers, and subscriptions from the connected Stripe account", security = @SecurityRequirement(name = "Bearer"))
@@ -104,20 +101,6 @@ public class StripeImportController {
         UUID accountId = UUID.fromString(userContext.getAccountId());
         StripeImportStatusResponse response = stripeImportService.startAutoCreateImport(accountId);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.<StripeImportStatusResponse>builder()
-                .success(true)
-                .data(response)
-                .build());
-    }
-
-    @PostMapping("/observe-sync")
-    @Operation(summary = "Observe mode sync",
-        description = "Lightweight sync that pulls customers, products/prices, and subscriptions from Stripe for cost-tracking analytics",
-        security = @SecurityRequirement(name = "Bearer"))
-    public ResponseEntity<ApiResponse<StripeObserveSyncResponse>> observeSync(
-            @AuthenticationPrincipal UserContext userContext) {
-        UUID accountId = UUID.fromString(userContext.getAccountId());
-        StripeObserveSyncResponse response = stripeObserveSyncService.sync(accountId);
-        return ResponseEntity.ok(ApiResponse.<StripeObserveSyncResponse>builder()
                 .success(true)
                 .data(response)
                 .build());

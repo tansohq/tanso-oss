@@ -1,0 +1,11 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260713-1"
+      author: tanso
+      comment: >
+        Remove Observe mode. Every account runs the full platform, so the
+        platform_mode discriminator is no longer read by application code.
+      changes:
+        - dropColumn:
+            tableName: account_settings
+            columnName: platform_mode

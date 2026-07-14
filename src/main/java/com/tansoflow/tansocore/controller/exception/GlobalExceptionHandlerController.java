@@ -19,7 +19,6 @@ package com.tansoflow.tansocore.controller.exception;
 
 import com.tansoflow.tansocore.model.exception.AuthenticationException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
-import com.tansoflow.tansocore.model.exception.PlatformModeException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.Error;
@@ -61,14 +60,6 @@ public class GlobalExceptionHandlerController {
         }
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(processErrorMessage(HttpStatus.BAD_REQUEST.getReasonPhrase(), errorId));
-    }
-
-    @ExceptionHandler(PlatformModeException.class)
-    public ResponseEntity<ApiResponse<Void>> handlePlatformModeException(PlatformModeException exception) {
-        String errorId = assignErrorId();
-        log.warn("Platform mode restriction [errorId={}]: {}", errorId, exception.getMessage());
-
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(processErrorMessage(exception.getMessage(), errorId));
     }
 
     @ExceptionHandler(AuthenticationException.class)

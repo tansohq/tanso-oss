@@ -511,7 +511,7 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     /**
      * For event-only customers (no Tanso subscription), check if they have a Stripe-linked
      * subscription. If so, use the plan's MRR as the revenue fallback for margin calculation.
-     * This enables Observe users who connect Stripe to see margin data without manually
+     * This enables accounts that connect Stripe to see margin data without manually
      * sending revenueAmount on every event.
      */
     private Map<UUID, BigDecimal> resolveStripeRevenueFallback(List<UUID> customerIds, Map<UUID, Customer> customerMap, UUID accountId) {
