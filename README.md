@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src=".github/assets/logo.jpg" alt="Tanso" width="88" />
+<img src=".github/assets/logo.svg" alt="Tanso" width="88" />
 
 # Tanso Core
 
