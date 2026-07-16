@@ -8,7 +8,7 @@
 credits or usage and whose inference costs are big enough that margin per
 customer is a real question.
 
-[Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Features](#features) · [Agents & MCP](#agents--mcp) · [Contributing](CONTRIBUTING.md)
+[Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Features](#features) · [Agents & MCP](#agents--mcp) · [Contributing](CONTRIBUTING.md) · [Docs](https://tanso.mintlify.app/introduction)
 
 [![CI](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
