@@ -47,12 +47,15 @@ public interface CreditPoolSubscriptionRepository extends JpaRepository<CreditPo
     @Query("""
         SELECT cps FROM CreditPoolSubscription cps
         WHERE cps.subscription.id = :subscriptionId
+          AND cps.account.id = :accountId
           AND cps.creditPool.denomination = :denomination
           AND cps.deletedAt IS NULL
         ORDER BY cps.drawPriority ASC
     """)
-    List<CreditPoolSubscription> findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(
-            @Param("subscriptionId") UUID subscriptionId, @Param("denomination") String denomination);
+    List<CreditPoolSubscription> findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+            @Param("subscriptionId") UUID subscriptionId,
+            @Param("accountId") UUID accountId,
+            @Param("denomination") String denomination);
 
     Optional<CreditPoolSubscription> findByCreditPoolIdAndSubscriptionIdAndDeletedAtIsNull(UUID creditPoolId, UUID subscriptionId);
 

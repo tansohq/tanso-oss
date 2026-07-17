@@ -208,6 +208,15 @@ tanso-core/
 ./mvnw test
 ```
 
+Spring context tests use the PostgreSQL database configured in
+`src/test/resources/application-test.yaml`. The default suite excludes tests
+tagged `manual`, which execute scheduler jobs against that database's current
+state. Run them explicitly after preparing a disposable test database:
+
+```bash
+./mvnw test -Pmanual-tests -Dgroups=manual
+```
+
 ---
 
 ## Deployment

@@ -32,6 +32,7 @@ import com.tansoflow.tansocore.model.event.events.EventDto;
 import com.tansoflow.tansocore.model.event.events.EventGroupDto;
 import com.tansoflow.tansocore.model.event.events.EventIngestionResult;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.monetization.cost.CostModel;
 import com.tansoflow.tansocore.model.monetization.cost.DefaultCostConfig;
 import com.tansoflow.tansocore.model.monetization.cost.ModelAwareCostModel;
@@ -296,6 +297,16 @@ public class EventServiceImpl implements EventService {
         applyDefaultCostIfMissing(eventDto, account);
         applyGlobalModelPricingIfMissing(eventDto);
 
+        if (billingEligible && creditDenomination != null
+                && eventDto.getSubscriptionId() != null
+                && eventDto.getUsageUnits() != null
+                && eventDto.getUsageUnits().compareTo(BigDecimal.ZERO) > 0
+                && !creditService.checkHardLimitForSubscription(
+                eventDto.getSubscriptionId(), account.getId(), creditDenomination, eventDto.getUsageUnits())) {
+            throw new CreditLimitExceededException(
+                    "Credit pool depleted - hard limit active for denomination " + creditDenomination);
+        }
+
         Event event = eventMapper.eventDtoToEventEntity(eventDto);
         event.setAccount(account);
 
@@ -306,16 +317,9 @@ public class EventServiceImpl implements EventService {
             return resultBuilder.build();
         }
 
-        // Synchronous credit deduction for events with usage (includes atomic hard limit check)
+        // Synchronous credit deduction for events with usage. Failures roll back event persistence.
         if (billingEligible) {
-            try {
-                deductCreditsForEvent(eventDto, event, account, creditDenomination);
-            } catch (IllegalStateException e) {
-                if (e.getMessage() != null && e.getMessage().contains("hard limit")) {
-                    return resultBuilder.message("Credit pool depleted — hard limit active").build();
-                }
-                throw e;
-            }
+            deductCreditsForEvent(eventDto, event, account, creditDenomination);
 
             // Forward usage to Stripe Meters for STRIPE_INTEGRATION accounts (credit-covered quantity excluded)
             forwardToStripeMeterIfNeeded(eventDto, account);
@@ -545,27 +549,10 @@ public class EventServiceImpl implements EventService {
 
         try {
             List<CreditPoolSubscription> links = creditPoolSubscriptionRepository
-                    .findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(
-                            eventDto.getSubscriptionId(), creditDenomination);
+                    .findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                            eventDto.getSubscriptionId(), account.getId(), creditDenomination);
 
             if (links.isEmpty()) return;
-
-            // Atomic hard limit check: sum available balance across all pools with hard limits
-            BigDecimal totalAvailable = BigDecimal.ZERO;
-            boolean anyHardLimit = false;
-            for (CreditPoolSubscription link : links) {
-                var pool = link.getCreditPool();
-                if (pool.getHardLimit()) {
-                    anyHardLimit = true;
-                    totalAvailable = totalAvailable.add(pool.getBalance());
-                }
-            }
-            if (anyHardLimit && totalAvailable.compareTo(eventDto.getUsageUnits()) < 0) {
-                eventDto.getContext().put("credit_blocked", true);
-                event.setContext(eventDto.getContext());
-                eventRepository.save(event);
-                throw new IllegalStateException("Credit pool depleted — hard limit active for denomination " + creditDenomination);
-            }
 
             // Credit deduction assumes 1:1 mapping between usageUnits and credit denomination.
             // Future: add creditConversionRate to PlanCreditAllocation for N:1 conversion.
@@ -616,6 +603,8 @@ public class EventServiceImpl implements EventService {
                 log.info("Deducted {} credits for event {}, {} usage remains for billing",
                         totalDeducted, event.getId(), remainingToDeduct);
             }
+        } catch (CreditLimitExceededException e) {
+            throw e;
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
@@ -672,27 +661,32 @@ public class EventServiceImpl implements EventService {
         if (eventDto.getFeatureId() != null && eventDto.getCustomerId() != null) {
             Subscription activeSub = null;
 
-            // When subscriptionId is provided, use that specific subscription
+            // A supplied subscription can participate in billing only for this account and customer.
             if (eventDto.getSubscriptionId() != null) {
-                activeSub = subscriptionRepository.findById(eventDto.getSubscriptionId())
-                        .filter(Subscription::getIsActive)
-                        .orElse(null);
+                Subscription requestedSub = subscriptionRepository.findSubscriptionByUuidAndAccountId(
+                        eventDto.getSubscriptionId(), account.getId());
+                if (requestedSub != null
+                        && Boolean.TRUE.equals(requestedSub.getIsActive())
+                        && requestedSub.getCustomer() != null
+                        && eventDto.getCustomerId().equals(requestedSub.getCustomer().getId())) {
+                    activeSub = requestedSub;
+                }
             }
 
             // Fall back to first active subscription for the customer
             if (activeSub == null) {
                 List<Subscription> subscriptions = subscriptionRepository.findSubscriptionsByCustomer_Id(eventDto.getCustomerId());
                 activeSub = subscriptions.stream()
-                        .filter(Subscription::getIsActive)
+                        .filter(subscription -> Boolean.TRUE.equals(subscription.getIsActive()))
+                        .filter(subscription -> subscription.getAccount() != null
+                                && account.getId().equals(subscription.getAccount().getId()))
                         .findFirst()
                         .orElse(null);
             }
 
             if (activeSub != null) {
-                // Stamp subscriptionId so the event is scoped to this subscription
-                if (eventDto.getSubscriptionId() == null) {
-                    eventDto.setSubscriptionId(activeSub.getId());
-                }
+                eventDto.setSubscriptionId(activeSub.getId());
+                eventDto.setSubscriptionIsNative(true);
 
                 PlanFeatureRule rule = planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
                         activeSub.getPlan().getId(), eventDto.getFeatureId());

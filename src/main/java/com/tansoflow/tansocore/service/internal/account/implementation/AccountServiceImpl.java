@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.entity.AccountApiKey;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.ExternalApiKey;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyEntityName;
+import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.property.AppProperty;
 import com.tansoflow.tansocore.repository.AccountApiKeyRepository;
 import com.tansoflow.tansocore.repository.AccountRepository;
@@ -32,6 +33,7 @@ import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -86,10 +88,7 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public Account findByApiKey(String apiKey) {
         AccountApiKey accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(apiKey);
-        if (accountApiKey != null) {
-            return accountApiKey.getAccount();
-        }
-        return null;
+        return isUsableApiKey(accountApiKey, Instant.now()) ? accountApiKey.getAccount() : null;
     }
 
     @Override
@@ -113,18 +112,14 @@ public class AccountServiceImpl implements AccountService {
     @Override
     public AccountApiKey retrieveFirstApiKey(String accountId) {
         List<AccountApiKey> keys = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));
+        Instant now = Instant.now();
 
-        // Prefer keys with valid sk_ prefix (required by ApiKeyAuthFilter)
         return keys.stream()
+                .filter(key -> isUsableApiKey(key, now))
                 .filter(k -> k.getKeyValue().startsWith("sk_live_") || k.getKeyValue().startsWith("sk_test_"))
                 .findFirst()
-                .or(() -> keys.stream().findFirst())
-                .orElseGet(() -> {
-                    // Auto-generate a key for accounts created before key generation was added
-                    log.info("No API key found for account {}, generating one", accountId);
-                    Account account = retrieveAccount(accountId);
-                    return createApiKeyForAccount(account);
-                });
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "No active API key found. Rotate the API key to create one."));
     }
 
     @Override
@@ -144,13 +139,17 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @Transactional
     public AccountApiKey rotateApiKey(String accountId) {
         Account account = retrieveAccount(accountId);
 
-        // Soft-delete existing keys
         List<AccountApiKey> existing = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));
-        // triggers @SQLDelete soft-delete
-        accountApiKeyRepository.deleteAll(existing);
+        Instant rotatedAt = Instant.now();
+        existing.forEach(apiKey -> {
+            apiKey.setIsActive(false);
+            apiKey.setDeletedAt(rotatedAt);
+        });
+        accountApiKeyRepository.saveAll(existing);
 
         return createApiKeyForAccount(account);
     }
@@ -158,6 +157,18 @@ public class AccountServiceImpl implements AccountService {
     private String generateRawApiKey() {
         String uuid = UUID.randomUUID().toString().replace("-", "");
         return appProperty.getApiKeyPrefix() + uuid;
+    }
+
+    private boolean isUsableApiKey(AccountApiKey apiKey, Instant now) {
+        return apiKey != null
+                && apiKey.getAccount() != null
+                && apiKey.getKeyValue() != null
+                && !apiKey.getKeyValue().isBlank()
+                && Boolean.TRUE.equals(apiKey.getIsActive())
+                && apiKey.getExpiresAt() != null
+                && apiKey.getExpiresAt().isAfter(now)
+                && apiKey.getDeletedAt() == null
+                && apiKey.getArchivedAt() == null;
     }
 
     @Override

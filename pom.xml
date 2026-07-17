@@ -15,6 +15,7 @@
     <description>tanso-core</description>
     <properties>
         <java.version>21</java.version>
+        <test.excluded-groups>manual</test.excluded-groups>
         <snakeyaml.version>2.0</snakeyaml.version>
         <mapstruct.version>1.6.3</mapstruct.version>
         <lombok-mapstruct-binding.version>0.2.0</lombok-mapstruct-binding.version>
@@ -80,6 +81,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>com.vaadin.external.google</groupId>
+                    <artifactId>android-json</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
@@ -227,8 +234,7 @@
                             <version>${lombok-mapstruct-binding.version}</version>
                         </path>
                     </annotationProcessorPaths>
-                    <source>16</source>
-                    <target>16</target>
+                    <release>${java.version}</release>
                 </configuration>
             </plugin>
             <plugin>
@@ -239,10 +245,20 @@
                     <systemPropertyVariables>
                         <spring.profiles.active>test</spring.profiles.active>
                     </systemPropertyVariables>
+                    <excludedGroups>${test.excluded-groups}</excludedGroups>
                 </configuration>
             </plugin>
 
         </plugins>
-</build>
+    </build>
 
-        </project>
+    <profiles>
+        <profile>
+            <id>manual-tests</id>
+            <properties>
+                <test.excluded-groups>none</test.excluded-groups>
+            </properties>
+        </profile>
+    </profiles>
+
+</project>

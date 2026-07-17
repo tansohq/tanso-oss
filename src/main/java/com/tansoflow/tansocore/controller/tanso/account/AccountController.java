@@ -36,6 +36,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -49,6 +50,7 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/account")
+@PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Account", description = "Account and authentication operations")
 public class AccountController {
     private final AccountService accountService;
@@ -57,13 +59,13 @@ public class AccountController {
     private final Resend resend;
 
     @GetMapping("/api-key")
-    @Operation(summary = "Get account API key", description = "Returns the account's API key")
+    @Operation(summary = "Get account API key", description = "Returns a masked account API key")
     public ResponseEntity<ApiResponse<AccountApiKeyResponse>> getAccountApiKey(@AuthenticationPrincipal UserContext userContext) {
         AccountApiKey apiKey = accountService.retrieveFirstApiKey(userContext.getAccountId());
 
         AccountApiKeyResponse response = AccountApiKeyResponse.builder()
-                .apiKey(apiKey.getKeyValue())
-                .keyType("secret") // Defaulting to secret as per current usage
+                .apiKey(maskApiKey(apiKey.getKeyValue()))
+                .keyType(apiKey.getKeyType())
                 .build();
 
         ApiResponse<AccountApiKeyResponse> apiResponse = ApiResponse.<AccountApiKeyResponse>builder()
@@ -75,7 +77,7 @@ public class AccountController {
     }
 
     @PostMapping("/api-key")
-    @Operation(summary = "Rotate account API key", description = "Generates a new API key, invalidating the previous one")
+    @Operation(summary = "Rotate account API key", description = "Generates a new API key, invalidates previous keys, and returns the new secret once")
     public ResponseEntity<ApiResponse<AccountApiKeyResponse>> rotateAccountApiKey(@AuthenticationPrincipal UserContext userContext) {
         log.info("API key rotation requested for account {}", userContext.getAccountId());
 
@@ -95,6 +97,22 @@ public class AccountController {
                 .success(true)
                 .data(response)
                 .build());
+    }
+
+    private static String maskApiKey(String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            return apiKey;
+        }
+
+        int prefixLength = apiKey.startsWith("sk_live_") || apiKey.startsWith("sk_test_") ? 8 : 4;
+        int suffixLength = 4;
+        if (apiKey.length() <= prefixLength + suffixLength) {
+            return "*".repeat(apiKey.length());
+        }
+
+        return apiKey.substring(0, prefixLength)
+                + "************"
+                + apiKey.substring(apiKey.length() - suffixLength);
     }
 
     @PostMapping("/feature-request")

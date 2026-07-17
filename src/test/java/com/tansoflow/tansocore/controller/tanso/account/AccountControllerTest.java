@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.entity.AccountApiKey;
 import com.tansoflow.tansocore.model.account.response.AccountApiKeyResponse;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
+import com.tansoflow.tansocore.service.internal.audit.AuditHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -35,12 +36,16 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AccountControllerTest {
 
     @Mock
     private AccountService accountService;
+
+    @Mock
+    private AuditHelper auditHelper;
 
     @InjectMocks
     private AccountController accountController;
@@ -51,14 +56,15 @@ class AccountControllerTest {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         String accountId = UUID.randomUUID().toString();
-        userContext = new UserContext(accountId, "test-token");
+        userContext = new UserContext(UUID.randomUUID().toString(), accountId, "test@example.com", "test-token");
     }
 
     @Test
     void testGetAccountApiKey_Success() {
         AccountApiKey apiKey = new AccountApiKey();
-        apiKey.setKeyValue("sk_test_12345");
-        
+        apiKey.setKeyValue("sk_test_1234567890abcdef");
+        apiKey.setKeyType("secret");
+
         when(accountService.retrieveFirstApiKey(userContext.getAccountId())).thenReturn(apiKey);
 
         ResponseEntity<ApiResponse<AccountApiKeyResponse>> response = accountController.getAccountApiKey(userContext);
@@ -66,7 +72,23 @@ class AccountControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertTrue(response.getBody().isSuccess());
-        assertEquals("sk_test_12345", response.getBody().getData().getApiKey());
+        assertEquals("sk_test_************cdef", response.getBody().getData().getApiKey());
         assertEquals("secret", response.getBody().getData().getKeyType());
+    }
+
+    @Test
+    void testRotateAccountApiKey_ReturnsRawKeyOnce() {
+        AccountApiKey apiKey = new AccountApiKey();
+        apiKey.setKeyValue("sk_test_new-secret-value");
+        apiKey.setKeyType("secret");
+
+        when(accountService.rotateApiKey(userContext.getAccountId())).thenReturn(apiKey);
+
+        ResponseEntity<ApiResponse<AccountApiKeyResponse>> response = accountController.rotateAccountApiKey(userContext);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertEquals("sk_test_new-secret-value", response.getBody().getData().getApiKey());
+        verify(accountService).rotateApiKey(userContext.getAccountId());
     }
 }

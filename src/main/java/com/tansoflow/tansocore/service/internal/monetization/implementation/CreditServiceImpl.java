@@ -41,6 +41,7 @@ import com.tansoflow.tansocore.model.credit.type.CreditPoolStatus;
 import com.tansoflow.tansocore.model.credit.type.CreditTransactionType;
 import com.tansoflow.tansocore.model.credit.type.GrantType;
 import com.tansoflow.tansocore.model.credit.type.RolloverPolicy;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.CreditGrantRepository;
@@ -337,9 +338,8 @@ public class CreditServiceImpl implements CreditService {
             throw new IllegalStateException("Cannot deduct from frozen pool: " + pool.getId());
         }
 
-        if (pool.getHardLimit() && pool.getBalance().compareTo(request.getAmount()) < 0) {
-            throw new IllegalStateException("Insufficient credits: available=" + pool.getBalance()
-                    + ", requested=" + request.getAmount());
+        if (Boolean.TRUE.equals(pool.getHardLimit()) && pool.getBalance().compareTo(request.getAmount()) < 0) {
+            throw new CreditLimitExceededException("Credit pool depleted - hard limit active for pool " + pool.getId());
         }
 
         // FIFO deduction from grants
@@ -642,16 +642,27 @@ public class CreditServiceImpl implements CreditService {
         if (denomination == null) return true; // non-credit feature, no limit
 
         List<CreditPoolSubscription> links = creditPoolSubscriptionRepository
-                .findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(subscriptionId, denomination);
+                .findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                        subscriptionId, accountId, denomination);
 
         BigDecimal totalAvailable = BigDecimal.ZERO;
         boolean anyHardLimit = false;
         for (CreditPoolSubscription link : links) {
             CreditPool pool = link.getCreditPool();
-            if (pool.getHardLimit()) {
+            if (Boolean.TRUE.equals(pool.getHardLimit())) {
                 anyHardLimit = true;
             }
-            totalAvailable = totalAvailable.add(pool.getBalance());
+            if (!CreditPoolStatus.ACTIVE.name().equals(pool.getStatus())) {
+                continue;
+            }
+
+            BigDecimal available = pool.getBalance().max(BigDecimal.ZERO);
+            if (link.getDrawLimit() != null) {
+                BigDecimal totalDrawn = link.getTotalDrawn() != null ? link.getTotalDrawn() : BigDecimal.ZERO;
+                BigDecimal drawAvailable = link.getDrawLimit().subtract(totalDrawn).max(BigDecimal.ZERO);
+                available = available.min(drawAvailable);
+            }
+            totalAvailable = totalAvailable.add(available);
         }
         return !anyHardLimit || totalAvailable.compareTo(requiredAmount) >= 0;
     }
@@ -762,6 +773,13 @@ public class CreditServiceImpl implements CreditService {
                     .orElseThrow(() -> new ResourceNotFoundException("Pool not found: " + poolId));
             BigDecimal balanceBefore = pool.getBalance();
             long currentVersion = pool.getVersion();
+
+            if (txType == CreditTransactionType.DEDUCTION
+                    && Boolean.TRUE.equals(pool.getHardLimit())
+                    && balanceBefore.add(delta).compareTo(BigDecimal.ZERO) < 0) {
+                throw new CreditLimitExceededException(
+                        "Credit pool depleted - hard limit active for pool " + pool.getId());
+            }
 
             int updatedRows = creditPoolRepository.updatePoolBalanceAtomically(
                     poolId, delta, txType.name(), currentVersion);
