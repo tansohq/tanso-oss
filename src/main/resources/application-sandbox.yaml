@@ -10,7 +10,7 @@ app:
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://sandbox.dashboard.your-domain.com,https://dashboard.your-domain.com}
   api-key-prefix: sk_test_
   mcp:
-    enabled: ${APP_MCP_ENABLED:true}
+    enabled: ${APP_MCP_ENABLED:false}
   resend:
     api-key: ${RESEND_API_KEY:}
   openai:
@@ -31,7 +31,7 @@ spring:
   ai:
     mcp:
       server:
-        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:true}
+        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:false}
   datasource:
     url: ${SPRING_DATASOURCE_URL}           # e.g. jdbc:postgresql://<rds-endpoint>:5432/<db>
     username: ${SPRING_DATASOURCE_USERNAME}

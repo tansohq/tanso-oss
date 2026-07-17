@@ -13,7 +13,7 @@ app:
   api-key-prefix: sk_live_
   default-free-plan-id: ${DEFAULT_FREE_PLAN_ID:}
   mcp:
-    enabled: ${APP_MCP_ENABLED:true}
+    enabled: ${APP_MCP_ENABLED:false}
   resend:
     api-key: ${RESEND_API_KEY:}
   openai:
@@ -34,7 +34,7 @@ spring:
   ai:
     mcp:
       server:
-        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:true}
+        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:false}
   datasource:
     url: ${SPRING_DATASOURCE_URL}           # e.g. jdbc:postgresql://<rds-endpoint>:5432/<db>
     username: ${SPRING_DATASOURCE_USERNAME}
@@ -123,4 +123,3 @@ management:
 # APP_WEBHOOK_ENDPOINT
 # SPRING_DATASOURCE_URL, SPRING_DATASOURCE_USERNAME, SPRING_DATASOURCE_PASSWORD
 # Any Firestore or other provider creds if enabled
-
