@@ -1,4 +1,4 @@
-import { TansoApiError } from "@tansohq/sdk";
+import { TansoConflictError } from "@tansohq/sdk";
 import { NextResponse } from "next/server";
 
 import { runModel } from "../../../lib/model";
@@ -24,7 +24,7 @@ export async function POST(request: Request) {
     const { customerReferenceId, featureKey } = getDemoIdentity();
 
     // 1. Check access before spending money with a model provider.
-    const before = await tanso.evaluateEntitlement({
+    const before = await tanso.entitlements.evaluate({
       customerReferenceId,
       featureKey,
       usage: {
@@ -54,32 +54,31 @@ export async function POST(request: Request) {
 
     // 3. Record real usage. With the demo seed, this deducts one hard-limit
     // credit atomically. Reusing the request ID cannot double-charge.
-    await tanso.ingestEvent(
-      {
-        customerReferenceId,
-        featureKey,
-        eventName: "ai.chat.completed",
-        flowId: requestId,
-        usageUnits: 1,
-        costAmount: 0.0003,
-        revenueAmount: 0.02,
-        costInput: {
-          model: "gpt-4.1-mini",
-          modelProvider: "openai",
-          inputTokens: result.inputTokens,
-          outputTokens: result.outputTokens,
-        },
-        meta: {
-          example: "nextjs-ai-credits",
-        },
-      },
-      { idempotencyKey: `usage-${requestId}` },
-    );
-
-    const after = await tanso.checkEntitlement(
+    await tanso.events.ingest({
       customerReferenceId,
       featureKey,
-      { record: false },
+      eventName: "ai.chat.completed",
+      eventIdempotencyKey: `usage-${requestId}`,
+      flowId: requestId,
+      usageUnits: 1,
+      costAmount: 0.0003,
+      revenueAmount: 0.02,
+      costInput: {
+        model: "gpt-4.1-mini",
+        modelProvider: "openai",
+        costUnits: result.inputTokens + result.outputTokens,
+      },
+      meta: {
+        example: "nextjs-ai-credits",
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+      },
+    });
+
+    const after = await tanso.entitlements.check(
+      customerReferenceId,
+      featureKey,
+      false,
     );
 
     return NextResponse.json({
@@ -88,7 +87,7 @@ export async function POST(request: Request) {
       requestId,
     });
   } catch (error) {
-    if (error instanceof TansoApiError && error.status === 409) {
+    if (error instanceof TansoConflictError) {
       return NextResponse.json(
         {
           error:

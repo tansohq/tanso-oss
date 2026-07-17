@@ -11,8 +11,7 @@ export function getTansoClient(): TansoClient {
     );
   }
 
-  return new TansoClient({
-    apiKey,
+  return new TansoClient(apiKey, {
     baseUrl: process.env.TANSO_BASE_URL ?? "http://localhost:8080",
   });
 }
