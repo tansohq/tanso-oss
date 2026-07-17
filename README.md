@@ -98,7 +98,8 @@ times. Each call checks access before the billable work and records provider
 cost, customer revenue, and one credit afterward. The sixth call is denied
 before any provider cost is incurred. See the
 [complete integration](examples/nextjs-ai-credits/app/api/generate/route.ts)
-or start with the reusable [TypeScript client](sdks/typescript/README.md).
+or install the published
+[`@tansohq/sdk`](https://www.npmjs.com/package/@tansohq/sdk).
 
 ---
 
@@ -215,8 +216,6 @@ tanso-core/
 ├── deploy/            # docker-compose quickstart (see Quick start)
 ├── examples/
 │   └── nextjs-ai-credits/     # runnable check → work → record flow
-├── sdks/
-│   └── typescript/            # typed server-side client
 ├── scripts/           # SQL seed & helper scripts
 ├── compose.yaml       # local Docker stack
 ├── package.json       # developer kit workspace
@@ -235,7 +234,6 @@ Validate the TypeScript SDK and Next.js example:
 
 ```bash
 npm install
-npm test
 npm run check
 npm run build
 ```

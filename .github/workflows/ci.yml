@@ -61,7 +61,6 @@ jobs:
 
       - name: Test and build
         run: |
-          npm test
           npm run check
           npm run build
 

@@ -8,12 +8,10 @@
     "postcss": "^8.5.10"
   },
   "workspaces": [
-    "sdks/typescript",
     "examples/nextjs-ai-credits"
   ],
   "scripts": {
-    "build": "npm run build --workspace @tansohq/sdk && npm run build --workspace @tansohq/nextjs-ai-credits-example",
-    "check": "npm run check --workspace @tansohq/sdk && npm run check --workspace @tansohq/nextjs-ai-credits-example",
-    "test": "npm run test --workspace @tansohq/sdk"
+    "build": "npm run build --workspace @tansohq/nextjs-ai-credits-example",
+    "check": "npm run check --workspace @tansohq/nextjs-ai-credits-example"
   }
 }

@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.tansoflow</groupId>
     <artifactId>tanso-core</artifactId>
-    <version>0.8.6</version>
+    <version>0.8.7</version>
     <name>Tanso Core Service</name>
     <description>tanso-core</description>
     <properties>

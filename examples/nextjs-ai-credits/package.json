@@ -9,7 +9,7 @@
     "check": "tsc --noEmit"
   },
   "dependencies": {
-    "@tansohq/sdk": "0.1.0",
+    "@tansohq/sdk": "0.2.0",
     "next": "16.2.10",
     "react": "19.2.7",
     "react-dom": "19.2.7"

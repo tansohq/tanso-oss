@@ -9,10 +9,10 @@ export async function GET() {
   try {
     const tanso = getTansoClient();
     const { customerReferenceId, featureKey } = getDemoIdentity();
-    const decision = await tanso.checkEntitlement(
+    const decision = await tanso.entitlements.check(
       customerReferenceId,
       featureKey,
-      { record: false },
+      false,
     );
 
     return NextResponse.json({ decision });
