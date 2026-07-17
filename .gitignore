@@ -2,6 +2,10 @@
 target/
 *.jar
 *.war
+node_modules/
+dist/
+.next/
+*.tsbuildinfo
 
 # Logs
 logs-generated/
