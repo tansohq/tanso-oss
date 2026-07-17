@@ -12,7 +12,7 @@ app:
   api-key-prefix: sk_test_
   default-free-plan-id: ${DEFAULT_FREE_PLAN_ID:}
   mcp:
-    enabled: true
+    enabled: ${APP_MCP_ENABLED:false}
   resend:
     api-key: ${RESEND_API_KEY:}
   openai:
@@ -33,7 +33,7 @@ spring:
   ai:
     mcp:
       server:
-        enabled: true
+        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:false}
   datasource:
     url: ${SPRING_DATASOURCE_URL}           # e.g. jdbc:postgresql://<stg-rds-endpoint>:5432/<db>
     username: ${SPRING_DATASOURCE_USERNAME}

@@ -11,7 +11,7 @@ project's [GNU AGPL-3.0](LICENSE).
 ## Getting started
 
 1. **Fork** the repository and clone your fork.
-2. Follow the [README](README.md#getting-started) to run the app locally
+2. Follow the [manual setup](README.md#getting-started-manual) to run the app locally
    (Java 21, a local PostgreSQL, and `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`).
 3. Create a branch for your work:
 

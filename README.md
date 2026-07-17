@@ -226,8 +226,26 @@ tanso-core/
 
 ## Testing
 
+The Spring integration tests require PostgreSQL. To run them against a fresh,
+disposable database without depending on local state:
+
 ```bash
-./mvnw test
+docker run --rm --name tanso-test-db \
+  -e POSTGRES_DB=core_db \
+  -e POSTGRES_USER=dev_user \
+  -e POSTGRES_PASSWORD=dev_pass \
+  -p 55432:5432 -d postgres:17.5
+
+until docker exec tanso-test-db \
+  pg_isready -U dev_user -d core_db >/dev/null 2>&1; do sleep 1; done
+
+SPRING_DATASOURCE_URL=jdbc:postgresql://localhost:55432/core_db \
+SPRING_DATASOURCE_USERNAME=dev_user \
+SPRING_DATASOURCE_PASSWORD=dev_pass \
+SPRING_LIQUIBASE_ENABLED=true \
+  ./mvnw test
+
+docker stop tanso-test-db
 ```
 
 Validate the TypeScript SDK and Next.js example:
@@ -238,10 +256,11 @@ npm run check
 npm run build
 ```
 
-Spring context tests use the PostgreSQL database configured in
+Without the environment overrides above, Spring context tests use the
+PostgreSQL database configured in
 `src/test/resources/application-test.yaml`. The default suite excludes tests
 tagged `manual`, which execute scheduler jobs against that database's current
-state. Run them explicitly after preparing a disposable test database:
+state. Run them explicitly only after preparing a disposable test database:
 
 ```bash
 ./mvnw test -Pmanual-tests -Dgroups=manual

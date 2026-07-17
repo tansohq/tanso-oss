@@ -4,7 +4,7 @@ app:
   # Keep this in env in prod so you can rotate/mask in logs
   stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:https://example.com/public/stripe/ingest/webhook}
   mcp:
-    enabled: true
+    enabled: ${APP_MCP_ENABLED:false}
   resend:
     api-key: ${RESEND_API_KEY:}
   openai:
@@ -30,7 +30,7 @@ spring:
   ai:
     mcp:
       server:
-        enabled: true
+        enabled: ${SPRING_AI_MCP_SERVER_ENABLED:false}
   main:
     allow-bean-definition-overriding: true
 
