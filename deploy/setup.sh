@@ -24,12 +24,20 @@ echo "API is ready."
 
 echo "Seeding test account..."
 if docker compose exec -T postgres psql -q \
+    -v ON_ERROR_STOP=1 \
     -U "${POSTGRES_USER:-tanso}" -d "${POSTGRES_DB:-tanso}" \
     < ../scripts/create-test-account.sql; then
   echo "Seeded."
 else
   echo "Seed failed — the account probably already exists. Continuing."
 fi
+
+echo "Seeding the five-credit developer demo..."
+docker compose exec -T postgres psql -q \
+  -v ON_ERROR_STOP=1 \
+  -U "${POSTGRES_USER:-tanso}" -d "${POSTGRES_DB:-tanso}" \
+  < ../scripts/seed-developer-demo.sql
+echo "Developer demo ready."
 
 # On schemas that still have the platform_mode column, it defaults to OBSERVE
 # (read-only mode), which blocks plan/subscription operations. Flip the seeded
@@ -47,7 +55,15 @@ Tanso is running.
   API key:  sk_test_828df0fc77874c219f353417fbca1ef4
   API:      $API_URL
   Docs:     $API_URL/swagger-ui.html
+  Demo:     demo-user has 5 AI_CREDITS for feature ai.chat
 
 These are the dev-quickstart credentials from scripts/create-test-account.sql.
 Change them before exposing this instance to anything real.
+
+Next.js example:
+
+  cd ..
+  npm install
+  cp examples/nextjs-ai-credits/.env.example examples/nextjs-ai-credits/.env.local
+  npm run dev --workspace @tansohq/nextjs-ai-credits-example
 EOF

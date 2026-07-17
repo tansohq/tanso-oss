@@ -23,6 +23,7 @@ project's [GNU AGPL-3.0](LICENSE).
 
 - **Build:** `./mvnw clean package`
 - **Run tests:** `./mvnw test`
+- **Validate the TypeScript SDK and example:** `npm ci && npm test && npm run check && npm run build`
 - **Run manual database tests:** `./mvnw test -Pmanual-tests -Dgroups=manual`
 - **Run locally:** `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`
 
