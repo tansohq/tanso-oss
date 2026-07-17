@@ -23,10 +23,13 @@ project's [GNU AGPL-3.0](LICENSE).
 
 - **Build:** `./mvnw clean package`
 - **Run tests:** `./mvnw test`
+- **Run manual database tests:** `./mvnw test -Pmanual-tests -Dgroups=manual`
 - **Run locally:** `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev`
 
 Please make sure the build and the full test suite pass before opening a pull
-request, and add tests for any new behavior.
+request, and add tests for any new behavior. Manual tests use the PostgreSQL
+connection in `src/test/resources/application-test.yaml` and execute scheduler
+jobs against its current state; they are excluded from the default suite.
 
 ## Coding standards
 

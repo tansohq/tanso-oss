@@ -29,6 +29,7 @@ import com.tansoflow.tansocore.mapper.event.EventMapper;
 import com.tansoflow.tansocore.model.event.events.EventDto;
 import com.tansoflow.tansocore.model.event.events.type.CostUnit;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.property.AppProperty;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.AccountSettingRepository;
@@ -184,8 +185,14 @@ class EventServiceImplTest {
         plan.setId(planId);
 
         Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setAccount(account);
         subscription.setPlan(plan);
         subscription.setIsActive(true);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
 
         PlanFeatureRule rule = new PlanFeatureRule();
         rule.setId(UUID.randomUUID());
@@ -250,8 +257,14 @@ class EventServiceImplTest {
         plan.setId(planId);
 
         Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setAccount(account);
         subscription.setPlan(plan);
         subscription.setIsActive(true);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
 
         PlanFeatureRule rule = new PlanFeatureRule();
         rule.setId(UUID.randomUUID());
@@ -332,8 +345,14 @@ class EventServiceImplTest {
         plan.setId(planId);
 
         Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setAccount(account);
         subscription.setPlan(plan);
         subscription.setIsActive(true);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
 
         // Pricing model is $0.10, but Cost model is $0.03
         PlanFeatureRule rule = new PlanFeatureRule();
@@ -493,6 +512,11 @@ class EventServiceImplTest {
         subscription.setId(subscriptionId);
         subscription.setPlan(plan);
         subscription.setIsActive(true);
+        subscription.setAccount(account);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
 
         // Rule with a credit model so credit deduction path would normally fire
         com.tansoflow.tansocore.entity.CreditModel creditModel = new com.tansoflow.tansocore.entity.CreditModel();
@@ -505,7 +529,7 @@ class EventServiceImplTest {
         Event eventEntity = new Event();
 
         when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(subscriptionRepository.findById(subscriptionId)).thenReturn(Optional.of(subscription));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId)).thenReturn(subscription);
         when(subscriptionRepository.findSubscriptionsByCustomer_Id(customerId)).thenReturn(List.of(subscription));
         when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(planId, featureId)).thenReturn(rule);
         when(eventMapper.eventDtoToEventEntity(any(EventDto.class))).thenReturn(eventEntity);
@@ -515,6 +539,137 @@ class EventServiceImplTest {
         verify(eventRepository).saveAndFlush(any(Event.class));
         // Zero usage must prevent credit deduction — the guard returns early
         verify(creditService, never()).deductCredits(any(), any());
+    }
+
+    @Test
+    void testCreateEvent_DepletedHardLimit_RejectsBeforePersistence() throws Exception {
+        UUID accountId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        UUID featureId = UUID.randomUUID();
+        UUID subscriptionId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+
+        EventDto eventDto = new EventDto();
+        eventDto.setAccountId(accountId);
+        eventDto.setCustomerId(customerId);
+        eventDto.setFeatureId(featureId);
+        eventDto.setSubscriptionId(subscriptionId);
+        eventDto.setEventName("test.feature");
+        eventDto.setUsageUnits(BigDecimal.TEN);
+
+        Account account = new Account();
+        account.setId(accountId);
+
+        Feature feature = new Feature();
+        feature.setId(featureId);
+
+        Plan plan = new Plan();
+        plan.setId(planId);
+
+        Subscription subscription = new Subscription();
+        subscription.setId(subscriptionId);
+        subscription.setAccount(account);
+        subscription.setPlan(plan);
+        subscription.setIsActive(true);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
+
+        com.tansoflow.tansocore.entity.CreditModel creditModel = new com.tansoflow.tansocore.entity.CreditModel();
+        creditModel.setDenomination("tokens");
+
+        PlanFeatureRule rule = new PlanFeatureRule();
+        rule.setId(UUID.randomUUID());
+        rule.setCreditModel(creditModel);
+        rule.setValue(Map.of("model", "usage", "price_per_unit", 1));
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(customerRepository.existsByIdAndAccountId(customerId, accountId)).thenReturn(true);
+        when(featureRepository.findByIdAndAccount(featureId, account)).thenReturn(Optional.of(feature));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId)).thenReturn(subscription);
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(planId, featureId)).thenReturn(rule);
+        when(creditService.checkHardLimitForSubscription(subscriptionId, accountId, "tokens", BigDecimal.TEN))
+                .thenReturn(false);
+
+        assertThrows(CreditLimitExceededException.class, () -> eventService.createEvent(eventDto));
+
+        verify(eventRepository, never()).saveAndFlush(any(Event.class));
+        verify(creditService, never()).deductCredits(any(), any());
+        verify(stripeSyncService, never()).forwardUsageToStripeMeter(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void testCreateEvent_SubscriptionFromAnotherCustomer_UsesScopedCustomerSubscription() throws Exception {
+        UUID accountId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        UUID requestedSubscriptionId = UUID.randomUUID();
+        UUID resolvedSubscriptionId = UUID.randomUUID();
+        UUID featureId = UUID.randomUUID();
+
+        Account account = new Account();
+        account.setId(accountId);
+
+        Customer eventCustomer = new Customer();
+        eventCustomer.setId(customerId);
+        eventCustomer.setAccount(account);
+
+        Customer otherCustomer = new Customer();
+        otherCustomer.setId(UUID.randomUUID());
+        otherCustomer.setAccount(account);
+
+        Plan requestedPlan = new Plan();
+        requestedPlan.setId(UUID.randomUUID());
+        Plan resolvedPlan = new Plan();
+        resolvedPlan.setId(UUID.randomUUID());
+
+        Subscription requestedSubscription = new Subscription();
+        requestedSubscription.setId(requestedSubscriptionId);
+        requestedSubscription.setAccount(account);
+        requestedSubscription.setCustomer(otherCustomer);
+        requestedSubscription.setPlan(requestedPlan);
+        requestedSubscription.setIsActive(true);
+
+        Subscription resolvedSubscription = new Subscription();
+        resolvedSubscription.setId(resolvedSubscriptionId);
+        resolvedSubscription.setAccount(account);
+        resolvedSubscription.setCustomer(eventCustomer);
+        resolvedSubscription.setPlan(resolvedPlan);
+        resolvedSubscription.setIsActive(true);
+
+        Feature feature = new Feature();
+        feature.setId(featureId);
+
+        PlanFeatureRule rule = new PlanFeatureRule();
+        rule.setId(UUID.randomUUID());
+        rule.setValue(Map.of("model", "usage", "price_per_unit", 1));
+
+        EventDto eventDto = new EventDto();
+        eventDto.setAccountId(accountId);
+        eventDto.setCustomerId(customerId);
+        eventDto.setFeatureId(featureId);
+        eventDto.setSubscriptionId(requestedSubscriptionId);
+        eventDto.setEventName("test.feature");
+        eventDto.setUsageUnits(BigDecimal.ONE);
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(customerRepository.existsByIdAndAccountId(customerId, accountId)).thenReturn(true);
+        when(featureRepository.findByIdAndAccount(featureId, account)).thenReturn(Optional.of(feature));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(requestedSubscriptionId, accountId))
+                .thenReturn(requestedSubscription);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customerId))
+                .thenReturn(List.of(resolvedSubscription));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                resolvedPlan.getId(), featureId)).thenReturn(rule);
+        when(eventMapper.eventDtoToEventEntity(eventDto)).thenReturn(new Event());
+
+        eventService.createEvent(eventDto);
+
+        assertEquals(resolvedSubscriptionId, eventDto.getSubscriptionId());
+        assertTrue(eventDto.getSubscriptionIsNative());
+        verify(planFeatureRuleRepository, never()).findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                requestedPlan.getId(), featureId);
+        verify(eventRepository).saveAndFlush(any(Event.class));
     }
 
     @Test

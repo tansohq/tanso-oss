@@ -29,8 +29,10 @@ import com.tansoflow.tansocore.entity.PlanCreditAllocation;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.mapper.credit.CreditMapper;
 import com.tansoflow.tansocore.model.credit.CreditGrantDto;
+import com.tansoflow.tansocore.model.credit.request.CreditDeductionRequest;
 import com.tansoflow.tansocore.model.credit.type.CreditTransactionType;
 import com.tansoflow.tansocore.model.credit.type.GrantType;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.CreditGrantRepository;
 import com.tansoflow.tansocore.repository.CreditModelRepository;
@@ -625,8 +627,8 @@ class CreditServiceImplTest {
         CreditPoolSubscription link = new CreditPoolSubscription();
         link.setCreditPool(pool);
 
-        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(
-                subscription.getId(), "api_credits"))
+        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                subscription.getId(), account.getId(), "api_credits"))
                 .thenReturn(List.of(link));
 
         boolean result = creditService.checkHardLimitForSubscription(
@@ -644,8 +646,8 @@ class CreditServiceImplTest {
         CreditPoolSubscription link = new CreditPoolSubscription();
         link.setCreditPool(pool);
 
-        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(
-                subscription.getId(), "api_credits"))
+        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                subscription.getId(), account.getId(), "api_credits"))
                 .thenReturn(List.of(link));
 
         boolean result = creditService.checkHardLimitForSubscription(
@@ -670,14 +672,94 @@ class CreditServiceImplTest {
         CreditPoolSubscription link2 = new CreditPoolSubscription();
         link2.setCreditPool(pool2);
 
-        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndCreditPool_DenominationOrderByDrawPriority(
-                subscription.getId(), "api_credits"))
+        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                subscription.getId(), account.getId(), "api_credits"))
                 .thenReturn(List.of(link1, link2));
 
         // Combined balance = 15, required = 10 → passes
         boolean result = creditService.checkHardLimitForSubscription(
                 subscription.getId(), account.getId(), "api_credits", BigDecimal.TEN);
         assertTrue(result);
+    }
+
+    @Test
+    void checkHardLimit_drawLimitReducesAvailableCredits() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setHardLimit(true);
+        pool.setBalance(new BigDecimal("100"));
+
+        CreditPoolSubscription link = new CreditPoolSubscription();
+        link.setCreditPool(pool);
+        link.setDrawLimit(new BigDecimal("5"));
+        link.setTotalDrawn(BigDecimal.ZERO);
+
+        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                subscription.getId(), account.getId(), "api_credits"))
+                .thenReturn(List.of(link));
+
+        boolean result = creditService.checkHardLimitForSubscription(
+                subscription.getId(), account.getId(), "api_credits", BigDecimal.TEN);
+
+        assertFalse(result);
+    }
+
+    @Test
+    void deductCredits_hardLimitExceeded_ThrowsDomainException() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setHardLimit(true);
+        pool.setBalance(new BigDecimal("5"));
+
+        CreditDeductionRequest request = new CreditDeductionRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(BigDecimal.TEN);
+
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+
+        assertThrows(CreditLimitExceededException.class,
+                () -> creditService.deductCredits(request, account.getId().toString()));
+        verify(creditTransactionRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void deductCredits_concurrentHardLimitDepletion_ThrowsAfterOptimisticLockRetry() {
+        CreditPool initialPool = new CreditPool();
+        initialPool.setId(UUID.randomUUID());
+        initialPool.setAccount(account);
+        initialPool.setHardLimit(true);
+        initialPool.setBalance(BigDecimal.TEN);
+        initialPool.setVersion(1L);
+
+        CreditPool concurrentlyDepletedPool = new CreditPool();
+        concurrentlyDepletedPool.setId(initialPool.getId());
+        concurrentlyDepletedPool.setAccount(account);
+        concurrentlyDepletedPool.setHardLimit(true);
+        concurrentlyDepletedPool.setBalance(new BigDecimal("5"));
+        concurrentlyDepletedPool.setVersion(2L);
+
+        CreditDeductionRequest request = new CreditDeductionRequest();
+        request.setCreditPoolId(initialPool.getId().toString());
+        request.setAmount(BigDecimal.TEN);
+
+        when(creditPoolRepository.findByIdAndAccountId(initialPool.getId(), account.getId()))
+                .thenReturn(Optional.of(initialPool));
+        when(creditGrantRepository.findActiveGrantsByPoolIdOrderByCreatedAsc(initialPool.getId()))
+                .thenReturn(List.of());
+        when(creditPoolRepository.findById(initialPool.getId()))
+                .thenReturn(Optional.of(initialPool), Optional.of(concurrentlyDepletedPool));
+        when(creditPoolRepository.updatePoolBalanceAtomically(
+                initialPool.getId(), BigDecimal.TEN.negate(), CreditTransactionType.DEDUCTION.name(), 1L))
+                .thenReturn(0);
+
+        assertThrows(CreditLimitExceededException.class,
+                () -> creditService.deductCredits(request, account.getId().toString()));
+
+        verify(creditPoolRepository).updatePoolBalanceAtomically(
+                initialPool.getId(), BigDecimal.TEN.negate(), CreditTransactionType.DEDUCTION.name(), 1L);
+        verify(creditTransactionRepository, never()).saveAndFlush(any());
     }
 
     // ── reverseTransaction restores grant remaining ──────────────────────────

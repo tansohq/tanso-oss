@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.controller.exception;
 
 import com.tansoflow.tansocore.model.exception.AuthenticationException;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -68,6 +69,14 @@ public class GlobalExceptionHandlerController {
         log.warn("Authentication failed [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(processErrorMessage("Invalid credentials", errorId));
+    }
+
+    @ExceptionHandler(CreditLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditLimitExceededException(CreditLimitExceededException exception) {
+        String errorId = assignErrorId();
+        log.info("Credit limit exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

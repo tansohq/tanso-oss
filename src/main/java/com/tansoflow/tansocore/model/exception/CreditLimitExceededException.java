@@ -15,20 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.account.response;
+package com.tansoflow.tansocore.model.exception;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Data;
-
-@Data
-@Builder
-@Schema(description = "Response containing the account's API key")
-public class AccountApiKeyResponse {
-    @Schema(description = "The API key value. Retrieval is masked; a newly rotated key is returned in full once.",
-            example = "sk_live_************6789")
-    private String apiKey;
-
-    @Schema(description = "The type of the API key", example = "secret")
-    private String keyType;
+public class CreditLimitExceededException extends RuntimeException {
+    public CreditLimitExceededException(String message) {
+        super(message);
+    }
 }

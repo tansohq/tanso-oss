@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.event.events.EventDto;
 import com.tansoflow.tansocore.model.event.events.EventIngestionResult;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
+import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.service.internal.data.EventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
@@ -126,6 +127,8 @@ public class EventTools {
             }
 
             return "{\"success\": true}";
+        } catch (CreditLimitExceededException e) {
+            return "{\"error\": \"credit_limit_exceeded\", \"message\": \"Credit pool depleted - hard limit active\"}";
         } catch (Exception e) {
             return "{\"error\": \"ingestion_failed\", \"message\": \"" + e.getMessage() + "\"}";
         }
