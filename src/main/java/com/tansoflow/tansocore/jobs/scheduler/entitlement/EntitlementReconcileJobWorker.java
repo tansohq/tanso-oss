@@ -56,6 +56,10 @@ public class EntitlementReconcileJobWorker {
             } catch (Exception ex) {
                 job.setStatus("FAILED");
                 job.setErrorMessage(truncate(ex.getMessage()));
+                log.error("Entitlement reconciliation failed for job {} (account {}, plan {}, feature {}); " +
+                                "job will not be retried until a new entitlement event re-upserts it: {}",
+                        job.getId(), job.getAccount().getId(), job.getPlan().getId(), job.getFeature().getId(),
+                        ex.getMessage(), ex);
             }
 
             job.setModifiedAt(Instant.now());
