@@ -75,7 +75,13 @@ public class AdminEventTools {
             }
 
             UUID parsedPlanId = parseUuid(planId);
+            if (parsedPlanId == null && planId != null && !planId.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}";
+            }
             UUID parsedFeatureId = parseUuid(featureId);
+            if (parsedFeatureId == null && featureId != null && !featureId.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}";
+            }
 
             EventType parsedEventType = null;
             if (eventType != null && !eventType.isBlank()) {
@@ -126,9 +132,21 @@ public class AdminEventTools {
             UUID accountId = UUID.fromString(getAccountId());
 
             Instant parsedStart = parseInstant(start);
+            if (parsedStart == null && start != null && !start.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"start must be a valid ISO-8601 timestamp\"}";
+            }
             Instant parsedEnd = parseInstant(end);
+            if (parsedEnd == null && end != null && !end.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"end must be a valid ISO-8601 timestamp\"}";
+            }
             UUID parsedPlanId = parseUuid(planId);
+            if (parsedPlanId == null && planId != null && !planId.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}";
+            }
             UUID parsedFeatureId = parseUuid(featureId);
+            if (parsedFeatureId == null && featureId != null && !featureId.isBlank()) {
+                return "{\"error\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}";
+            }
 
             EventType parsedEventType = null;
             if (eventType != null && !eventType.isBlank()) {
