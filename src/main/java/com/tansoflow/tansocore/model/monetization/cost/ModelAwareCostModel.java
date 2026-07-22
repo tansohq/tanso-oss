@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -29,6 +30,7 @@ import java.util.Map;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
+@Slf4j
 public class ModelAwareCostModel extends CostModel {
     @Override
     public String getModel() {
@@ -158,6 +160,7 @@ public class ModelAwareCostModel extends CostModel {
         try {
             return new BigDecimal(val.toString());
         } catch (NumberFormatException e) {
+            log.warn("Failed to parse numeric value for key '{}': {}", key, val);
             return null;
         }
     }
