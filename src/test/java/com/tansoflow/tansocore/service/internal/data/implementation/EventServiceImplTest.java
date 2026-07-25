@@ -43,6 +43,7 @@ import com.tansoflow.tansocore.repository.PlanFeatureRuleRepository;
 import com.tansoflow.tansocore.repository.SubscriptionRepository;
 import com.tansoflow.tansocore.service.client.ClientEntitlementService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import com.tansoflow.tansocore.util.ModelPricingResolver;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -63,6 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -105,6 +107,9 @@ class EventServiceImplTest {
 
     @MockitoBean
     private CreditService creditService;
+
+    @MockitoBean
+    private CreditWeightService creditWeightService;
 
     @MockitoBean
     private CreditPoolSubscriptionRepository creditPoolSubscriptionRepository;
@@ -542,6 +547,98 @@ class EventServiceImplTest {
     }
 
     @Test
+    void testCreateEvent_WeightedDeduction_MultipliesUsageByWeight() {
+        // Setup: weight table resolves 2 credits/unit; 10 usage units must burn 20 credits,
+        // check must probe the weighted amount, and Stripe context keys must stay unit-correct.
+        UUID accountId = UUID.randomUUID();
+        UUID customerId = UUID.randomUUID();
+        UUID featureId = UUID.randomUUID();
+        UUID subscriptionId = UUID.randomUUID();
+        UUID planId = UUID.randomUUID();
+        UUID weightId = UUID.randomUUID();
+
+        EventDto eventDto = new EventDto();
+        eventDto.setAccountId(accountId);
+        eventDto.setCustomerId(customerId);
+        eventDto.setFeatureId(featureId);
+        eventDto.setSubscriptionId(subscriptionId);
+        eventDto.setEventName("test.feature");
+        eventDto.setUsageUnits(BigDecimal.TEN);
+        eventDto.setOccurredAt(Instant.now());
+        eventDto.setEventIdempotencyKey(UUID.randomUUID().toString());
+        eventDto.setContext(new HashMap<>());
+
+        Account account = new Account();
+        account.setId(accountId);
+
+        Feature feature = new Feature();
+        feature.setId(featureId);
+
+        Plan plan = new Plan();
+        plan.setId(planId);
+
+        Subscription subscription = new Subscription();
+        subscription.setId(subscriptionId);
+        subscription.setAccount(account);
+        subscription.setPlan(plan);
+        subscription.setIsActive(true);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        customer.setAccount(account);
+        subscription.setCustomer(customer);
+
+        com.tansoflow.tansocore.entity.CreditModel creditModel = new com.tansoflow.tansocore.entity.CreditModel();
+        creditModel.setDenomination("tokens");
+
+        PlanFeatureRule rule = new PlanFeatureRule();
+        rule.setId(UUID.randomUUID());
+        rule.setCreditModel(creditModel);
+        rule.setValue(Map.of("model", "usage", "price_per_unit", 1));
+
+        com.tansoflow.tansocore.entity.CreditPool pool = new com.tansoflow.tansocore.entity.CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setStatus("ACTIVE");
+        pool.setBalance(new BigDecimal("100"));
+
+        com.tansoflow.tansocore.entity.CreditPoolSubscription link = new com.tansoflow.tansocore.entity.CreditPoolSubscription();
+        link.setId(UUID.randomUUID());
+        link.setCreditPool(pool);
+        link.setTotalDrawn(BigDecimal.ZERO);
+
+        Event eventEntity = new Event();
+
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(customerRepository.existsByIdAndAccountId(customerId, accountId)).thenReturn(true);
+        when(featureRepository.findByIdAndAccount(featureId, account)).thenReturn(Optional.of(feature));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId)).thenReturn(subscription);
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(planId, featureId)).thenReturn(rule);
+        when(creditWeightService.resolveWeight(eq(accountId), eq(featureId), any(), any()))
+                .thenReturn(new CreditWeightService.ResolvedWeight(new BigDecimal("2"), weightId,
+                        com.tansoflow.tansocore.model.credit.type.WeightMatch.FEATURE_DEFAULT));
+        when(creditService.checkHardLimitForSubscription(subscriptionId, accountId, "tokens", new BigDecimal("20.0000")))
+                .thenReturn(true);
+        when(eventMapper.eventDtoToEventEntity(any(EventDto.class))).thenReturn(eventEntity);
+        when(creditPoolSubscriptionRepository.findBySubscriptionIdAndAccountIdAndDenominationOrderByDrawPriority(
+                subscriptionId, accountId, "tokens")).thenReturn(List.of(link));
+
+        eventService.createEvent(eventDto);
+
+        // Pre-check probed the weighted amount, not raw usage units
+        verify(creditService).checkHardLimitForSubscription(subscriptionId, accountId, "tokens", new BigDecimal("20.0000"));
+
+        ArgumentCaptor<com.tansoflow.tansocore.model.credit.request.CreditDeductionRequest> deductionCaptor =
+                ArgumentCaptor.forClass(com.tansoflow.tansocore.model.credit.request.CreditDeductionRequest.class);
+        verify(creditService).deductCredits(deductionCaptor.capture(), eq(accountId.toString()));
+        assertEquals(0, new BigDecimal("20.0000").compareTo(deductionCaptor.getValue().getAmount()));
+        assertEquals(weightId.toString(), deductionCaptor.getValue().getMetadata().get("credit_feature_weight_id"));
+
+        // Context keys stay unit-correct: 20 credits / 2 weight = 10 units covered
+        assertEquals(0, new BigDecimal("20").compareTo((BigDecimal) eventDto.getContext().get("credit_deducted")));
+        assertEquals(0, new BigDecimal("10").compareTo((BigDecimal) eventDto.getContext().get("usage_covered_by_credits")));
+        assertEquals(0, BigDecimal.ZERO.compareTo((BigDecimal) eventDto.getContext().get("credit_remaining_usage")));
+    }
+
+    @Test
     void testCreateEvent_DepletedHardLimit_RejectsBeforePersistence() throws Exception {
         UUID accountId = UUID.randomUUID();
         UUID customerId = UUID.randomUUID();
@@ -589,6 +686,8 @@ class EventServiceImplTest {
         when(featureRepository.findByIdAndAccount(featureId, account)).thenReturn(Optional.of(feature));
         when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId)).thenReturn(subscription);
         when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(planId, featureId)).thenReturn(rule);
+        when(creditWeightService.resolveWeight(eq(accountId), eq(featureId), any(), any()))
+                .thenReturn(CreditWeightService.ResolvedWeight.IDENTITY);
         when(creditService.checkHardLimitForSubscription(subscriptionId, accountId, "tokens", BigDecimal.TEN))
                 .thenReturn(false);
 

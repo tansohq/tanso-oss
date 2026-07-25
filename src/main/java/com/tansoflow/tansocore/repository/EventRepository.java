@@ -44,6 +44,17 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
             @Param("end") Instant end
     );
 
+    @Query("SELECT e.featureId, e.model, SUM(e.costAmount), SUM(e.usageUnits) FROM Event e " +
+           "WHERE e.account.id = :accountId " +
+           "AND e.featureId IS NOT NULL " +
+           "AND e.costAmount IS NOT NULL " +
+           "AND e.usageUnits IS NOT NULL AND e.usageUnits > 0 " +
+           "AND e.occurredAt >= :since " +
+           "GROUP BY e.featureId, e.model")
+    List<Object[]> sumCostAndUsageByFeatureAndModel(
+            @Param("accountId") UUID accountId,
+            @Param("since") Instant since);
+
     @Query("SELECT COALESCE(SUM(e.usageUnits), 0) FROM Event e " +
            "WHERE e.customerId = :customerId " +
            "AND e.eventName = :eventName " +

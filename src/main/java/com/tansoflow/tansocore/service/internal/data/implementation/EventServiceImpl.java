@@ -55,6 +55,7 @@ import com.tansoflow.tansocore.repository.PlanFeatureRuleRepository;
 import com.tansoflow.tansocore.repository.SubscriptionRepository;
 import com.tansoflow.tansocore.service.internal.data.EventService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import com.tansoflow.tansocore.util.ModelPricingResolver;
 import com.tansoflow.tansocore.util.monetization.RuleCalculationUtil;
 import com.tansoflow.tansocore.model.customer.CustomerSource;
@@ -94,6 +95,7 @@ public class EventServiceImpl implements EventService {
     private final AccountSettingRepository accountSettingRepository;
     private final StripeSyncService stripeSyncService;
     private final CreditService creditService;
+    private final CreditWeightService creditWeightService;
     private final CreditPoolSubscriptionRepository creditPoolSubscriptionRepository;
     private final InvoiceRepository invoiceRepository;
     private final EventService self;
@@ -116,6 +118,7 @@ public class EventServiceImpl implements EventService {
             AccountSettingRepository accountSettingRepository,
             @Lazy StripeSyncService stripeSyncService,
             @Lazy CreditService creditService,
+            CreditWeightService creditWeightService,
             CreditPoolSubscriptionRepository creditPoolSubscriptionRepository,
             InvoiceRepository invoiceRepository,
             @Lazy EventService self,
@@ -137,6 +140,7 @@ public class EventServiceImpl implements EventService {
         this.accountSettingRepository = accountSettingRepository;
         this.stripeSyncService = stripeSyncService;
         this.creditService = creditService;
+        this.creditWeightService = creditWeightService;
         this.creditPoolSubscriptionRepository = creditPoolSubscriptionRepository;
         this.invoiceRepository = invoiceRepository;
         this.self = self;
@@ -273,6 +277,33 @@ public class EventServiceImpl implements EventService {
             }
         }
 
+        // Resolve the credit weight once for pre-check and deduction. The tariff timestamp is
+        // clamped to [now-48h, now+5min]: stale replays can't reach old cheap rates, clock skew
+        // can't fail, and events themselves are never rejected on occurredAt.
+        CreditWeightService.ResolvedWeight resolvedWeight = CreditWeightService.ResolvedWeight.IDENTITY;
+        BigDecimal weightedCredits = null;
+        if (billingEligible && creditDenomination != null && eventDto.getFeatureId() != null
+                && eventDto.getUsageUnits() != null
+                && eventDto.getUsageUnits().compareTo(BigDecimal.ZERO) > 0) {
+            Instant occurred = eventDto.getOccurredAt() != null ? eventDto.getOccurredAt() : Instant.now();
+            Instant lowerBound = Instant.now().minus(48, java.time.temporal.ChronoUnit.HOURS);
+            Instant upperBound = Instant.now().plus(5, java.time.temporal.ChronoUnit.MINUTES);
+            Instant weightAt = occurred.isBefore(lowerBound) ? lowerBound
+                    : occurred.isAfter(upperBound) ? upperBound : occurred;
+            if (!weightAt.equals(occurred)) {
+                eventDto.getContext().put("occurred_at_clamped", true);
+            }
+            resolvedWeight = creditWeightService.resolveWeight(
+                    account.getId(), eventDto.getFeatureId(), eventDto.getModel(), weightAt);
+            // Round once, before the pool-split loop — ledger scale is numeric(18,4)
+            weightedCredits = eventDto.getUsageUnits()
+                    .multiply(resolvedWeight.weight())
+                    .setScale(4, RoundingMode.HALF_UP);
+            if (resolvedWeight.match() == com.tansoflow.tansocore.model.credit.type.WeightMatch.NONE) {
+                eventDto.getContext().put("credit_weight_defaulted", true);
+            }
+        }
+
         // Max usage enforcement
         if (billingEligible && resolvedCtx != null && resolvedCtx.pricingModel() != null && resolvedCtx.pricingModel().hasMaxUsage()
                 && eventDto.getCustomerId() != null && eventDto.getFeatureId() != null && resolvedCtx.subscription() != null) {
@@ -299,10 +330,9 @@ public class EventServiceImpl implements EventService {
 
         if (billingEligible && creditDenomination != null
                 && eventDto.getSubscriptionId() != null
-                && eventDto.getUsageUnits() != null
-                && eventDto.getUsageUnits().compareTo(BigDecimal.ZERO) > 0
+                && weightedCredits != null
                 && !creditService.checkHardLimitForSubscription(
-                eventDto.getSubscriptionId(), account.getId(), creditDenomination, eventDto.getUsageUnits())) {
+                eventDto.getSubscriptionId(), account.getId(), creditDenomination, weightedCredits)) {
             throw new CreditLimitExceededException(
                     "Credit pool depleted - hard limit active for denomination " + creditDenomination);
         }
@@ -319,7 +349,7 @@ public class EventServiceImpl implements EventService {
 
         // Synchronous credit deduction for events with usage. Failures roll back event persistence.
         if (billingEligible) {
-            deductCreditsForEvent(eventDto, event, account, creditDenomination);
+            deductCreditsForEvent(eventDto, event, account, creditDenomination, resolvedWeight, weightedCredits, resultBuilder);
 
             // Forward usage to Stripe Meters for STRIPE_INTEGRATION accounts (credit-covered quantity excluded)
             forwardToStripeMeterIfNeeded(eventDto, account);
@@ -509,12 +539,13 @@ public class EventServiceImpl implements EventService {
                 }
             }
 
-            // Credit-covered usage must NOT be forwarded to Stripe Meters — only overage flows to Stripe
+            // Credit-covered usage must NOT be forwarded to Stripe Meters — only overage flows to Stripe.
+            // usage_covered_by_credits is unit-denominated (credit_deducted holds credits, ≠ units under weighting).
             BigDecimal usageToForward = eventDto.getUsageUnits();
-            Object creditDeducted = eventDto.getContext() != null ? eventDto.getContext().get("credit_deducted") : null;
-            if (creditDeducted != null) {
-                BigDecimal deducted = new BigDecimal(creditDeducted.toString());
-                usageToForward = usageToForward.subtract(deducted).max(BigDecimal.ZERO);
+            Object usageCovered = eventDto.getContext() != null ? eventDto.getContext().get("usage_covered_by_credits") : null;
+            if (usageCovered != null) {
+                BigDecimal covered = new BigDecimal(usageCovered.toString());
+                usageToForward = usageToForward.subtract(covered).max(BigDecimal.ZERO);
                 if (usageToForward.compareTo(BigDecimal.ZERO) <= 0) {
                     log.debug("All usage covered by credits for event on feature {}, skipping Stripe meter", eventDto.getFeatureId());
                     return;
@@ -537,13 +568,17 @@ public class EventServiceImpl implements EventService {
 
     /**
      * Deducts credits for the event from linked credit pools (FIFO by draw priority).
-     * Any credit-covered usage is tracked in event context for downstream exclusion from Stripe meters.
+     * The charge is usageUnits × weight, rounded once before the pool split; everything
+     * inside the loop — pool balances, drawLimit/totalDrawn — is credit-denominated.
+     * Credit-covered usage is tracked in event context for Stripe meter exclusion.
      */
-    private void deductCreditsForEvent(EventDto eventDto, Event event, Account account, String creditDenomination) {
+    private void deductCreditsForEvent(EventDto eventDto, Event event, Account account, String creditDenomination,
+                                       CreditWeightService.ResolvedWeight resolvedWeight, BigDecimal weightedCredits,
+                                       EventIngestionResult.EventIngestionResultBuilder resultBuilder) {
         if (creditDenomination == null) return; // no credit model → no deduction
 
-        if (eventDto.getSubscriptionId() == null || eventDto.getUsageUnits() == null
-                || eventDto.getUsageUnits().compareTo(BigDecimal.ZERO) <= 0) {
+        if (eventDto.getSubscriptionId() == null || weightedCredits == null
+                || weightedCredits.compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
 
@@ -554,22 +589,35 @@ public class EventServiceImpl implements EventService {
 
             if (links.isEmpty()) return;
 
-            // Credit deduction assumes 1:1 mapping between usageUnits and credit denomination.
-            // Future: add creditConversionRate to PlanCreditAllocation for N:1 conversion.
-            BigDecimal remainingToDeduct = eventDto.getUsageUnits();
+            BigDecimal weight = resolvedWeight.weight();
+            BigDecimal remainingToDeduct = weightedCredits;
             BigDecimal totalDeducted = BigDecimal.ZERO;
+            BigDecimal remainingBalance = BigDecimal.ZERO;
+
+            Map<String, Object> provenance = new HashMap<>();
+            if (resolvedWeight.weightId() != null) {
+                provenance.put("credit_feature_weight_id", resolvedWeight.weightId().toString());
+            }
+            provenance.put("credits_per_unit", weight);
+            provenance.put("usage_units", eventDto.getUsageUnits());
+            provenance.put("weight_match", resolvedWeight.match().name());
+            provenance.put("occurred_at", eventDto.getOccurredAt() != null ? eventDto.getOccurredAt().toString() : null);
+            provenance.put("ingested_at", Instant.now().toString());
 
             for (CreditPoolSubscription link : links) {
-                if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) break;
-
                 var pool = link.getCreditPool();
                 if (!"ACTIVE".equals(pool.getStatus()) || pool.getBalance().compareTo(BigDecimal.ZERO) <= 0) {
                     continue;
                 }
 
+                if (remainingToDeduct.compareTo(BigDecimal.ZERO) <= 0) {
+                    remainingBalance = remainingBalance.add(pool.getBalance().max(BigDecimal.ZERO));
+                    continue;
+                }
+
                 BigDecimal deductAmount = remainingToDeduct.min(pool.getBalance());
 
-                // Respect per-subscription draw limit
+                // Respect per-subscription draw limit (credit-denominated)
                 if (link.getDrawLimit() != null) {
                     BigDecimal available = link.getDrawLimit().subtract(link.getTotalDrawn());
                     deductAmount = deductAmount.min(available.max(BigDecimal.ZERO));
@@ -584,6 +632,7 @@ public class EventServiceImpl implements EventService {
                 deductionRequest.setCustomerId(eventDto.getCustomerId() != null ? eventDto.getCustomerId().toString() : null);
                 deductionRequest.setEventId(event.getId());
                 deductionRequest.setDescription("Usage deduction for event " + event.getId());
+                deductionRequest.setMetadata(provenance);
 
                 creditService.deductCredits(deductionRequest, account.getId().toString());
 
@@ -593,15 +642,27 @@ public class EventServiceImpl implements EventService {
 
                 totalDeducted = totalDeducted.add(deductAmount);
                 remainingToDeduct = remainingToDeduct.subtract(deductAmount);
+                remainingBalance = remainingBalance.add(pool.getBalance().subtract(deductAmount).max(BigDecimal.ZERO));
             }
 
             if (totalDeducted.compareTo(BigDecimal.ZERO) > 0) {
+                // FLOOR so credits never cover more usage than was paid for — Stripe overage rounds toward billing
+                BigDecimal usageCovered = totalDeducted.divide(weight, 6, RoundingMode.FLOOR);
+                BigDecimal usageRemaining = eventDto.getUsageUnits().subtract(usageCovered).max(BigDecimal.ZERO);
                 eventDto.getContext().put("credit_deducted", totalDeducted);
-                eventDto.getContext().put("credit_remaining_usage", remainingToDeduct);
+                eventDto.getContext().put("usage_covered_by_credits", usageCovered);
+                eventDto.getContext().put("credit_remaining_usage", usageRemaining);
                 event.setContext(eventDto.getContext());
                 eventRepository.save(event); // persist credit context back to DB
-                log.info("Deducted {} credits for event {}, {} usage remains for billing",
-                        totalDeducted, event.getId(), remainingToDeduct);
+
+                resultBuilder.creditsDeducted(totalDeducted)
+                        .weightApplied(weight)
+                        .weightId(resolvedWeight.weightId() != null ? resolvedWeight.weightId().toString() : null)
+                        .weightMatch(resolvedWeight.match().name())
+                        .remainingBalance(remainingBalance);
+
+                log.info("Deducted {} credits (weight {}) for event {}, {} usage units remain for billing",
+                        totalDeducted, weight, event.getId(), usageRemaining);
             }
         } catch (CreditLimitExceededException e) {
             throw e;

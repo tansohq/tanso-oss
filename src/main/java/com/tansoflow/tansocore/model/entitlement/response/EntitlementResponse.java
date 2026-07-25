@@ -53,6 +53,12 @@ public class EntitlementResponse {
     @Schema(description = "Credit balance for the feature's credit model")
     private Credit credit;
 
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    @Schema(description = "Credit weight quote for the requested usage, when a credit model applies. " +
+            "A quote, not a promise: it resolves at request time, the actual charge resolves at the " +
+            "event's occurredAt, so a tariff change between quote and charge can change the outcome.")
+    private CreditQuote creditQuote;
+
     @Data
     @JsonInclude(JsonInclude.Include.NON_NULL)
     @Schema(description = "Usage details for a metered feature")
@@ -96,6 +102,19 @@ public class EntitlementResponse {
         private BigDecimal totalConsumed;
         @Schema(description = "Whether zero balance blocks access")
         private Boolean hardLimit;
+    }
+
+    @Data
+    @Schema(description = "Credit weight quote for a proposed usage amount")
+    public static class CreditQuote {
+        @Schema(description = "Credits burned per usage unit for this feature/model")
+        private BigDecimal weight;
+        @Schema(description = "requestedUnits × weight — the estimated credit charge")
+        private BigDecimal estimatedCredits;
+        @Schema(description = "Tariff row the weight came from. Null when the identity default (1.0) applied.")
+        private String weightId;
+        @Schema(description = "Which tariff tier matched: MODEL, FEATURE_DEFAULT, or NONE")
+        private String weightMatch;
     }
 
     @Data

@@ -78,6 +78,8 @@ class ClientEntitlementServiceImplTest {
     @Mock
     private CreditService creditService;
     @Mock
+    private com.tansoflow.tansocore.service.internal.monetization.CreditWeightService creditWeightService;
+    @Mock
     private CustomerService customerService;
     @Mock
     private EventService eventService;
@@ -853,6 +855,85 @@ class ClientEntitlementServiceImplTest {
         assertEquals(1, response.getSubscriptions().get(0).getEntitlements().size());
         assertEquals("standalone_feature", response.getSubscriptions().get(0).getEntitlements().get(0).getFeatureKey());
         assertTrue(response.getSubscriptions().get(0).getEntitlements().get(0).isAllowed());
+    }
+
+    @Test
+    void testEvaluateEntitlement_CreditQuote_UngatedFromUsageLimits() {
+        // Feature has a credit model but NO usage limit — the old Simulation gate would
+        // never populate anything here; creditQuote must still resolve.
+        Subscription subscription = createActiveSubscription();
+        CreditModel creditModel = createCreditModel("TOKENS", true);
+        PlanFeatureRule rule = createRuleWithCreditModel(subscription, creditModel);
+        UUID weightId = UUID.randomUUID();
+
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+        UsageContext usage = new UsageContext();
+        usage.setUsageUnits(new BigDecimal("5"));
+        usage.setModel("gpt-4.1");
+        request.setUsage(usage);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(creditService.checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(new BigDecimal("5"))))
+                .thenReturn(true);
+        when(creditService.getCreditPoolsByCustomer(customer.getId().toString(), accountUuid))
+                .thenReturn(List.of());
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+        when(creditWeightService.resolveWeight(any(UUID.class), eq(feature.getId()), eq("gpt-4.1"), any()))
+                .thenReturn(new com.tansoflow.tansocore.service.internal.monetization.CreditWeightService.ResolvedWeight(
+                        new BigDecimal("3"), weightId, com.tansoflow.tansocore.model.credit.type.WeightMatch.MODEL));
+
+        EntitlementResponse response = clientEntitlementService.evaluateEntitlement(accountUuid, request);
+
+        assertNotNull(response.getCreditQuote());
+        assertEquals(0, new BigDecimal("3").compareTo(response.getCreditQuote().getWeight()));
+        assertEquals(0, new BigDecimal("15.0000").compareTo(response.getCreditQuote().getEstimatedCredits()));
+        assertEquals(weightId.toString(), response.getCreditQuote().getWeightId());
+        assertEquals("MODEL", response.getCreditQuote().getWeightMatch());
+        // No usage limit configured — Simulation stays unset, proving the quote is independent of it
+        assertNull(response.getSimulation());
+    }
+
+    @Test
+    void testEvaluateEntitlement_CreditQuote_NoCreditModel_IsNull() {
+        Subscription subscription = createActiveSubscription();
+        PlanFeatureRule rule = createRuleWithUsageModelNoMax(subscription);
+
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(eventRepository.sumUsageUnitsByCustomerAndFeatureIdSince(eq(customer.getId()), eq(feature.getId()), isNull()))
+                .thenReturn(BigDecimal.ZERO);
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+
+        EntitlementResponse response = clientEntitlementService.evaluateEntitlement(accountUuid, request);
+
+        assertNull(response.getCreditQuote());
+        verify(creditWeightService, never()).resolveWeight(any(), any(), any(), any());
     }
 
     // --- Helper methods ---

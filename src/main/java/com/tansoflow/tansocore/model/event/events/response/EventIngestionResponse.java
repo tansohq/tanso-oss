@@ -27,4 +27,15 @@ import lombok.Data;
 public class EventIngestionResponse {
     private Boolean usageLimitExceeded;
     private String message;
+
+    /** Credits burned for this event across all pools. Absent when no credit model applies. */
+    private java.math.BigDecimal creditsDeducted;
+    /** Credits-per-unit weight the server applied (usageUnits × weight = credit charge). */
+    private java.math.BigDecimal weightApplied;
+    /** Tariff row the weight came from. Absent when the identity default applied. */
+    private String weightId;
+    /** Which tariff tier matched: MODEL, FEATURE_DEFAULT, or NONE (identity 1.0). */
+    private String weightMatch;
+    /** Remaining balance across the pools this subscription draws from, after deduction. */
+    private java.math.BigDecimal remainingBalance;
 }

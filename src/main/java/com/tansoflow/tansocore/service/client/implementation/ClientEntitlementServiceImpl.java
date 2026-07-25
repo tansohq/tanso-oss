@@ -38,6 +38,7 @@ import com.tansoflow.tansocore.service.client.ClientEntitlementService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.data.EventService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import com.tansoflow.tansocore.service.internal.monetization.EntitlementService;
 import com.tansoflow.tansocore.util.monetization.RuleCalculationUtil;
 import lombok.RequiredArgsConstructor;
@@ -61,6 +62,7 @@ import java.util.stream.Collectors;
 public class ClientEntitlementServiceImpl implements ClientEntitlementService {
     private final EntitlementService entitlementService;
     private final CreditService creditService;
+    private final CreditWeightService creditWeightService;
     private final CustomerService customerService;
     private final EventService eventService;
     private final FeatureRepository featureRepository;
@@ -201,6 +203,10 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
         handleEntitlement(entitlementResponse, isEntitled, denyReason);
         populateUsage(entitlementResponse, usageInfo);
         entitlementResponse.setCredit(resolveCreditInfo(customer, request.getFeatureKey(), accountUuid));
+        // Quote independent of usage limits — the Simulation block above is gated on a max-usage
+        // rule existing, which is exactly wrong for credit-only features with no usage cap.
+        entitlementResponse.setCreditQuote(
+                resolveCreditQuote(customer, request.getFeatureKey(), accountUuid, requestedUnits, usage));
 
         // 4d. Populate simulation response
         if (usage != null && usage.getUsageUnits() != null && usageInfo != null && usageInfo.limit() != null) {
@@ -425,6 +431,44 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
             return credit;
         } catch (Exception e) {
             log.error("Failed to resolve credit info for customer {} and feature {}: {}",
+                    customer.getId(), featureKey, e.getMessage());
+            return null;
+        }
+    }
+
+    private EntitlementResponse.CreditQuote resolveCreditQuote(Customer customer, String featureKey, String accountUuid,
+                                                               BigDecimal requestedUnits, UsageContext usage) {
+        try {
+            List<Subscription> subscriptions = subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId());
+            Subscription activeSub = subscriptions.stream()
+                    .filter(Subscription::getIsActive)
+                    .findFirst()
+                    .orElse(null);
+            if (activeSub == null) return null;
+
+            Feature feature = featureRepository.findByKeyAndAccountId(featureKey, UUID.fromString(accountUuid))
+                    .orElse(null);
+            if (feature == null) return null;
+
+            PlanFeatureRule rule = planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                    activeSub.getPlan().getId(), feature.getId());
+            if (rule == null || rule.getCreditModel() == null) return null;
+
+            // Quote resolves at now() — the charge resolves at the event's occurredAt, which may
+            // differ (backfill, replay). A tariff change between quote and charge changes the outcome;
+            // that's a documented "quote, not a promise", not a bug.
+            String model = usage != null ? usage.getModel() : null;
+            CreditWeightService.ResolvedWeight resolved = creditWeightService.resolveWeight(
+                    UUID.fromString(accountUuid), feature.getId(), model, Instant.now());
+
+            EntitlementResponse.CreditQuote quote = new EntitlementResponse.CreditQuote();
+            quote.setWeight(resolved.weight());
+            quote.setEstimatedCredits(requestedUnits.multiply(resolved.weight()).setScale(4, java.math.RoundingMode.HALF_UP));
+            quote.setWeightId(resolved.weightId() != null ? resolved.weightId().toString() : null);
+            quote.setWeightMatch(resolved.match().name());
+            return quote;
+        } catch (Exception e) {
+            log.error("Failed to resolve credit quote for customer {} and feature {}: {}",
                     customer.getId(), featureKey, e.getMessage());
             return null;
         }
