@@ -1,12 +1,13 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { apiFetch } from "@/lib/api/client"
+import { apiFetch, queryString } from "@/lib/api/client"
 import type {
   CreditGrantDto,
   CreditModelDto,
   CreditPoolDto,
   CreditTransactionDto,
 } from "@/lib/api/types"
+import type { CreditFeatureWeightDto } from "./types"
 
 export function useCreditModels() {
   return useQuery({
@@ -42,5 +43,31 @@ export function useCreditPoolTransactions(poolId: string) {
     queryKey: ["credit-pools", poolId, "transactions"],
     queryFn: () =>
       apiFetch<CreditTransactionDto[]>(`/api/v1/monetization/credits/pools/${poolId}/transactions`),
+  })
+}
+
+export function useCreditWeights() {
+  return useQuery({
+    queryKey: ["credit-weights"],
+    queryFn: () => apiFetch<CreditFeatureWeightDto[]>("/api/v1/monetization/credits/weights"),
+  })
+}
+
+export function useCreditWeightUnitCosts() {
+  return useQuery({
+    queryKey: ["credit-weights", "unit-costs"],
+    queryFn: () =>
+      apiFetch<Record<string, number>>("/api/v1/monetization/credits/weights/unit-costs"),
+  })
+}
+
+export function useCreditWeightHistory(featureId: string | undefined, model: string | null) {
+  return useQuery({
+    queryKey: ["credit-weights", "history", featureId, model],
+    queryFn: () =>
+      apiFetch<CreditFeatureWeightDto[]>(
+        `/api/v1/monetization/credits/weights/history${queryString({ featureId, model: model ?? undefined })}`,
+      ),
+    enabled: !!featureId,
   })
 }

@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/api/client"
 import type { CreditGrantDto, CreditModelDto, CreditPoolDto } from "@/lib/api/types"
 import type { CreditGrantInput, CreditModelInput, CreditPoolInput } from "./schemas"
+import type { CreditFeatureWeightDto, PublishCreditWeightsInput } from "./types"
 
 export function useCreateCreditModel() {
   const queryClient = useQueryClient()
@@ -25,6 +26,27 @@ export function useCreateCreditPool() {
         body: JSON.stringify({ ...input, customerId: input.customerId || undefined }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["credit-pools"] }),
+  })
+}
+
+export function usePublishCreditWeights() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PublishCreditWeightsInput) =>
+      apiFetch<CreditFeatureWeightDto[]>("/api/v1/monetization/credits/weights/publish", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["credit-weights"] }),
+  })
+}
+
+export function useDeleteCreditWeight() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (weightId: string) =>
+      apiFetch<void>(`/api/v1/monetization/credits/weights/${weightId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["credit-weights"] }),
   })
 }
 
