@@ -25,6 +25,7 @@ import com.tansoflow.tansocore.entity.PlanFeatureRule;
 import com.tansoflow.tansocore.model.credit.CreditFeatureWeightDto;
 import com.tansoflow.tansocore.model.credit.request.PublishCreditWeightsRequest;
 import com.tansoflow.tansocore.model.credit.type.WeightMatch;
+import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.CreditFeatureWeightRepository;
 import com.tansoflow.tansocore.repository.EventRepository;
@@ -399,7 +400,7 @@ class CreditWeightServiceImplTest {
         when(creditFeatureWeightRepository.findByAccountIdOrderByFeatureIdAscModelAscEffectiveFromDesc(accountId))
                 .thenReturn(List.of(existingRow));
 
-        assertThrows(IllegalStateException.class,
+        assertThrows(TariffConflictException.class,
                 () -> creditWeightService.publishWeights(request, accountId.toString(), UUID.randomUUID()));
     }
 
