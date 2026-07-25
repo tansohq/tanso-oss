@@ -1,0 +1,99 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260725-2"
+      author: tanso
+      comment: >
+        Credit weight table: server-side credits-per-unit tariff, versioned by
+        effective_from. Uniqueness needs raw SQL because Postgres UNIQUE treats
+        NULLs as distinct — the NULL-model (feature default) tier would allow
+        duplicate rows and resolve nondeterministically. Also renames
+        credit_pool_subscriptions.draw_limit/total_drawn to *_credits: with
+        weighted burn these columns become credit-denominated, and the semantic
+        change gets a name change so self-hosted upgrades fail loudly instead
+        of silently reinterpreting limits.
+      changes:
+        - createTable:
+            tableName: credit_feature_weights
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: feature_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: model
+                  type: VARCHAR(128)
+              - column:
+                  name: credits_per_unit
+                  type: NUMERIC(18,6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: credit_feature_weights
+            baseColumnNames: account_id
+            constraintName: fk_credit_feature_weights_account
+            referencedTableName: accounts
+            referencedColumnNames: account_id
+            onDelete: CASCADE
+        - addForeignKeyConstraint:
+            baseTableName: credit_feature_weights
+            baseColumnNames: feature_id
+            constraintName: fk_credit_feature_weights_feature
+            referencedTableName: features
+            referencedColumnNames: feature_id
+            onDelete: CASCADE
+        - sql:
+            sql: >
+              ALTER TABLE credit_feature_weights
+                ADD CONSTRAINT chk_credit_feature_weights_positive
+                CHECK (credits_per_unit > 0);
+              CREATE UNIQUE INDEX uq_credit_feature_weights_model
+                ON credit_feature_weights (account_id, feature_id, model, effective_from)
+                WHERE model IS NOT NULL;
+              CREATE UNIQUE INDEX uq_credit_feature_weights_default
+                ON credit_feature_weights (account_id, feature_id, effective_from)
+                WHERE model IS NULL;
+        - createIndex:
+            tableName: credit_feature_weights
+            indexName: idx_credit_feature_weights_lookup
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: feature_id
+              - column:
+                  name: effective_from
+        - renameColumn:
+            tableName: credit_pool_subscriptions
+            oldColumnName: draw_limit
+            newColumnName: draw_limit_credits
+        - renameColumn:
+            tableName: credit_pool_subscriptions
+            oldColumnName: total_drawn
+            newColumnName: total_drawn_credits

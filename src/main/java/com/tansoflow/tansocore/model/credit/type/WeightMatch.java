@@ -15,26 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.event.events;
+package com.tansoflow.tansocore.model.credit.type;
 
-import lombok.Builder;
-import lombok.Data;
-
-import java.math.BigDecimal;
-
-@Data
-@Builder
-public class EventIngestionResult {
-    @Builder.Default
-    private boolean usageLimitExceeded = false;
-    @Builder.Default
-    private boolean customerAutoCreated = false;
-    private String message;
-
-    // Credit burn outcome — null when no credit model applies to the event
-    private BigDecimal creditsDeducted;
-    private BigDecimal weightApplied;
-    private String weightId;
-    private String weightMatch;
-    private BigDecimal remainingBalance;
+/** Which tariff tier a weight resolution matched. NONE means the identity default 1.0 applied. */
+public enum WeightMatch {
+    MODEL,
+    FEATURE_DEFAULT,
+    NONE
 }
