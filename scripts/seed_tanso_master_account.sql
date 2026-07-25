@@ -21,6 +21,8 @@ ON CONFLICT (account_id) DO NOTHING;
 -- 2. API Key (for internal context switching)
 -- !! CHANGE ME !! Generate your own secret key value before running in any real
 -- environment. Anyone who knows this value can act as the master account.
+-- Plaintext is accepted here and replaced with its SHA-256 digest by the
+-- application on the key's first successful authentication.
 INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at)
 VALUES (
     '00000000-0000-0000-0000-000000000031',

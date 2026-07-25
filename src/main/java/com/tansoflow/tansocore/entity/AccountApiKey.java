@@ -63,6 +63,9 @@ public class AccountApiKey {
     @Column(name = "key_value", nullable = false, length = Integer.MAX_VALUE)
     private String keyValue;
 
+    @Column(name = "key_hint", length = 50)
+    private String keyHint;
+
     @ColumnDefault("false")
     @Column(name = "is_active")
     private Boolean isActive;

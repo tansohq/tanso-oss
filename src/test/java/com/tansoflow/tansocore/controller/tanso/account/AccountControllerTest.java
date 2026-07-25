@@ -19,6 +19,7 @@ package com.tansoflow.tansocore.controller.tanso.account;
 
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.AccountApiKey;
+import com.tansoflow.tansocore.model.account.IssuedApiKey;
 import com.tansoflow.tansocore.model.account.response.AccountApiKeyResponse;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
@@ -78,11 +79,12 @@ class AccountControllerTest {
 
     @Test
     void testRotateAccountApiKey_ReturnsRawKeyOnce() {
-        AccountApiKey apiKey = new AccountApiKey();
-        apiKey.setKeyValue("sk_test_new-secret-value");
-        apiKey.setKeyType("secret");
+        AccountApiKey entity = new AccountApiKey();
+        entity.setKeyValue("digest-not-shown");
+        entity.setKeyType("secret");
 
-        when(accountService.rotateApiKey(userContext.getAccountId())).thenReturn(apiKey);
+        when(accountService.rotateApiKey(userContext.getAccountId()))
+                .thenReturn(new IssuedApiKey(entity, "sk_test_new-secret-value"));
 
         ResponseEntity<ApiResponse<AccountApiKeyResponse>> response = accountController.rotateAccountApiKey(userContext);
 

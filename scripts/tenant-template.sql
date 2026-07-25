@@ -30,6 +30,8 @@ INSERT INTO account_settings (account_id, stripe_enabled)
 VALUES ('{{ACCOUNT_ID}}', false);
 
 -- 5. Create API Key
+-- Plaintext is accepted here and replaced with its SHA-256 digest by the
+-- application on the key's first successful authentication.
 INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at, modified_at)
 VALUES ('{{API_KEY_ID}}', '{{ACCOUNT_ID}}', 'SECRET', '{{API_KEY_VALUE}}', true, '{{EXPIRES_AT}}', NOW(), NOW());
 

@@ -20,6 +20,7 @@ package com.tansoflow.tansocore.service.internal.account;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AccountApiKey;
 import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.model.account.IssuedApiKey;
 
 import java.util.UUID;
 
@@ -38,9 +39,9 @@ public interface AccountService {
 
     void createAccountSettings(Account account);
 
-    AccountApiKey createApiKeyForAccount(Account account);
+    IssuedApiKey createApiKeyForAccount(Account account);
 
-    AccountApiKey rotateApiKey(String accountId);
+    IssuedApiKey rotateApiKey(String accountId);
 
     void registerExternalApiKeyForAccount(String externalApiKey, String accountId, String externalEntityName, String type);
 

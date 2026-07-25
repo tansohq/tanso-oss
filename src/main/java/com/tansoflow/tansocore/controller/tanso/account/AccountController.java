@@ -22,6 +22,7 @@ import com.resend.core.exception.ResendException;
 import com.resend.services.emails.model.CreateEmailOptions;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.AccountApiKey;
+import com.tansoflow.tansocore.model.account.IssuedApiKey;
 import com.tansoflow.tansocore.model.account.request.ChangePasswordRequest;
 import com.tansoflow.tansocore.model.account.response.AccountApiKeyResponse;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -63,8 +64,12 @@ public class AccountController {
     public ResponseEntity<ApiResponse<AccountApiKeyResponse>> getAccountApiKey(@AuthenticationPrincipal UserContext userContext) {
         AccountApiKey apiKey = accountService.retrieveFirstApiKey(userContext.getAccountId());
 
+        // Hashed keys carry a stored hint; legacy plaintext rows (not yet
+        // upgraded by their next authentication) are masked from the value.
+        String display = apiKey.getKeyHint() != null ? apiKey.getKeyHint() : maskApiKey(apiKey.getKeyValue());
+
         AccountApiKeyResponse response = AccountApiKeyResponse.builder()
-                .apiKey(maskApiKey(apiKey.getKeyValue()))
+                .apiKey(display)
                 .keyType(apiKey.getKeyType())
                 .build();
 
@@ -81,7 +86,7 @@ public class AccountController {
     public ResponseEntity<ApiResponse<AccountApiKeyResponse>> rotateAccountApiKey(@AuthenticationPrincipal UserContext userContext) {
         log.info("API key rotation requested for account {}", userContext.getAccountId());
 
-        AccountApiKey newKey = accountService.rotateApiKey(userContext.getAccountId());
+        IssuedApiKey newKey = accountService.rotateApiKey(userContext.getAccountId());
 
         auditHelper.audit("API_KEY_ROTATED",
                 UUID.fromString(userContext.getUserId()),
@@ -89,7 +94,7 @@ public class AccountController {
                 "ACCOUNT", userContext.getAccountId(), null);
 
         AccountApiKeyResponse response = AccountApiKeyResponse.builder()
-                .apiKey(newKey.getKeyValue())
+                .apiKey(newKey.rawKey())
                 .keyType("secret")
                 .build();
 

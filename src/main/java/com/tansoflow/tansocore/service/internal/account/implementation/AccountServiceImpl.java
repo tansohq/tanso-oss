@@ -21,6 +21,8 @@ import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AccountApiKey;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.ExternalApiKey;
+import com.tansoflow.tansocore.auth.ApiKeyHasher;
+import com.tansoflow.tansocore.model.account.IssuedApiKey;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyEntityName;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.property.AppProperty;
@@ -86,8 +88,22 @@ public class AccountServiceImpl implements AccountService {
     }
 
     @Override
+    @Transactional
     public Account findByApiKey(String apiKey) {
-        AccountApiKey accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(apiKey);
+        AccountApiKey accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(apiKey));
+
+        if (accountApiKey == null) {
+            // Legacy row storing the plaintext (pre-hashing install or seed script).
+            // Upgrade it in place so the plaintext leaves the database.
+            accountApiKey = accountApiKeyRepository.findAccountApiKeyByKeyValue(apiKey);
+            if (accountApiKey != null) {
+                accountApiKey.setKeyValue(ApiKeyHasher.sha256Hex(apiKey));
+                accountApiKey.setKeyHint(ApiKeyHasher.hint(apiKey));
+                accountApiKeyRepository.save(accountApiKey);
+                log.info("Upgraded legacy plaintext API key to digest for account {}", accountApiKey.getAccount().getId());
+            }
+        }
+
         return isUsableApiKey(accountApiKey, Instant.now()) ? accountApiKey.getAccount() : null;
     }
 
@@ -116,31 +132,32 @@ public class AccountServiceImpl implements AccountService {
 
         return keys.stream()
                 .filter(key -> isUsableApiKey(key, now))
-                .filter(k -> k.getKeyValue().startsWith("sk_live_") || k.getKeyValue().startsWith("sk_test_"))
+                .filter(k -> "secret".equalsIgnoreCase(k.getKeyType()))
                 .findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No active API key found. Rotate the API key to create one."));
     }
 
     @Override
-    public AccountApiKey createApiKeyForAccount(Account account) {
+    public IssuedApiKey createApiKeyForAccount(Account account) {
         String rawKey = generateRawApiKey();
 
         AccountApiKey apiKey = new AccountApiKey();
         apiKey.setAccount(account);
         apiKey.setKeyType("secret");
-        apiKey.setKeyValue(rawKey);
+        apiKey.setKeyValue(ApiKeyHasher.sha256Hex(rawKey));
+        apiKey.setKeyHint(ApiKeyHasher.hint(rawKey));
         apiKey.setIsActive(true);
         apiKey.setExpiresAt(Instant.now().plus(1825, ChronoUnit.DAYS));
 
         AccountApiKey saved = accountApiKeyRepository.save(apiKey);
         log.info("Created API key for account {}", account.getId());
-        return saved;
+        return new IssuedApiKey(saved, rawKey);
     }
 
     @Override
     @Transactional
-    public AccountApiKey rotateApiKey(String accountId) {
+    public IssuedApiKey rotateApiKey(String accountId) {
         Account account = retrieveAccount(accountId);
 
         List<AccountApiKey> existing = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));

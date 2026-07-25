@@ -20,7 +20,9 @@ INSERT INTO account_settings (account_id, stripe_mode)
 VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'NONE');
 
 -- 5. Create API Key
-INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, is_active, expires_at, created_at, modified_at)
-VALUES ('286c570c-8a08-441d-92c0-2fc074a93457', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'SECRET', 'sk_test_828df0fc77874c219f353417fbca1ef4', true, '2036-01-26 19:24:00', NOW(), NOW());
+-- key_value is the SHA-256 digest of the plaintext key printed by setup.sh:
+--   sk_test_828df0fc77874c219f353417fbca1ef4
+INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, key_hint, is_active, expires_at, created_at, modified_at)
+VALUES ('286c570c-8a08-441d-92c0-2fc074a93457', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'SECRET', '16b45d1c2e789d6b24669ae1e2cf723d393169fec877e8f708e780be67e9df8f', 'sk_test_…1ef4', true, '2036-01-26 19:24:00', NOW(), NOW());
 
 COMMIT;

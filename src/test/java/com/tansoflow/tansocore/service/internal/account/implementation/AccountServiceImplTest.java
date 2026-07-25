@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.service.internal.account.implementation;
 
+import com.tansoflow.tansocore.auth.ApiKeyHasher;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AccountApiKey;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
@@ -37,7 +38,9 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -84,14 +87,26 @@ class AccountServiceImplTest {
     @Test
     void findByApiKey_ValidKey_ReturnsAccount() {
         AccountApiKey apiKey = apiKey(true, Instant.now().plusSeconds(60), null);
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY)).thenReturn(apiKey);
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY))).thenReturn(apiKey);
 
         assertSame(account, accountService.findByApiKey(API_KEY));
     }
 
     @Test
+    void findByApiKey_LegacyPlaintextKey_IsUpgradedInPlace() {
+        AccountApiKey apiKey = apiKey(true, Instant.now().plusSeconds(60), null);
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY))).thenReturn(null);
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY)).thenReturn(apiKey);
+
+        assertSame(account, accountService.findByApiKey(API_KEY));
+        assertEquals(ApiKeyHasher.sha256Hex(API_KEY), apiKey.getKeyValue());
+        assertNotNull(apiKey.getKeyHint());
+        verify(accountApiKeyRepository).save(apiKey);
+    }
+
+    @Test
     void findByApiKey_InactiveKey_IsRejected() {
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY))
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY)))
                 .thenReturn(apiKey(false, Instant.now().plusSeconds(60), null));
 
         assertNull(accountService.findByApiKey(API_KEY));
@@ -99,7 +114,7 @@ class AccountServiceImplTest {
 
     @Test
     void findByApiKey_ExpiredKey_IsRejected() {
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY))
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY)))
                 .thenReturn(apiKey(true, Instant.now().minusSeconds(1), null));
 
         assertNull(accountService.findByApiKey(API_KEY));
@@ -107,7 +122,7 @@ class AccountServiceImplTest {
 
     @Test
     void findByApiKey_ArchivedKey_IsRejected() {
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY))
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY)))
                 .thenReturn(apiKey(true, Instant.now().plusSeconds(60), Instant.now()));
 
         assertNull(accountService.findByApiKey(API_KEY));
@@ -115,7 +130,7 @@ class AccountServiceImplTest {
 
     @Test
     void findByApiKey_MissingExpiry_IsRejected() {
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY))
+        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(ApiKeyHasher.sha256Hex(API_KEY)))
                 .thenReturn(apiKey(true, null, null));
 
         assertNull(accountService.findByApiKey(API_KEY));
@@ -123,8 +138,7 @@ class AccountServiceImplTest {
 
     @Test
     void findByApiKey_UnknownKey_IsRejected() {
-        when(accountApiKeyRepository.findAccountApiKeyByKeyValue(API_KEY)).thenReturn(null);
-
+        // Neither the digest nor the legacy plaintext lookup matches.
         assertNull(accountService.findByApiKey(API_KEY));
     }
 
@@ -145,12 +159,14 @@ class AccountServiceImplTest {
         when(appProperty.getApiKeyPrefix()).thenReturn("sk_test_");
         when(accountApiKeyRepository.save(any(AccountApiKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        AccountApiKey rotatedKey = accountService.rotateApiKey(account.getId().toString());
+        com.tansoflow.tansocore.model.account.IssuedApiKey rotatedKey = accountService.rotateApiKey(account.getId().toString());
 
         assertFalse(existingKey.getIsActive());
         assertTrue(existingKey.getDeletedAt() != null);
-        assertNotSame(existingKey, rotatedKey);
-        assertTrue(rotatedKey.getKeyValue().startsWith("sk_test_"));
+        assertNotSame(existingKey, rotatedKey.entity());
+        assertTrue(rotatedKey.rawKey().startsWith("sk_test_"));
+        assertEquals(ApiKeyHasher.sha256Hex(rotatedKey.rawKey()), rotatedKey.entity().getKeyValue());
+        assertNotNull(rotatedKey.entity().getKeyHint());
         verify(accountApiKeyRepository).saveAll(List.of(existingKey));
     }
 
