@@ -61,6 +61,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -855,6 +856,97 @@ class ClientEntitlementServiceImplTest {
     }
 
     // --- Helper methods ---
+
+    @Test
+    void testEvaluateEntitlement_PassesRequestedUnitsToCreditCheck() {
+        Subscription subscription = createActiveSubscription();
+        CreditModel creditModel = createCreditModel("TOKENS", true);
+        PlanFeatureRule rule = createRuleWithCreditModel(subscription, creditModel);
+
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+        UsageContext usage = new UsageContext();
+        usage.setUsageUnits(new BigDecimal("5"));
+        request.setUsage(usage);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(creditService.checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(new BigDecimal("5"))))
+                .thenReturn(true);
+        when(creditService.getCreditPoolsByCustomer(customer.getId().toString(), accountUuid))
+                .thenReturn(List.of());
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+
+        EntitlementResponse response = clientEntitlementService.evaluateEntitlement(accountUuid, request);
+
+        // Check must probe with the same units the charge will deduct
+        assertTrue(response.isAllowed());
+        verify(creditService).checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(new BigDecimal("5")));
+    }
+
+    @Test
+    void testEvaluateEntitlement_NoUsageContext_ProbesOneUnit() {
+        Subscription subscription = createActiveSubscription();
+        CreditModel creditModel = createCreditModel("TOKENS", true);
+        PlanFeatureRule rule = createRuleWithCreditModel(subscription, creditModel);
+
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(creditService.checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(BigDecimal.ONE)))
+                .thenReturn(true);
+        when(creditService.getCreditPoolsByCustomer(customer.getId().toString(), accountUuid))
+                .thenReturn(List.of());
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+
+        EntitlementResponse response = clientEntitlementService.evaluateEntitlement(accountUuid, request);
+
+        assertTrue(response.isAllowed());
+        verify(creditService).checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(BigDecimal.ONE));
+    }
+
+    @Test
+    void testEvaluateEntitlement_NonPositiveUsageUnits_Rejected() {
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+        UsageContext usage = new UsageContext();
+        usage.setUsageUnits(BigDecimal.ZERO);
+        request.setUsage(usage);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> clientEntitlementService.evaluateEntitlement(accountUuid, request));
+        verify(creditService, never()).checkHardLimitForSubscription(any(), any(), any(), any());
+    }
 
     private Subscription createActiveSubscription() {
         Plan plan = new Plan();

@@ -63,6 +63,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -305,7 +306,7 @@ public class CreditServiceImpl implements CreditService {
 
         // Update pool balance with optimistic locking retry
         updatePoolBalanceWithRetry(pool.getId(), request.getAmount(), CreditTransactionType.GRANT,
-                grant, null, null, null, null, request.getDescription(), request.getIdempotencyKey());
+                new TxParams(grant, null, null, null, null, request.getDescription(), request.getIdempotencyKey(), null));
 
         log.info("Granted {} {} to pool {} (grant {})", request.getAmount(), pool.getDenomination(), pool.getId(), grant.getId());
         return creditMapper.creditGrantToDto(grant);
@@ -332,6 +333,10 @@ public class CreditServiceImpl implements CreditService {
             throw new IllegalArgumentException("Duplicate deduction: idempotency key already used");
         }
 
+        if (request.getMetadata() != null && request.getMetadata().toString().length() > 8192) {
+            throw new IllegalArgumentException("Deduction metadata too large (max ~8KB)");
+        }
+
         CreditPool pool = retrievePool(request.getCreditPoolId(), accountId);
 
         if (CreditPoolStatus.FROZEN.name().equals(pool.getStatus())) {
@@ -350,8 +355,9 @@ public class CreditServiceImpl implements CreditService {
 
         // Update pool balance
         CreditTransaction tx = updatePoolBalanceWithRetry(pool.getId(), request.getAmount().negate(),
-                CreditTransactionType.DEDUCTION, null, subscriptionId, customerId,
-                request.getEventId(), null, request.getDescription(), request.getIdempotencyKey());
+                CreditTransactionType.DEDUCTION, new TxParams(null, subscriptionId, customerId,
+                request.getEventId(), null, request.getDescription(), request.getIdempotencyKey(),
+                request.getMetadata()));
 
         log.info("Deducted {} from pool {}", request.getAmount(), pool.getId());
         return creditMapper.creditTransactionToDto(tx);
@@ -382,10 +388,10 @@ public class CreditServiceImpl implements CreditService {
         }
 
         CreditTransaction tx = updatePoolBalanceWithRetry(original.getCreditPool().getId(), reversalAmount,
-                CreditTransactionType.REVERSAL, original.getCreditGrant(),
+                CreditTransactionType.REVERSAL, new TxParams(original.getCreditGrant(),
                 original.getSubscriptionId(), original.getCustomerId(), original.getEventId(),
                 original.getId(), description != null ? description : "Reversal of " + transactionId,
-                null);
+                null, null));
 
         log.info("Reversed transaction {} with amount {}", transactionId, reversalAmount);
         return creditMapper.creditTransactionToDto(tx);
@@ -552,8 +558,8 @@ public class CreditServiceImpl implements CreditService {
 
                 // Deduct from pool balance
                 updatePoolBalanceWithRetry(pool.getId(), remainingToClawBack.negate(),
-                        CreditTransactionType.DEDUCTION, grant, subscriptionId, null,
-                        null, null, "Claw back on subscription cancellation", null);
+                        CreditTransactionType.DEDUCTION, new TxParams(grant, subscriptionId, null,
+                        null, null, "Claw back on subscription cancellation", null, null));
 
                 log.info("Clawed back {} credits from grant {} on subscription cancellation",
                         remainingToClawBack, grant.getId());
@@ -577,8 +583,8 @@ public class CreditServiceImpl implements CreditService {
                 if (toExpire.compareTo(BigDecimal.ZERO) > 0) {
                     expireRemainingGrants(pool);
                     updatePoolBalanceWithRetry(poolId, toExpire.negate(), CreditTransactionType.EXPIRATION,
-                            null, null, null, null, null,
-                            "Period rollover: NONE policy", null);
+                            new TxParams(null, null, null, null, null,
+                            "Period rollover: NONE policy", null, null));
                     log.info("Expired {} credits from pool {} (NONE policy)", toExpire, poolId);
                 }
             }
@@ -587,8 +593,8 @@ public class CreditServiceImpl implements CreditService {
                 BigDecimal excess = pool.getBalance().subtract(cap);
                 if (excess.compareTo(BigDecimal.ZERO) > 0) {
                     updatePoolBalanceWithRetry(poolId, excess.negate(), CreditTransactionType.EXPIRATION,
-                            null, null, null, null, null,
-                            "Period rollover: CAPPED at " + cap, null);
+                            new TxParams(null, null, null, null, null,
+                            "Period rollover: CAPPED at " + cap, null, null));
                     log.info("Expired {} excess credits from pool {} (CAPPED at {})", excess, poolId, cap);
                 }
             }
@@ -619,8 +625,8 @@ public class CreditServiceImpl implements CreditService {
             creditGrantRepository.save(grant);
 
             updatePoolBalanceWithRetry(grant.getCreditPool().getId(), remaining.negate(),
-                    CreditTransactionType.EXPIRATION, grant, null, null, null, null,
-                    "Grant expired", null);
+                    CreditTransactionType.EXPIRATION, new TxParams(grant, null, null, null, null,
+                    "Grant expired", null, null));
 
             log.info("Expired grant {} with {} remaining credits", grant.getId(), remaining);
         }
@@ -695,8 +701,8 @@ public class CreditServiceImpl implements CreditService {
         deductFromGrants(poolId, creditOffset);
 
         updatePoolBalanceWithRetry(poolId, creditOffset.negate(), CreditTransactionType.DEDUCTION,
-                null, subscriptionId, null, null, null,
-                description != null ? description : "Billing credit offset", null);
+                new TxParams(null, subscriptionId, null, null, null,
+                description != null ? description : "Billing credit offset", null, null));
 
         log.info("Applied credit offset of {} from pool {} for subscription {}", creditOffset, poolId, subscriptionId);
         return creditOffset;
@@ -763,10 +769,13 @@ public class CreditServiceImpl implements CreditService {
         }
     }
 
+    /** Context for a ledger write. Metadata is caller-supplied and persisted verbatim on the transaction. */
+    private record TxParams(CreditGrant grant, UUID subscriptionId, UUID customerId,
+                            UUID eventId, UUID reversedTransactionId, String description,
+                            String idempotencyKey, Map<String, Object> metadata) {}
+
     private CreditTransaction updatePoolBalanceWithRetry(
-            UUID poolId, BigDecimal delta, CreditTransactionType txType,
-            CreditGrant grant, UUID subscriptionId, UUID customerId,
-            UUID eventId, UUID reversedTxId, String description, String idempotencyKey) {
+            UUID poolId, BigDecimal delta, CreditTransactionType txType, TxParams params) {
 
         for (int attempt = 1; attempt <= MAX_RETRY_ATTEMPTS; attempt++) {
             CreditPool pool = creditPoolRepository.findById(poolId)
@@ -786,8 +795,7 @@ public class CreditServiceImpl implements CreditService {
 
             if (updatedRows == 1) {
                 BigDecimal balanceAfter = balanceBefore.add(delta);
-                return createTransactionRecord(pool, delta, balanceBefore, balanceAfter,
-                        txType, grant, subscriptionId, customerId, eventId, reversedTxId, description, idempotencyKey);
+                return createTransactionRecord(pool, delta, balanceBefore, balanceAfter, txType, params);
             }
 
             if (attempt == MAX_RETRY_ATTEMPTS) {
@@ -807,8 +815,7 @@ public class CreditServiceImpl implements CreditService {
 
     private CreditTransaction createTransactionRecord(
             CreditPool pool, BigDecimal delta, BigDecimal balanceBefore, BigDecimal balanceAfter,
-            CreditTransactionType txType, CreditGrant grant, UUID subscriptionId, UUID customerId,
-            UUID eventId, UUID reversedTxId, String description, String idempotencyKey) {
+            CreditTransactionType txType, TxParams params) {
 
         CreditTransaction tx = new CreditTransaction();
         tx.setCreditPool(pool);
@@ -817,24 +824,24 @@ public class CreditServiceImpl implements CreditService {
         tx.setAmount(delta);
         tx.setBalanceBefore(balanceBefore);
         tx.setBalanceAfter(balanceAfter);
-        tx.setDescription(description);
-        tx.setIdempotencyKey(idempotencyKey);
-        tx.setMetadata(new HashMap<>());
+        tx.setDescription(params.description());
+        tx.setIdempotencyKey(params.idempotencyKey());
+        tx.setMetadata(params.metadata() != null ? new HashMap<>(params.metadata()) : new HashMap<>());
 
-        if (grant != null) {
-            tx.setCreditGrant(grant);
+        if (params.grant() != null) {
+            tx.setCreditGrant(params.grant());
         }
-        if (subscriptionId != null) {
-            tx.setSubscriptionId(subscriptionId);
+        if (params.subscriptionId() != null) {
+            tx.setSubscriptionId(params.subscriptionId());
         }
-        if (customerId != null) {
-            tx.setCustomerId(customerId);
+        if (params.customerId() != null) {
+            tx.setCustomerId(params.customerId());
         }
-        if (eventId != null) {
-            tx.setEventId(eventId);
+        if (params.eventId() != null) {
+            tx.setEventId(params.eventId());
         }
-        if (reversedTxId != null) {
-            tx.setReversedTransactionId(reversedTxId);
+        if (params.reversedTransactionId() != null) {
+            tx.setReversedTransactionId(params.reversedTransactionId());
         }
 
         creditTransactionRepository.saveAndFlush(tx);

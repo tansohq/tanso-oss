@@ -56,6 +56,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -759,6 +760,87 @@ class CreditServiceImplTest {
 
         verify(creditPoolRepository).updatePoolBalanceAtomically(
                 initialPool.getId(), BigDecimal.TEN.negate(), CreditTransactionType.DEDUCTION.name(), 1L);
+        verify(creditTransactionRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void deductCredits_metadata_persistedOnTransaction() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setHardLimit(false);
+        pool.setBalance(new BigDecimal("100"));
+        pool.setVersion(1L);
+
+        CreditDeductionRequest request = new CreditDeductionRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(BigDecimal.TEN);
+        request.setMetadata(Map.of("source", "integration-x", "trace", "abc-123"));
+
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+        when(creditGrantRepository.findActiveGrantsByPoolIdOrderByCreatedAsc(pool.getId()))
+                .thenReturn(List.of());
+        when(creditPoolRepository.findById(pool.getId()))
+                .thenReturn(Optional.of(pool));
+        when(creditPoolRepository.updatePoolBalanceAtomically(
+                pool.getId(), BigDecimal.TEN.negate(), CreditTransactionType.DEDUCTION.name(), 1L))
+                .thenReturn(1);
+        when(creditTransactionRepository.saveAndFlush(any(CreditTransaction.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        when(creditMapper.creditTransactionToDto(any())).thenReturn(null);
+
+        creditService.deductCredits(request, account.getId().toString());
+
+        ArgumentCaptor<CreditTransaction> txCaptor = ArgumentCaptor.forClass(CreditTransaction.class);
+        verify(creditTransactionRepository).saveAndFlush(txCaptor.capture());
+        assertEquals("integration-x", txCaptor.getValue().getMetadata().get("source"));
+        assertEquals("abc-123", txCaptor.getValue().getMetadata().get("trace"));
+    }
+
+    @Test
+    void deductCredits_withoutMetadata_writesEmptyMap() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setHardLimit(false);
+        pool.setBalance(new BigDecimal("100"));
+        pool.setVersion(1L);
+
+        CreditDeductionRequest request = new CreditDeductionRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(BigDecimal.TEN);
+
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+        when(creditGrantRepository.findActiveGrantsByPoolIdOrderByCreatedAsc(pool.getId()))
+                .thenReturn(List.of());
+        when(creditPoolRepository.findById(pool.getId()))
+                .thenReturn(Optional.of(pool));
+        when(creditPoolRepository.updatePoolBalanceAtomically(
+                pool.getId(), BigDecimal.TEN.negate(), CreditTransactionType.DEDUCTION.name(), 1L))
+                .thenReturn(1);
+        when(creditTransactionRepository.saveAndFlush(any(CreditTransaction.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        when(creditMapper.creditTransactionToDto(any())).thenReturn(null);
+
+        creditService.deductCredits(request, account.getId().toString());
+
+        ArgumentCaptor<CreditTransaction> txCaptor = ArgumentCaptor.forClass(CreditTransaction.class);
+        verify(creditTransactionRepository).saveAndFlush(txCaptor.capture());
+        assertNotNull(txCaptor.getValue().getMetadata());
+        assertTrue(txCaptor.getValue().getMetadata().isEmpty());
+    }
+
+    @Test
+    void deductCredits_oversizedMetadata_rejected() {
+        CreditDeductionRequest request = new CreditDeductionRequest();
+        request.setCreditPoolId(UUID.randomUUID().toString());
+        request.setAmount(BigDecimal.TEN);
+        request.setMetadata(Map.of("blob", "x".repeat(9000)));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> creditService.deductCredits(request, account.getId().toString()));
         verify(creditTransactionRepository, never()).saveAndFlush(any());
     }
 

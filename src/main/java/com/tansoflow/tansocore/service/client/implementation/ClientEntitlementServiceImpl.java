@@ -101,7 +101,7 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
             isEntitled = false;
             denyReason = "Usage limit exceeded";
         }
-        if (isEntitled && isCreditHardLimitReached(customer, featureKey, accountUuid)) {
+        if (isEntitled && isCreditHardLimitReached(customer, featureKey, accountUuid, BigDecimal.ONE)) {
             isEntitled = false;
             denyReason = "Credit limit reached";
         }
@@ -160,6 +160,15 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
 
         Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(request.getCustomerReferenceId(), accountUuid);
 
+        UsageContext usage = request.getUsage();
+        if (usage != null && usage.getUsageUnits() != null
+                && usage.getUsageUnits().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("usage.usageUnits must be positive");
+        }
+        BigDecimal requestedUnits = usage != null && usage.getUsageUnits() != null
+                ? usage.getUsageUnits()
+                : BigDecimal.ONE;
+
         boolean isEntitled = entitlementService.isEntitled(request.getFeatureKey(), customer);
         String denyReason = "Entitlement is revoked";
         UsageInfo usageInfo = resolveUsageInfo(customer, request.getFeatureKey(), accountUuid);
@@ -167,13 +176,13 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
             isEntitled = false;
             denyReason = "Usage limit exceeded";
         }
-        if (isEntitled && isCreditHardLimitReached(customer, request.getFeatureKey(), accountUuid)) {
+        // Probe affordability with the requested units so check and charge agree
+        if (isEntitled && isCreditHardLimitReached(customer, request.getFeatureKey(), accountUuid, requestedUnits)) {
             isEntitled = false;
             denyReason = "Credit limit reached";
         }
 
         // 4a. Projection check: if usage context provides usageUnits, simulate whether it would exceed
-        UsageContext usage = request.getUsage();
         boolean wouldExceedLimit = false;
         BigDecimal projectedUsage = null;
         BigDecimal projectedRemaining = null;
@@ -421,7 +430,7 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
         }
     }
 
-    private boolean isCreditHardLimitReached(Customer customer, String featureKey, String accountUuid) {
+    private boolean isCreditHardLimitReached(Customer customer, String featureKey, String accountUuid, BigDecimal usageUnits) {
         try {
             List<Subscription> subscriptions = subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId());
             Subscription activeSub = subscriptions.stream()
@@ -441,7 +450,7 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
 
             String denomination = rule.getCreditModel().getDenomination();
             return !creditService.checkHardLimitForSubscription(
-                    activeSub.getId(), UUID.fromString(accountUuid), denomination, BigDecimal.ONE);
+                    activeSub.getId(), UUID.fromString(accountUuid), denomination, usageUnits);
         } catch (Exception e) {
             log.error("Failed to check credit hard limit for customer {} and feature {}: {}",
                     customer.getId(), featureKey, e.getMessage());
