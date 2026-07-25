@@ -44,6 +44,9 @@ not the source of truth.
 - **Entitlements** — low-latency gating of capabilities based on subscription state.
 - **Credits** — prepaid credit pools per customer, with grants, deductions,
   expirations, and full transaction history.
+- **Credit weights (tariff)** — server-side table mapping usage units to
+  credits per feature and model, with scheduled effective times, a console
+  editor, and a pre-flight credit quote on entitlement checks.
 - **Billing & payments** — invoice generation and cycle rollover, synchronized
   with [Stripe](https://stripe.com).
 - **Agent-native (MCP)** — an optional MCP server so AI agents can operate the
@@ -210,6 +213,52 @@ spring:
 
 The server exposes `/mcp`. See `McpServerConfig` and
 `src/main/java/com/tansoflow/tansocore/mcp/tools/` for the full tool catalog.
+
+---
+
+## Credit weights (tariff)
+
+By default one usage unit burns one credit. The weight table lets you reprice
+server-side — "a `deep-research` call costs 5 credits, and 8 on `gpt-4.1`" —
+without redeploying your client. Weights resolve most-specific first:
+`(feature, model)` → `(feature, any model)` → `1.0`.
+
+Publish a tariff from the console (**Credits → Weights**) or via
+`POST /api/v1/monetization/credits/weights/publish`. All rows in a batch share
+one effective time, which must be in the future — effective rows are
+append-only and never repriced; only rows that haven't taken effect yet can be
+deleted.
+
+Quote the cost before doing billable work, then record it:
+
+```bash
+# Pre-flight: is the customer allowed, and what would this burn?
+curl -X POST http://localhost:8080/api/v1/client/entitlements \
+  -H "X-API-Key: $TANSO_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"customerReferenceId":"demo-user","featureKey":"ai.chat",
+       "usage":{"usageUnits":1,"model":"gpt-4.1"}}'
+# → "creditQuote": {"weight":8, "estimatedCredits":8, "weightMatch":"MODEL"}
+
+# Record the usage — the same weight resolution applies at ingestion
+curl -X POST http://localhost:8080/api/v1/client/events \
+  -H "X-API-Key: $TANSO_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"customerReferenceId":"demo-user","featureKey":"ai.chat",
+       "eventName":"chat completion","eventIdempotencyKey":"evt-123",
+       "usageUnits":1,"costInput":{"model":"gpt-4.1"}}'
+# → "creditsDeducted":8, "weightApplied":8, "remainingBalance":42
+```
+
+The quote is a quote, not a promise — the charge resolves at the event's
+`occurredAt`, so a tariff change between quote and charge can change the
+outcome. The `model` string on evaluate and ingest must match the tariff's
+model exactly.
+
+**Migrating existing integrations:** if your client already sends
+pre-multiplied units (`usageUnits: 5` for a "5-credit action"), deploy the
+client to send raw units *first*, then publish the tariff — never the reverse,
+or the server multiplies your multiplied numbers. Repricing also affects
+anything calibrated against the old numbers: `maxUsage` caps, Stripe meter
+prices, and grant sizing.
 
 ---
 

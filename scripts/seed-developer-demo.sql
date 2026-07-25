@@ -351,7 +351,7 @@ INSERT INTO credit_pool_subscriptions (
     subscription_id,
     account_id,
     draw_priority,
-    total_drawn,
+    total_drawn_credits,
     created_at,
     modified_at
 )
@@ -367,8 +367,8 @@ VALUES (
 )
 ON CONFLICT (id) DO UPDATE SET
     draw_priority = 0,
-    draw_limit = NULL,
-    total_drawn = 0,
+    draw_limit_credits = NULL,
+    total_drawn_credits = 0,
     deleted_at = NULL,
     archived_at = NULL,
     modified_at = NOW();
