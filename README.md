@@ -216,18 +216,18 @@ The server exposes `/mcp`. See `McpServerConfig` and
 ## Credit forecasting widget
 
 [`credit-estimator`](https://github.com/tansohq/credit-estimator) is a
-companion open-source project, published to npm under `@tanso-hq`. It
+companion open-source project, published to npm under `@tansohq`. It
 forecasts credit or usage runway from observed history and explicit
 low/base/high burn assumptions, and renders the result as an embeddable,
 accessible React widget.
 
 It's provider-neutral — no Tanso dependency required — with an optional
-adapter (`@tanso-hq/credit-forecast-tanso`) that maps a Tanso credits
+adapter (`@tansohq/credit-forecast-tanso`) that maps a Tanso credits
 snapshot into the same neutral input any other host supplies. See
 [Credit forecasts](https://tanso.mintlify.app/credit-forecasts) in the docs.
 
 ```bash
-npm install @tanso-hq/credit-forecast-core @tanso-hq/credit-burndown-react
+npm install @tansohq/credit-forecast-core @tansohq/credit-burndown-react
 ```
 
 ---
