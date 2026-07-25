@@ -33,8 +33,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -133,6 +135,24 @@ public class GlobalExceptionHandlerController {
         log.warn("Validation failed [errorId={}]: {}", errorId, details);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(processErrorMessage("Validation failed: " + details, errorId));
+    }
+
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMissingServletRequestParameter(MissingServletRequestParameterException exception) {
+        String errorId = assignErrorId();
+        log.warn("Missing request parameter [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(processErrorMessage(
+                "Missing required parameter: " + exception.getParameterName(), errorId));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        String errorId = assignErrorId();
+        log.warn("Parameter type mismatch [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(processErrorMessage(
+                "Invalid value for parameter: " + exception.getName(), errorId));
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

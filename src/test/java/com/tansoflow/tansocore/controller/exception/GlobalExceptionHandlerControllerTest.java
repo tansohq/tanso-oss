@@ -24,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,5 +51,29 @@ class GlobalExceptionHandlerControllerTest {
         assertFalse(response.getBody().isSuccess());
         assertNotNull(response.getBody().getError());
         assertTrue(response.getBody().getError().getMessage().contains("Credit pool depleted"));
+    }
+
+    @Test
+    void missingRequestParameter_ReturnsBadRequest() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMissingServletRequestParameter(
+                new MissingServletRequestParameterException("periodStart", "Instant"));
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
+        assertTrue(response.getBody().getError().getMessage().contains("periodStart"));
+    }
+
+    @Test
+    void parameterTypeMismatch_ReturnsBadRequest() {
+        MethodArgumentTypeMismatchException exception = new MethodArgumentTypeMismatchException(
+                "not-a-date", java.time.Instant.class, "periodStart", null, new IllegalArgumentException("bad"));
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleMethodArgumentTypeMismatch(exception);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertNotNull(response.getBody());
+        assertFalse(response.getBody().isSuccess());
+        assertTrue(response.getBody().getError().getMessage().contains("periodStart"));
     }
 }
