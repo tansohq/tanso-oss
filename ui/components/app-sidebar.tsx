@@ -150,10 +150,13 @@ export function AppSidebar() {
           <SidebarMenuItem>
             <SidebarMenuButton onClick={logout}>
               <LogOut />
-              <span className="truncate">{email ? `Sign out (${email})` : "Sign out"}</span>
+              Sign out
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+        {email && (
+          <div className="truncate px-2 pb-1 text-xs text-muted-foreground">{email}</div>
+        )}
       </SidebarFooter>
     </Sidebar>
   )
