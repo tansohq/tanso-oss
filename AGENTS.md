@@ -1,4 +1,4 @@
-# Claude Context: Tanso Core - Comprehensive Technical Guide
+# Codex Context: Tanso Core - Comprehensive Technical Guide
 
 This document is a deep-dive technical reference for the Tanso Core project. It is designed to provide maximum context for AI assistants, ensuring a clear understanding of the architecture, monetization engine, and "dogfooding" implementation.
 
