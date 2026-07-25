@@ -21,6 +21,7 @@ import com.tansoflow.tansocore.model.exception.AuthenticationException;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.Error;
 import jakarta.validation.ConstraintViolation;
@@ -77,6 +78,14 @@ public class GlobalExceptionHandlerController {
     public ResponseEntity<ApiResponse<Void>> handleCreditLimitExceededException(CreditLimitExceededException exception) {
         String errorId = assignErrorId();
         log.info("Credit limit exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId));
+    }
+
+    @ExceptionHandler(TariffConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTariffConflictException(TariffConflictException exception) {
+        String errorId = assignErrorId();
+        log.info("Tariff publish conflict [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId));
     }
