@@ -81,6 +81,19 @@ The API listens on [http://localhost:8080](http://localhost:8080) with docs at
 `/swagger-ui.html`. `setup.sh` prints a test login and API key — change them
 before exposing the instance to anything real.
 
+### Run the admin console
+
+The repo ships a web console for the admin API — plans, features, customers,
+subscriptions, credits, invoices, events, and margin analytics:
+
+```bash
+npm install
+npm run dev:ui
+```
+
+Sign in with the credentials `setup.sh` printed. See [`ui/README.md`](ui/README.md)
+for configuration.
+
 ### Try the five-credit Next.js example
 
 The quickstart also seeds a `demo-user` with five hard-limit AI credits. In a
