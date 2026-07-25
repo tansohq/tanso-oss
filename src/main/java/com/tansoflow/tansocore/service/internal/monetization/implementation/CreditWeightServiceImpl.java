@@ -25,6 +25,7 @@ import com.tansoflow.tansocore.model.credit.CreditFeatureWeightDto;
 import com.tansoflow.tansocore.model.credit.request.PublishCreditWeightsRequest;
 import com.tansoflow.tansocore.model.credit.type.WeightMatch;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.CreditFeatureWeightRepository;
 import com.tansoflow.tansocore.repository.EventRepository;
@@ -183,7 +184,7 @@ public class CreditWeightServiceImpl implements CreditWeightService {
                 log.info("Idempotent tariff replay for account {} at {}", accountId, request.getEffectiveFrom());
                 return existing.stream().map(this::toDto).toList();
             }
-            throw new IllegalStateException(
+            throw new TariffConflictException(
                     "A different tariff is already published at " + request.getEffectiveFrom() + " — pick another effective time");
         }
 
