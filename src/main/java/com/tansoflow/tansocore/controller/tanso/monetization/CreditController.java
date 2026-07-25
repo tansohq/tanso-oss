@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
 import com.tansoflow.tansocore.auth.UserContext;
+import com.tansoflow.tansocore.model.credit.CreditFeatureWeightDto;
 import com.tansoflow.tansocore.model.credit.CreditGrantDto;
 import com.tansoflow.tansocore.model.credit.CreditModelDto;
 import com.tansoflow.tansocore.model.credit.CreditPoolDto;
@@ -27,8 +28,10 @@ import com.tansoflow.tansocore.model.credit.request.CreateCreditModelRequest;
 import com.tansoflow.tansocore.model.credit.request.CreateCreditPoolRequest;
 import com.tansoflow.tansocore.model.credit.request.CreditDeductionRequest;
 import com.tansoflow.tansocore.model.credit.request.CreditGrantRequest;
+import com.tansoflow.tansocore.model.credit.request.PublishCreditWeightsRequest;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -49,7 +52,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @Slf4j
@@ -59,6 +66,7 @@ import java.util.List;
 @Tag(name = "Credits", description = "Credit pool management operations")
 public class CreditController {
     private final CreditService creditService;
+    private final CreditWeightService creditWeightService;
 
     // ─── Credit Model endpoints ───
 
@@ -262,5 +270,60 @@ public class CreditController {
         List<CreditTransactionDto> txs = creditService.getTransactionsByPool(poolId, userContext.getAccountId());
         return ResponseEntity.ok(
                 ApiResponse.<List<CreditTransactionDto>>builder().data(txs).success(true).build());
+    }
+
+    // ─── Credit Feature Weights (tariff) ───
+
+    @GetMapping("/weights")
+    @Operation(summary = "List current and scheduled credit weights", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditFeatureWeightDto>>> getWeights(
+            @AuthenticationPrincipal UserContext userContext) {
+        List<CreditFeatureWeightDto> weights = creditWeightService.getWeights(userContext.getAccountId());
+        return ResponseEntity.ok(
+                ApiResponse.<List<CreditFeatureWeightDto>>builder().data(weights).success(true).build());
+    }
+
+    @GetMapping("/weights/history")
+    @Operation(summary = "Tariff history for a (feature, model) pair", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditFeatureWeightDto>>> getWeightHistory(
+            @AuthenticationPrincipal UserContext userContext,
+            @RequestParam String featureId,
+            @RequestParam(required = false) String model) {
+        List<CreditFeatureWeightDto> history = creditWeightService.getHistory(userContext.getAccountId(), featureId, model);
+        return ResponseEntity.ok(
+                ApiResponse.<List<CreditFeatureWeightDto>>builder().data(history).success(true).build());
+    }
+
+    @PostMapping("/weights/publish")
+    @Operation(summary = "Publish a tariff batch — one transaction, one shared effective time",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditFeatureWeightDto>>> publishWeights(
+            @AuthenticationPrincipal UserContext userContext,
+            @Valid @RequestBody PublishCreditWeightsRequest request) {
+        List<CreditFeatureWeightDto> published = creditWeightService.publishWeights(
+                request, userContext.getAccountId(),
+                userContext.getUserId() != null ? UUID.fromString(userContext.getUserId()) : null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.<List<CreditFeatureWeightDto>>builder().data(published).success(true).build());
+    }
+
+    @DeleteMapping("/weights/{weightId}")
+    @Operation(summary = "Delete a scheduled (not-yet-effective) weight row", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<Void>> deleteScheduledWeight(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String weightId) {
+        creditWeightService.deleteScheduledWeight(weightId, userContext.getAccountId());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
+    }
+
+    @GetMapping("/weights/unit-costs")
+    @Operation(summary = "Observed average cost per usage unit, keyed \"featureId|model\" (last 30 days)",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<Map<String, BigDecimal>>> getObservedUnitCosts(
+            @AuthenticationPrincipal UserContext userContext) {
+        Map<String, BigDecimal> costs = creditWeightService.getObservedUnitCosts(
+                userContext.getAccountId(), Instant.now().minus(30, ChronoUnit.DAYS));
+        return ResponseEntity.ok(
+                ApiResponse.<Map<String, BigDecimal>>builder().data(costs).success(true).build());
     }
 }

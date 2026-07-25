@@ -91,20 +91,25 @@ public class EventClientController {
 
         EventIngestionResult result = eventService.createEvent(eventDto);
 
+        EventIngestionResponse.EventIngestionResponseBuilder body = EventIngestionResponse.builder()
+                .creditsDeducted(result.getCreditsDeducted())
+                .weightApplied(result.getWeightApplied())
+                .weightId(result.getWeightId())
+                .weightMatch(result.getWeightMatch())
+                .remainingBalance(result.getRemainingBalance());
+
         if (result.isUsageLimitExceeded()) {
             return ResponseEntity.status(HttpStatus.OK)
                     .body(ApiResponse.<EventIngestionResponse>builder()
                             .success(true)
-                            .data(EventIngestionResponse.builder()
-                                    .usageLimitExceeded(true)
-                                    .message(result.getMessage())
-                                    .build())
+                            .data(body.usageLimitExceeded(true).message(result.getMessage()).build())
                             .build());
         }
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.<EventIngestionResponse>builder()
                         .success(true)
+                        .data(body.build())
                         .build());
     }
 }

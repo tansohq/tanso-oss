@@ -39,6 +39,12 @@ public class UsageContext {
             example = "1000.0")
     private BigDecimal usageUnits = BigDecimal.valueOf(1);
 
+    @Size(max = 128)
+    @Schema(description = "Model the usage will run on (e.g. \"gpt-4.1\"). Selects the credit weight row; " +
+            "must exactly match the model string sent on the ingestion event's costInput.model.",
+            example = "gpt-4.1")
+    private String model;
+
     @Schema(description = "Optional metadata (JSON object).")
     private Map<String, Object> meta;
 }

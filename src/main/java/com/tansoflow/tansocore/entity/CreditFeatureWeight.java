@@ -26,26 +26,28 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
-import lombok.AccessLevel;
+import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
-import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.SQLDelete;
-import org.hibernate.annotations.SQLRestriction;
-import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+/**
+ * One row of the credit tariff: how many credits one usage unit of a feature
+ * burns, optionally per model. Rows that have ever been effective are
+ * append-only; a tariff change is a new batch of rows sharing one
+ * effective_from. Resolution picks the row with the greatest
+ * effective_from &lt;= the event timestamp, most specific tier first:
+ * (feature, model) then (feature, NULL) then default 1.0.
+ */
 @Getter
 @Setter
 @Entity
-@Table(name = "credit_pool_subscriptions")
-@SQLRestriction("deleted_at IS NULL")
-@SQLDelete(sql = "UPDATE credit_pool_subscriptions SET deleted_at = now() WHERE id = ?")
-public class CreditPoolSubscription {
+@Table(name = "credit_feature_weights")
+public class CreditFeatureWeight {
     @Id
     @GeneratedValue
     @Column(name = "id", nullable = false, updatable = false)
@@ -53,46 +55,30 @@ public class CreditPoolSubscription {
 
     @NotNull
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "credit_pool_id", nullable = false)
-    private CreditPool creditPool;
-
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "subscription_id", nullable = false)
-    private Subscription subscription;
-
-    @NotNull
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "account_id", updatable = false, nullable = false)
+    @JoinColumn(name = "account_id", nullable = false, updatable = false)
     private Account account;
 
     @NotNull
-    @ColumnDefault("0")
-    @Column(name = "draw_priority", nullable = false)
-    private Integer drawPriority = 0;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "feature_id", nullable = false, updatable = false)
+    private Feature feature;
 
-    // Credit-denominated since weighted burn: caps credits drawn, not usage units
-    @Column(name = "draw_limit_credits", precision = 18, scale = 4)
-    private BigDecimal drawLimit;
+    @Size(max = 128)
+    @Column(name = "model", length = 128, updatable = false)
+    private String model;
 
     @NotNull
-    @ColumnDefault("0")
-    @Column(name = "total_drawn_credits", nullable = false, precision = 18, scale = 4)
-    private BigDecimal totalDrawn = BigDecimal.ZERO;
+    @Column(name = "credits_per_unit", nullable = false, precision = 18, scale = 6, updatable = false)
+    private BigDecimal creditsPerUnit;
 
-    @Setter(AccessLevel.NONE)
+    @NotNull
+    @Column(name = "effective_from", nullable = false, updatable = false)
+    private Instant effectiveFrom;
+
+    @Column(name = "created_by", updatable = false)
+    private UUID createdBy;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
-
-    @Setter(AccessLevel.NONE)
-    @Column(name = "modified_at", insertable = false)
-    @UpdateTimestamp
-    private Instant modifiedAt;
-
-    @Column(name = "deleted_at")
-    private Instant deletedAt;
-
-    @Column(name = "archived_at")
-    private Instant archivedAt;
 }
