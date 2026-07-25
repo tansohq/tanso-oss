@@ -77,18 +77,21 @@ function EventsTable() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end gap-2">
         <Input
+          aria-label="Filter by event name"
           placeholder="Event name"
           className="w-44"
           value={draft.eventName}
           onChange={(e) => setDraft({ ...draft, eventName: e.target.value })}
         />
         <Input
+          aria-label="Filter by customer reference"
           placeholder="Customer reference"
           className="w-44"
           value={draft.customerReferenceId}
           onChange={(e) => setDraft({ ...draft, customerReferenceId: e.target.value })}
         />
         <Input
+          aria-label="Filter by model"
           placeholder="Model"
           className="w-44"
           value={draft.model}
