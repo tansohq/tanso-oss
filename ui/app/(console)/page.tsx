@@ -91,7 +91,9 @@ export default function OverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            {formatCurrency(summary?.totalEffectiveMrr)} effective with usage
+            {summary?.totalEffectiveMrr != null
+              ? `${formatCurrency(summary.totalEffectiveMrr)} effective with usage`
+              : "Effective MRR appears with usage"}
           </CardContent>
         </Card>
         <Card>
@@ -129,7 +131,9 @@ export default function OverviewPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Critical accounts · {formatCurrency(summary?.highRiskMrr)} MRR at risk
+            {summary?.highRiskMrr != null
+              ? `Critical accounts · ${formatCurrency(summary.highRiskMrr)} MRR at risk`
+              : "Critical accounts by churn score"}
           </CardContent>
         </Card>
       </div>
