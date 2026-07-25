@@ -66,12 +66,11 @@ export async function POST(request: Request) {
       costInput: {
         model: "gpt-4.1-mini",
         modelProvider: "openai",
-        costUnits: result.inputTokens + result.outputTokens,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
       },
       meta: {
         example: "nextjs-ai-credits",
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
       },
     });
 
