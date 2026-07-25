@@ -153,6 +153,7 @@ erDiagram
     *   `CLIENT_TRACKED`: Standard usage event (e.g., "AI Message Sent").
     *   `ENTITLEMENT_CHECKED`: Metadata event recorded for billing audit trails.
 4.  **Invoice**: Generated at cycle end. Orchestrates payment via Stripe. Statuses: `PENDING`, `DUE`, `PAID`, `VOID`.
+5.  **CreditFeatureWeight**: Append-only, effective-dated tariff mapping usage units to credits, resolved `(feature, model)` → `(feature, NULL)` → identity 1.0. Managed by `CreditWeightService` (batch publish, one shared future `effectiveFrom`, advisory-locked; future-only delete). Entitlement evaluate returns a `creditQuote`; ingestion applies the same resolution at the event's clamped `occurredAt` and reports `creditsDeducted`/`weightApplied`/`weightMatch`/`remainingBalance`. Console editor: Credits → Weights.
 
 ---
 
