@@ -126,34 +126,41 @@ export function PlanForm({ plan, isPending, onSubmit }: PlanFormProps) {
               )}
             />
           </Field>
-          <Field>
-            <FieldLabel>Status</FieldLabel>
-            <Controller
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <Select items={statusItems} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {statusItems.map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              )}
-            />
-          </Field>
+          {plan && (
+            <Field>
+              <FieldLabel>Status</FieldLabel>
+              <Controller
+                control={form.control}
+                name="status"
+                render={({ field }) => (
+                  <Select items={statusItems} value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        {statusItems.map((item) => (
+                          <SelectItem key={item.value} value={item.value}>
+                            {item.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
+          )}
         </div>
         <Button type="submit" disabled={isPending}>
           {isPending && <Spinner data-icon="inline-start" />}
           {plan ? "Save changes" : "Create plan"}
         </Button>
+        {!plan && (
+          <p className="text-xs text-muted-foreground">
+            New plans start as drafts. Activate from the plan page when ready.
+          </p>
+        )}
       </FieldGroup>
     </form>
   )
