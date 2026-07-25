@@ -21,6 +21,7 @@ import type { CreditModelDto, CreditPoolDto } from "@/lib/api/types"
 import { formatNumber } from "@/lib/format"
 import { CreditModelForm } from "@/features/credits/credit-model-form"
 import { CreditPoolForm } from "@/features/credits/credit-pool-form"
+import { WeightsTab } from "@/features/credits/weights-tab"
 import { useCreateCreditModel, useCreateCreditPool } from "@/features/credits/mutations"
 import { useCreditModels, useCreditPools } from "@/features/credits/queries"
 import { useCustomerOptions } from "@/features/subscriptions/queries"
@@ -100,6 +101,7 @@ export default function CreditsPage() {
   const [modelOpen, setModelOpen] = useState(false)
   const [poolOpen, setPoolOpen] = useState(false)
   const [tab, setTab] = useState("models")
+  const [weightsDirty, setWeightsDirty] = useState(false)
 
   const customerItems = (customers.data?.customers ?? []).map((c) => {
     const name = [c.firstName, c.lastName].filter(Boolean).join(" ")
@@ -115,22 +117,35 @@ export default function CreditsPage() {
             Credit models define units; pools hold customer balances.
           </p>
         </div>
-        {tab === "models" ? (
+        {tab === "models" && (
           <Button onClick={() => setModelOpen(true)}>
             <Plus data-icon="inline-start" />
             New model
           </Button>
-        ) : (
+        )}
+        {tab === "pools" && (
           <Button onClick={() => setPoolOpen(true)}>
             <Plus data-icon="inline-start" />
             New pool
           </Button>
         )}
       </div>
-      <Tabs value={tab} onValueChange={(value) => setTab(value as string)}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          if (
+            tab === "weights" &&
+            weightsDirty &&
+            !window.confirm("Discard unsaved weight changes?")
+          )
+            return
+          setTab(value as string)
+        }}
+      >
         <TabsList>
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="pools">Pools</TabsTrigger>
+          <TabsTrigger value="weights">Weights</TabsTrigger>
         </TabsList>
         <TabsContent value="models">
           <DataTable
@@ -150,6 +165,9 @@ export default function CreditsPage() {
             emptyDescription="Pools are created from plan allocations or manually."
             onRowClick={(pool) => router.push(`/credits/pools/${pool.id}`)}
           />
+        </TabsContent>
+        <TabsContent value="weights">
+          <WeightsTab onDirtyChange={setWeightsDirty} />
         </TabsContent>
       </Tabs>
       <Sheet open={modelOpen} onOpenChange={setModelOpen}>

@@ -31,3 +31,12 @@ export const creditGrantSchema = z.object({
 })
 
 export type CreditGrantInput = z.infer<typeof creditGrantSchema>
+
+export const creditWeightValueSchema = z.coerce
+  .number({ error: "Weight must be a number" })
+  .positive("Weight must be positive")
+  .max(1_000_000, "Weight exceeds maximum 1,000,000")
+  .refine((v) => {
+    const decimals = String(v).split(".")[1] ?? ""
+    return decimals.length <= 6
+  }, "At most 6 decimal places")
