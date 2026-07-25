@@ -40,6 +40,8 @@ import {
   type EventFilters,
   type EventGroupBy,
 } from "@/features/events/queries"
+import { useCustomers } from "@/features/customers/queries"
+import { useFeatures } from "@/features/features/queries"
 
 const groupChartConfig = {
   totalRevenue: { label: "Revenue", color: "var(--chart-1)" },
@@ -58,6 +60,15 @@ function EventsTable() {
   const [draft, setDraft] = useState({ eventName: "", customerReferenceId: "", model: "" })
   const [filters, setFilters] = useState<EventFilters>({ page: 0, size: 25 })
   const events = useEvents(filters)
+  const customers = useCustomers()
+  const features = useFeatures()
+
+  // Ingestion resolves reference strings to IDs and drops them from the
+  // stored event, so display names come from the cached catalog lists.
+  const customerById = new Map(
+    (customers.data?.customers ?? []).map((c) => [c.id, c.referenceId ?? c.email]),
+  )
+  const featureById = new Map((features.data ?? []).map((f) => [f.id, f.key]))
 
   const items = events.data?.items ?? []
   const totalPages = events.data?.totalPages ?? 0
@@ -142,9 +153,11 @@ function EventsTable() {
                     </TableCell>
                     <TableCell>{event.eventName}</TableCell>
                     <TableCell className="font-mono text-xs">
-                      {event.customerReferenceId}
+                      {event.customerReferenceId ?? customerById.get(event.customerId ?? "") ?? "—"}
                     </TableCell>
-                    <TableCell className="font-mono text-xs">{event.featureKey}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {event.featureKey ?? featureById.get(event.featureId ?? "") ?? "—"}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{event.model ?? "—"}</TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
                       {formatNumber(event.usageUnits)}
