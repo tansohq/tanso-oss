@@ -4,26 +4,6 @@
  */
 
 export interface paths {
-    "/public/v1/signup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Self-serve signup
-         * @description Creates a new organization, user, and API key
-         */
-        post: operations["signup"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/public/v1/login": {
         parameters: {
             query?: never;
@@ -264,6 +244,23 @@ export interface paths {
          * @description Creates a new customer under the authenticated account
          */
         post: operations["postCustomer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/weights/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a tariff batch — one transaction, one shared effective time */
+        post: operations["publishWeights"];
         delete?: never;
         options?: never;
         head?: never;
@@ -521,7 +518,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/account/subscribe": {
+    "/api/v1/analytics/insights/generate": {
         parameters: {
             query?: never;
             header?: never;
@@ -531,10 +528,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Subscribe to plan
-         * @description Subscribes the account to a specified plan
+         * Generate insights
+         * @description Analyzes event data and generates AI-powered insights
          */
-        post: operations["subscribeToPlan"];
+        post: operations["generateInsights"];
         delete?: never;
         options?: never;
         head?: never;
@@ -590,13 +587,13 @@ export interface paths {
         };
         /**
          * Get account API key
-         * @description Returns a masked view of the account's API key. The full key is only shown once, at create/rotate time.
+         * @description Returns a masked account API key
          */
         get: operations["getAccountApiKey"];
         put?: never;
         /**
          * Rotate account API key
-         * @description Generates a new API key, invalidating the previous one
+         * @description Generates a new API key, invalidates previous keys, and returns the new secret once
          */
         post: operations["rotateAccountApiKey"];
         delete?: never;
@@ -954,6 +951,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monetization/credits/weights": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List current and scheduled credit weights */
+        get: operations["getWeights"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/weights/unit-costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Observed average cost per usage unit, keyed "featureId|model" (last 30 days) */
+        get: operations["getObservedUnitCosts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/weights/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tariff history for a (feature, model) pair */
+        get: operations["getWeightHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/credits/pools/{poolId}": {
         parameters: {
             query?: never;
@@ -1157,7 +1205,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/account/subscription-status": {
+    "/api/v1/analytics/insights": {
         parameters: {
             query?: never;
             header?: never;
@@ -1165,13 +1213,17 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get subscription status
-         * @description Checks if the account has an active subscription and returns plan details
+         * List insights
+         * @description Returns previously generated AI insights
          */
-        get: operations["getSubscriptionStatus"];
+        get: operations["listInsights"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Clear insights
+         * @description Deletes all generated insights
+         */
+        delete: operations["clearInsights"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1254,23 +1306,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monetization/credits/weights/{weightId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a scheduled (not-yet-effective) weight row */
+        delete: operations["deleteScheduledWeight"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        CustomerRequest: {
-            customerReferenceId?: string;
-            firstName?: string;
-            lastName?: string;
-            email: string;
-            phoneNumber?: string;
-            address?: string;
-        };
-        SignupRequest: {
-            customerDetails?: components["schemas"]["CustomerRequest"];
-            organizationName?: string;
+        UsernameAndPasswordRequest: {
+            username?: string;
             password?: string;
-            planId?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseJwtResponse: {
@@ -1296,10 +1355,6 @@ export interface components {
              * @example Bearer
              */
             type?: string;
-        };
-        UsernameAndPasswordRequest: {
-            username?: string;
-            password?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseVoid: {
@@ -1726,6 +1781,66 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        CustomerRequest: {
+            customerReferenceId?: string;
+            firstName?: string;
+            lastName?: string;
+            email: string;
+            phoneNumber?: string;
+            address?: string;
+        };
+        /** @description One weight entry in a tariff publish */
+        Entry: {
+            /** @description Feature the weight applies to */
+            featureId: string;
+            /** @description Model the weight applies to. Null or blank = feature default for all models. Must exactly match the model string sent on events. */
+            model?: string;
+            /** @description Credits burned per usage unit. Positive, max 1,000,000, up to 6 decimals. */
+            creditsPerUnit: number;
+        };
+        /** @description Batch tariff publish: all entries share one effectiveFrom and commit in one transaction. Features omitted from the batch keep their current weights; resetting to default requires an explicit 1.0 entry. */
+        PublishCreditWeightsRequest: {
+            /**
+             * Format: date-time
+             * @description Instant the tariff takes effect. Must not be in the past. All entries share it.
+             */
+            effectiveFrom: string;
+            /** @description Weight entries to publish */
+            entries: components["schemas"]["Entry"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListCreditFeatureWeightDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CreditFeatureWeightDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description One row of the credit tariff: credits burned per usage unit for a feature (optionally per model) */
+        CreditFeatureWeightDto: {
+            /** @description Unique identifier of the weight row */
+            id?: string;
+            /** @description Feature this weight applies to */
+            featureId?: string;
+            /** @description Feature key, for display */
+            featureKey?: string;
+            /** @description Model this weight applies to. Null = feature default for all models. Must exactly match the model string sent on events. */
+            model?: string;
+            /** @description Credits burned per usage unit */
+            creditsPerUnit?: number;
+            /**
+             * Format: date-time
+             * @description Instant this row takes effect. Rows never change once effective; publish a new row to reprice.
+             */
+            effectiveFrom?: string;
+            /** @description Admin user who published this row */
+            createdBy?: string;
+            /**
+             * Format: date-time
+             * @description Timestamp when the row was created
+             */
+            createdAt?: string;
+        };
         /** @description Generic API response wrapper */
         ApiResponseCreditTransactionDto: {
             /** @description Response data */
@@ -2105,13 +2220,30 @@ export interface components {
         StripeApiKeyRegisterRequest: {
             clientStripeApiKey?: string;
         };
-        /** @description Request to subscribe the account to a plan */
-        SubscribeToPlanRequest: {
-            /**
-             * @description The UUID of the plan to subscribe to
-             * @example 550e8400-e29b-41d4-a716-446655440000
-             */
-            planId?: string;
+        AiInsightDto: {
+            /** Format: uuid */
+            id?: string;
+            /** @enum {string} */
+            severity?: "CRITICAL" | "WARNING" | "POSITIVE" | "INFO";
+            title?: string;
+            description?: string;
+            category?: string;
+            featureKey?: string;
+            customerId?: string;
+            metricValue?: number;
+            /** Format: int32 */
+            tokensUsed?: number;
+            costUsd?: number;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListAiInsightDto: {
+            /** @description Response data */
+            data?: components["schemas"]["AiInsightDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         /** @description Request to change user password */
         ChangePasswordRequest: {
@@ -2129,8 +2261,8 @@ export interface components {
         /** @description Response containing the account's API key */
         AccountApiKeyResponse: {
             /**
-             * @description The API key value
-             * @example sk_live_123456789
+             * @description The API key value. Retrieval is masked; a newly rotated key is returned in full once.
+             * @example sk_live_************6789
              */
             apiKey?: string;
             /**
@@ -2673,6 +2805,16 @@ export interface components {
             success?: boolean;
         };
         /** @description Generic API response wrapper */
+        ApiResponseMapStringBigDecimal: {
+            /** @description Response data */
+            data?: {
+                [key: string]: number;
+            };
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
         ApiResponseListCreditPoolDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditPoolDto"][];
@@ -3073,42 +3215,6 @@ export interface components {
             cost?: number;
             percentage?: number;
         };
-        /** @description Generic API response wrapper */
-        ApiResponseSubscriptionStatusResponse: {
-            /** @description Response data */
-            data?: components["schemas"]["SubscriptionStatusResponse"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        /** @description Response containing the account's subscription status */
-        SubscriptionStatusResponse: {
-            /**
-             * @description Whether the account has an active subscription
-             * @example true
-             */
-            hasActiveSubscription?: boolean;
-            /**
-             * @description Name of the active plan
-             * @example Free Plan
-             */
-            planName?: string;
-            /**
-             * @description Price amount of the active plan
-             * @example 0
-             */
-            planPriceAmount?: number;
-            /**
-             * @description Billing interval in months
-             * @example 1
-             */
-            planIntervalMonths?: string;
-            /**
-             * @description Unique key of the active plan
-             * @example free_monthly
-             */
-            planKey?: string;
-        };
         UuidListRequest: {
             ids?: string[];
         };
@@ -3121,30 +3227,6 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
-    signup: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SignupRequest"];
-            };
-        };
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiResponseJwtResponse"];
-                };
-            };
-        };
-    };
     login: {
         parameters: {
             query?: never;
@@ -3169,13 +3251,6 @@ export interface operations {
             };
             /** @description Invalid credentials */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Too many failed login attempts */
-            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3729,6 +3804,30 @@ export interface operations {
             };
         };
     };
+    publishWeights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishCreditWeightsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditFeatureWeightDto"];
+                };
+            };
+        };
+    };
     reverseTransaction: {
         parameters: {
             query?: {
@@ -4199,18 +4298,14 @@ export interface operations {
             };
         };
     };
-    subscribeToPlan: {
+    generateInsights: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SubscribeToPlanRequest"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -4218,7 +4313,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseListAiInsightDto"];
                 };
             };
         };
@@ -5092,6 +5187,69 @@ export interface operations {
             };
         };
     };
+    getWeights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditFeatureWeightDto"];
+                };
+            };
+        };
+    };
+    getObservedUnitCosts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseMapStringBigDecimal"];
+                };
+            };
+        };
+    };
+    getWeightHistory: {
+        parameters: {
+            query: {
+                featureId: string;
+                model?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditFeatureWeightDto"];
+                };
+            };
+        };
+    };
     getPool: {
         parameters: {
             query?: never;
@@ -5380,7 +5538,7 @@ export interface operations {
             };
         };
     };
-    getSubscriptionStatus: {
+    listInsights: {
         parameters: {
             query?: never;
             header?: never;
@@ -5395,7 +5553,27 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseSubscriptionStatusResponse"];
+                    "*/*": components["schemas"]["ApiResponseListAiInsightDto"];
+                };
+            };
+        };
+    };
+    clearInsights: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
                 };
             };
         };
@@ -5499,6 +5677,28 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    deleteScheduledWeight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                weightId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
             };
         };
     };
