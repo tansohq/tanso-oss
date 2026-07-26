@@ -58,9 +58,9 @@ export async function POST(request: Request) {
     // 2. Run the billable work.
     const result = await runModel(prompt);
 
-    // 3. Record real usage. With the demo seed, this deducts one hard-limit
-    // credit atomically. Reusing the request ID cannot double-charge.
-    await tanso.events.ingest({
+    // 3. Record real usage. With the demo seed, this deducts hard-limit
+    // credits atomically. Reusing the request ID cannot double-charge.
+    const receipt = await tanso.events.ingest({
       customerReferenceId,
       featureKey,
       eventName: "ai.chat.completed",
@@ -86,9 +86,11 @@ export async function POST(request: Request) {
       false,
     );
 
+    const deducted = receipt.creditsDeducted ?? 1;
     return NextResponse.json({
-      answer: result.text,
+      answer: `${result.text} Tanso recorded one unit of usage and deducted ${deducted} ${deducted === 1 ? "credit" : "credits"}.`,
       decision: after,
+      receipt,
       requestId,
     });
   } catch (error) {

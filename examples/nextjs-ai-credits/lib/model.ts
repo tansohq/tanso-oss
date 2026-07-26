@@ -13,7 +13,7 @@ export async function runModel(prompt: string): Promise<{
 
   const inputTokens = Math.max(8, Math.ceil(prompt.length / 4));
   const text =
-    "Your request passed the entitlement check. Tanso recorded one unit of usage, deducted one credit, and kept the provider key on the server.";
+    "Your request passed the entitlement check and kept the provider key on the server.";
 
   return {
     text,

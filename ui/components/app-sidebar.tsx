@@ -60,9 +60,13 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-baseline gap-2 px-2 py-1">
-          <span className="text-lg font-semibold tracking-tight">Tanso</span>
-          <span className="font-mono text-xs text-primary">console</span>
+        <div className="flex items-center gap-2 px-2 py-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.svg" alt="" className="size-6 rounded-md" />
+          <div className="flex items-baseline gap-2">
+            <span className="text-lg font-semibold tracking-tight">Tanso</span>
+            <span className="font-mono text-xs text-primary">console</span>
+          </div>
         </div>
       </SidebarHeader>
       <SidebarContent>
