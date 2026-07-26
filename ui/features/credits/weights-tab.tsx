@@ -5,6 +5,14 @@ import { History, Plus, Trash2 } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -61,6 +69,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
   const [addFeatureId, setAddFeatureId] = useState("")
   const [addModel, setAddModel] = useState("")
   const [focusKey, setFocusKey] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<CreditFeatureWeightDto | null>(null)
 
   const [now] = useState(() => Date.now())
   const allWeights = weights.data ?? []
@@ -183,11 +192,15 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
   }
 
   const handleDelete = (row: CreditFeatureWeightDto) => {
-    if (!window.confirm(`Delete scheduled weight for ${row.featureKey}${row.model ? ` (${row.model})` : ""}?`))
-      return
     deleteWeight.mutate(row.id, {
-      onSuccess: () => toast.add({ title: "Scheduled weight deleted" }),
-      onError: (error) => toast.add({ title: "Delete failed", description: error.message }),
+      onSuccess: () => {
+        setDeleteTarget(null)
+        toast.add({ title: "Scheduled weight deleted" })
+      },
+      onError: (error) => {
+        setDeleteTarget(null)
+        toast.add({ title: "Delete failed", description: error.message })
+      },
     })
   }
 
@@ -242,7 +255,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
                     variant="ghost"
                     size="icon-sm"
                     aria-label="Delete scheduled weight"
-                    onClick={() => handleDelete(row)}
+                    onClick={() => setDeleteTarget(row)}
                   >
                     <Trash2 />
                   </Button>
@@ -410,6 +423,37 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
           </div>
         </div>
       )}
+
+      <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete scheduled weight</DialogTitle>
+            <DialogDescription>
+              {deleteTarget && (
+                <>
+                  <span className="font-mono">
+                    {deleteTarget.featureKey}
+                    {deleteTarget.model ? ` (${deleteTarget.model})` : ""}: {deleteTarget.creditsPerUnit}
+                  </span>{" "}
+                  will no longer take effect {formatUtc(deleteTarget.effectiveFrom)}.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteWeight.isPending}
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <PublishWeightsDialog
         key={String(publishOpen)}
