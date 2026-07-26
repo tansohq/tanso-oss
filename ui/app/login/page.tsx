@@ -42,7 +42,7 @@ export default function LoginPage() {
     <main className="flex min-h-svh items-center justify-center p-6">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex items-baseline justify-center gap-2">
-          <span className="text-2xl font-semibold tracking-tight">tanso</span>
+          <span className="text-2xl font-semibold tracking-tight">Tanso</span>
           <span className="font-mono text-sm text-primary">console</span>
         </div>
         <Card>

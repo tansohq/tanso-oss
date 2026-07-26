@@ -61,7 +61,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader>
         <div className="flex items-baseline gap-2 px-2 py-1">
-          <span className="text-lg font-semibold tracking-tight">tanso</span>
+          <span className="text-lg font-semibold tracking-tight">Tanso</span>
           <span className="font-mono text-xs text-primary">console</span>
         </div>
       </SidebarHeader>
