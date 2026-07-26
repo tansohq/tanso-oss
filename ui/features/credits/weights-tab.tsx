@@ -270,6 +270,9 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
               const baseline = row.current ? String(row.current.creditsPerUnit) : "1"
               const value = draft[key] ?? baseline
               const invalid = invalidKeys.has(key)
+              const edited = changes.some(
+                (c) => c.featureId === row.featureId && c.model === row.model,
+              )
               return (
                 <TableRow key={key}>
                   <TableCell className="font-mono text-xs">{row.featureKey}</TableCell>
@@ -290,13 +293,23 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
                             setFocusKey(null)
                           }
                         }}
-                        className="w-24 font-mono tabular-nums"
+                        className={
+                          edited
+                            ? "w-24 border-primary font-mono tabular-nums"
+                            : "w-24 font-mono tabular-nums"
+                        }
                         aria-label={`Weight for ${row.featureKey}${row.model ? ` (${row.model})` : ""}`}
                         aria-invalid={invalid}
                         value={value}
                         onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
                       />
-                      {!row.current && <Badge variant="outline">Default</Badge>}
+                      {edited ? (
+                        <Badge variant="outline" className="border-primary text-primary">
+                          Pending
+                        </Badge>
+                      ) : (
+                        !row.current && <Badge variant="outline">Default</Badge>
+                      )}
                     </div>
                     {invalid && (
                       <p className="mt-1 text-xs text-destructive">
