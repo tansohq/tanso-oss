@@ -6,6 +6,7 @@ import { History, Plus, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
+import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -347,10 +348,8 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
       </div>
 
       <div className="flex flex-wrap items-end gap-2 rounded-lg border p-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground" htmlFor="add-weight-feature">
-            Feature
-          </label>
+        <Field className="w-fit">
+          <FieldLabel htmlFor="add-weight-feature">Feature</FieldLabel>
           <Select
             items={featureItems}
             value={addFeatureId || null}
@@ -369,11 +368,9 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
               </SelectGroup>
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground" htmlFor="add-weight-model">
-            Model
-          </label>
+        </Field>
+        <Field className="w-fit">
+          <FieldLabel htmlFor="add-weight-model">Model</FieldLabel>
           <Input
             id="add-weight-model"
             className="w-48 font-mono"
@@ -381,7 +378,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
             value={addModel}
             onChange={(e) => setAddModel(e.target.value)}
           />
-        </div>
+        </Field>
         <Button variant="outline" onClick={addRow} disabled={!addFeatureId || !addModel.trim()}>
           <Plus data-icon="inline-start" />
           Add model weight
