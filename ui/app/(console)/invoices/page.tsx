@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import {
   Table,
@@ -129,8 +130,10 @@ export default function InvoicesPage() {
             </DialogDescription>
           </DialogHeader>
           {detail.isPending ? (
-            <div className="flex justify-center py-8">
-              <Spinner />
+            <div className="flex flex-col gap-2">
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
+              <Skeleton className="h-9 w-full" />
             </div>
           ) : (
             <div className="flex flex-col gap-4">
