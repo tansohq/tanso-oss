@@ -114,7 +114,9 @@ export default function CreditsPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Credits</h1>
           <p className="text-sm text-muted-foreground">
-            Credit models define units; pools hold customer balances.
+            {tab === "weights"
+              ? "Weights set how many credits one usage unit burns, per feature and model."
+              : "Credit models define units; pools hold customer balances."}
           </p>
         </div>
         {tab === "models" && (
