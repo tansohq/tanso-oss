@@ -110,6 +110,7 @@ export default function CustomerDetailPage({
               <CardDescription>{stat.label}</CardDescription>
               <CardTitle className="font-mono text-2xl tabular-nums">{stat.value}</CardTitle>
             </CardHeader>
+            <CardContent className="text-sm text-muted-foreground">All time</CardContent>
           </Card>
         ))}
       </div>
