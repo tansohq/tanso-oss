@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       usage: {
         eventName: "ai.chat.generate",
         usageUnits: 1,
+        model: "gpt-4.1-mini",
       },
       context: {
         idempotencyKey: `check-${requestId}`,
@@ -48,6 +49,11 @@ export async function POST(request: Request) {
         { status: 402 },
       );
     }
+
+    // The quote resolves now; the charge resolves at the event's occurredAt.
+    console.log(
+      `credit quote: ${before.creditQuote?.estimatedCredits ?? 1} (match: ${before.creditQuote?.weightMatch ?? "NONE"})`,
+    );
 
     // 2. Run the billable work.
     const result = await runModel(prompt);
