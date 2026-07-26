@@ -187,10 +187,15 @@ function ApiKeyCard() {
             <code className="flex-1 truncate rounded-md border bg-muted px-3 py-2 font-mono text-xs">
               {revealed ? key : mask(key)}
             </code>
-            <Button variant="outline" size="icon" onClick={() => setRevealed(!revealed)}>
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label={revealed ? "Hide API key" : "Reveal API key"}
+              onClick={() => setRevealed(!revealed)}
+            >
               {revealed ? <EyeOff /> : <Eye />}
             </Button>
-            <Button variant="outline" size="icon" onClick={copyKey}>
+            <Button variant="outline" size="icon" aria-label="Copy API key" onClick={copyKey}>
               <Copy />
             </Button>
           </div>
