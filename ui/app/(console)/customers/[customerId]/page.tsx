@@ -1,6 +1,8 @@
 "use client"
 
 import { use, useState } from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Pencil } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
@@ -30,14 +32,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
-import { formatCurrency, formatDate } from "@/lib/format"
+import { formatCurrency, formatDate, formatDateTime, formatNumber } from "@/lib/format"
 import { CustomerForm } from "@/features/customers/customer-form"
 import { useUpdateCustomer } from "@/features/customers/mutations"
 import {
   useCustomer,
   useCustomerCreditPools,
+  useCustomerEvents,
   useCustomerSubscriptions,
+  useCustomerUsageTotals,
 } from "@/features/customers/queries"
+import { useFeatures } from "@/features/features/queries"
 
 export default function CustomerDetailPage({
   params,
@@ -45,9 +50,14 @@ export default function CustomerDetailPage({
   params: Promise<{ customerId: string }>
 }) {
   const { customerId } = use(params)
+  const router = useRouter()
   const customer = useCustomer(customerId)
   const subscriptions = useCustomerSubscriptions(customerId)
   const pools = useCustomerCreditPools(customerId)
+  const events = useCustomerEvents(customer.data?.customerReferenceId ?? undefined)
+  const usage = useCustomerUsageTotals(customerId, customer.data?.customerReferenceId)
+  const features = useFeatures()
+  const featureById = new Map((features.data ?? []).map((f) => [f.id ?? "", f.key ?? ""]))
   const updateCustomer = useUpdateCustomer(customerId)
   const [editOpen, setEditOpen] = useState(false)
 
@@ -87,6 +97,83 @@ export default function CustomerDetailPage({
         {customer.data?.phoneNumber && ` · ${customer.data.phoneNumber}`}
         {customer.data?.createdAt && ` · Customer since ${formatDate(customer.data.createdAt)}`}
       </div>
+
+      <div className="grid gap-4 md:grid-cols-4">
+        {[
+          { label: "Events", value: formatNumber(usage.data?.eventCount) },
+          { label: "Usage units", value: formatNumber(usage.data?.totalUsageUnits) },
+          { label: "Cost", value: formatCurrency(usage.data?.totalCost) },
+          { label: "Revenue", value: formatCurrency(usage.data?.totalRevenue) },
+        ].map((stat) => (
+          <Card key={stat.label}>
+            <CardHeader>
+              <CardDescription>{stat.label}</CardDescription>
+              <CardTitle className="font-mono text-2xl tabular-nums">{stat.value}</CardTitle>
+            </CardHeader>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent usage</CardTitle>
+          <CardDescription>
+            Latest events from this customer.{" "}
+            <Link href="/events" className="text-primary underline-offset-4 hover:underline">
+              See all events
+            </Link>
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {events.data?.items?.length ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Occurred</TableHead>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Feature</TableHead>
+                  <TableHead>Model</TableHead>
+                  <TableHead className="text-right">Units</TableHead>
+                  <TableHead className="text-right">Cost</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {events.data.items.map((event) => (
+                  <TableRow key={event.id}>
+                    <TableCell className="whitespace-nowrap">
+                      {formatDateTime(event.occurredAt)}
+                    </TableCell>
+                    <TableCell>{event.eventName}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {event.featureKey ?? featureById.get(event.featureId ?? "") ?? "—"}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{event.model ?? "—"}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatNumber(event.usageUnits)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatCurrency(event.costAmount)}
+                    </TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatCurrency(event.revenueAmount)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No usage yet</EmptyTitle>
+                <EmptyDescription>
+                  Events ingested for this customer will appear here.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -153,7 +240,11 @@ export default function CustomerDetailPage({
               </TableHeader>
               <TableBody>
                 {pools.data.map((pool) => (
-                  <TableRow key={pool.id}>
+                  <TableRow
+                    key={pool.id}
+                    className="cursor-pointer"
+                    onClick={() => router.push(`/credits/pools/${pool.id}`)}
+                  >
                     <TableCell>{pool.name}</TableCell>
                     <TableCell className="text-muted-foreground">{pool.denomination}</TableCell>
                     <TableCell className="font-mono tabular-nums">
