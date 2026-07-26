@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { useUpdateAccountSettings } from "@/features/settings/mutations"
+import { StripeCard } from "@/features/settings/stripe-card"
 import { useAccountSettings, useApiKey } from "@/features/settings/queries"
 import {
   accountSettingsSchema,
@@ -213,6 +214,7 @@ export default function SettingsPage() {
         <p className="text-sm text-muted-foreground">Account, billing, and integration options.</p>
       </div>
       <SettingsForm />
+      <StripeCard />
       <ApiKeyCard />
     </>
   )
