@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table"
 import { formatCurrency, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import { GettingStartedCard } from "@/features/analytics/getting-started-card"
 import { useModelsAnalytics, usePortfolio, useRevenueBridge } from "@/features/analytics/queries"
 
 const bridgeChartConfig = {
@@ -81,6 +82,8 @@ export default function OverviewPage() {
           Revenue, cost, and margin across your portfolio.
         </p>
       </div>
+
+      <GettingStartedCard />
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
