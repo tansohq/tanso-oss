@@ -1,6 +1,7 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import {
   Sheet,
   SheetContent,
@@ -54,9 +55,14 @@ export function WeightHistorySheet({ pair, onOpenChange }: WeightHistorySheetPro
             </>
           )}
           {!history.isPending && rows.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No explicit weight rows — this pair burns at the identity default of 1.0.
-            </p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyTitle>No weight rows</EmptyTitle>
+                <EmptyDescription>
+                  This pair burns at the identity default of 1.0 until a tariff is published.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           )}
           {rows.map((row) => {
             const scheduled = new Date(row.effectiveFrom).getTime() > now
