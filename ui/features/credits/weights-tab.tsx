@@ -59,6 +59,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
   const [historyPair, setHistoryPair] = useState<WeightPair | null>(null)
   const [addFeatureId, setAddFeatureId] = useState("")
   const [addModel, setAddModel] = useState("")
+  const [focusKey, setFocusKey] = useState<string | null>(null)
 
   const [now] = useState(() => Date.now())
   const allWeights = weights.data ?? []
@@ -144,6 +145,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
         ? prev
         : [...prev, { featureId: addFeatureId, model }],
     )
+    setFocusKey(pairKey(addFeatureId, model))
     setAddModel("")
   }
 
@@ -281,6 +283,13 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Input
+                        ref={(el) => {
+                          if (el && focusKey === key) {
+                            el.focus()
+                            el.select()
+                            setFocusKey(null)
+                          }
+                        }}
                         className="w-24 font-mono tabular-nums"
                         aria-label={`Weight for ${row.featureKey}${row.model ? ` (${row.model})` : ""}`}
                         aria-invalid={invalid}
