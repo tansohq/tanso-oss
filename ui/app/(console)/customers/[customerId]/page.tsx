@@ -65,7 +65,13 @@ export default function CustomerDetailPage({
     return (
       <div className="flex flex-col gap-4">
         <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-40 w-full" />
+        <div className="grid gap-4 md:grid-cols-4">
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-28 w-full" />
+        </div>
+        <Skeleton className="h-64 w-full" />
       </div>
     )
   }
