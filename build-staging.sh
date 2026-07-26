@@ -1,1 +1,0 @@
-docker build -f Dockerfile.staging --build-arg PROJECT_NAME=tanso-core -t tanso-core-staging:latest .

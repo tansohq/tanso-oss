@@ -309,7 +309,6 @@ tanso-core/
 ├── examples/
 │   └── nextjs-ai-credits/     # runnable check → work → record flow
 ├── scripts/           # SQL seed & helper scripts
-├── compose.yaml       # local Docker stack
 ├── package.json       # developer kit workspace
 └── pom.xml
 ```
