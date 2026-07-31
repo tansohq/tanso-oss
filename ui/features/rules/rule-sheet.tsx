@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
 
 import { Button } from "@/components/ui/button"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -26,6 +26,16 @@ import { Textarea } from "@/components/ui/textarea"
 import type { FeatureDto, PlanFeatureRuleDto } from "@/lib/api/types"
 import { ruleSchema, type RuleInput } from "./schemas"
 
+const DEFAULT_RULE_VALUE = JSON.stringify(
+  {
+    model: "usage",
+    usage_unit_type: "AI_CREDITS",
+    price_per_unit: 0.1,
+  },
+  null,
+  2,
+)
+
 interface RuleSheetProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -43,7 +53,7 @@ export function RuleSheet({ open, onOpenChange, features, rule, isPending, onSub
     values: {
       featureId: rule?.featureId ?? "",
       isEnabled: rule?.enabled ?? true,
-      value: rule?.value ? JSON.stringify(rule.value, null, 2) : "{\n  \n}",
+      value: rule?.value ? JSON.stringify(rule.value, null, 2) : DEFAULT_RULE_VALUE,
       creditModelId: rule?.creditModelId ?? "",
     },
   })
@@ -101,6 +111,10 @@ export function RuleSheet({ open, onOpenChange, features, rule, isPending, onSub
                   aria-invalid={!!errors.value}
                   {...form.register("value")}
                 />
+                <FieldDescription>
+                  <code>model</code> is <code>&quot;usage&quot;</code> (flat <code>price_per_unit</code>)
+                  or <code>&quot;graduated&quot;</code> (tiered rates).
+                </FieldDescription>
                 {errors.value && <FieldError>{errors.value.message}</FieldError>}
               </Field>
               <Field orientation="horizontal">
