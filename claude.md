@@ -246,4 +246,4 @@ The `EventService` is designed for high throughput:
 *   **Console: "Attach feature" / "New subscription" panel — Base UI Select fields**: clicking a `Select` trigger and immediately typing inserts characters into the trigger's placeholder text without registering a selection, so the form submits with an empty value. Click the trigger, wait for the popover, then click an option from the list.
 
 ---
-*Last Updated: 2026-02-03*
+*Last Updated: 2026-08-05*
