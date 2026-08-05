@@ -315,11 +315,13 @@ public class AnalyticsServiceImpl implements AnalyticsService {
     }
 
     private String buildCustomerName(Customer customer) {
-        if (customer.getEmail() != null && !customer.getEmail().isBlank()) return customer.getEmail();
+        // Name before email, matching every other console surface (invoices,
+        // subscriptions render name || email).
         String firstName = customer.getFirstName() != null ? customer.getFirstName() : "";
         String lastName = customer.getLastName() != null ? customer.getLastName() : "";
         String fullName = (firstName + " " + lastName).trim();
         if (!fullName.isEmpty()) return fullName;
+        if (customer.getEmail() != null && !customer.getEmail().isBlank()) return customer.getEmail();
         if (customer.getExternalClientCustomerId() != null) return customer.getExternalClientCustomerId();
         StripeCustomer sc = stripeCustomerRepository.findByCustomer(customer);
         if (sc != null && sc.getStripeCustomerExternalId() != null) return sc.getStripeCustomerExternalId();

@@ -23,6 +23,7 @@ import com.tansoflow.tansocore.entity.StripePrice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +32,6 @@ public interface StripePriceRepository extends JpaRepository<StripePrice, UUID> 
     Optional<StripePrice> findByPlanAndAccount(Plan plan, Account account);
 
     Optional<StripePrice> findFirstByPlanAndAccountOrderByCreatedAtDesc(Plan plan, Account account);
+
+    List<StripePrice> findAllByPlanAndAccount(Plan plan, Account account);
 }

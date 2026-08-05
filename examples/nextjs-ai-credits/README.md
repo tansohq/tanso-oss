@@ -41,8 +41,9 @@ credit. The next request is denied before `runModel` executes.
 - [`lib/model.ts`](lib/model.ts) is the provider-free model stub. Replace it
   with your OpenAI, Anthropic, or other provider call.
 - [`lib/tanso.ts`](lib/tanso.ts) creates the server-side Tanso client.
-- [`../../sdks/typescript`](../../sdks/typescript) contains the reusable typed
-  client.
+- [`@tansohq/sdk`](https://www.npmjs.com/package/@tansohq/sdk) is the reusable
+  typed client (source at
+  [tansohq/tanso-typescript-sdk](https://github.com/tansohq/tanso-typescript-sdk)).
 
 ## Reset the five demo credits
 

@@ -589,16 +589,15 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         Plan plan = planService.retrievePlan(UUID.fromString(accountId.toString()), planId);
 
-        // Get or lazily create the Stripe Price
-        StripePrice stripePrice = stripePriceRepository
-                .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, customer.getAccount())
-                .orElse(null);
-        if (stripePrice == null) {
+        // Get or lazily create the Stripe Prices (base + metered where applicable)
+        List<StripePrice> stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+        if (stripePrices.isEmpty()) {
             log.info("No StripePrice for plan {}, creating lazily for checkout", plan.getId());
             createStripeProductWithPrices(planId, accountId);
-            stripePrice = stripePriceRepository
-                    .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, customer.getAccount())
-                    .orElseThrow(() -> new IllegalStateException("Failed to create StripePrice for plan " + planId));
+            stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+            if (stripePrices.isEmpty()) {
+                throw new IllegalStateException("Failed to create StripePrice for plan " + planId);
+            }
         }
 
         Map<String, String> metadata = Map.of(
@@ -612,19 +611,30 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                         .putAllMetadata(metadata)
                         .build();
 
-        SessionCreateParams params = SessionCreateParams.builder()
+        SessionCreateParams.Builder paramsBuilder = SessionCreateParams.builder()
                 .setMode(SessionCreateParams.Mode.SUBSCRIPTION)
-                .addLineItem(SessionCreateParams.LineItem.builder()
-                        .setPrice(stripePrice.getStripePriceExternalId())
-                        .setQuantity(1L)
-                        .build())
                 .putAllMetadata(metadata)
                 .addPaymentMethodType(SessionCreateParams.PaymentMethodType.CARD)
                 .setSuccessUrl(successUrl)
                 .setCancelUrl(cancelUrl)
                 .setCustomer(stripeCustomer.getStripeCustomerExternalId())
-                .setSubscriptionData(subscriptionData)
-                .build();
+                .setSubscriptionData(subscriptionData);
+
+        // Stripe rejects a quantity on metered prices, and requires one on
+        // licensed prices — check each price's usage type before adding it.
+        for (StripePrice mapped : stripePrices) {
+            Price price = stripeClient.v1().prices().retrieve(mapped.getStripePriceExternalId());
+            boolean metered = price.getRecurring() != null
+                    && "metered".equals(price.getRecurring().getUsageType());
+            SessionCreateParams.LineItem.Builder lineItem = SessionCreateParams.LineItem.builder()
+                    .setPrice(mapped.getStripePriceExternalId());
+            if (!metered) {
+                lineItem.setQuantity(1L);
+            }
+            paramsBuilder.addLineItem(lineItem.build());
+        }
+
+        SessionCreateParams params = paramsBuilder.build();
 
         Session session = stripeClient.v1().checkout().sessions().create(params);
 
@@ -762,6 +772,19 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         stripePriceEntity.setAccount(plan.getAccount());
         stripePriceEntity.setStripePriceExternalId(stripePrice.getId());
         stripePriceRepository.save(stripePriceEntity);
+
+        // A metered price only covers usage — a plan with a base price needs the
+        // flat recurring price too, or checkout silently drops the subscription fee.
+        if (meteredRule != null && plan.getPriceAmount() != null
+                && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+            Price basePrice = createStripePrice(plan, productId);
+            StripePrice basePriceEntity = new StripePrice();
+            basePriceEntity.setPlan(plan);
+            basePriceEntity.setStripeProduct(stripeProduct);
+            basePriceEntity.setAccount(plan.getAccount());
+            basePriceEntity.setStripePriceExternalId(basePrice.getId());
+            stripePriceRepository.save(basePriceEntity);
+        }
 
         log.info("Created Stripe Product+Price for plan {} in account {}. Stripe Price ID: {}",
                 planId, accountId, stripePrice.getId());

@@ -136,7 +136,10 @@ for configuration.
    drives billing** (Stripe is the source of truth; Tanso becomes your
    entitlements/usage/analytics plane) or **Tanso handles billing** (Tanso
    manages subscriptions and invoices; Stripe only collects payment).
-   Disconnecting resets the mode back to `None`.
+   Disconnecting resets the mode back to `None`. In **Stripe drives billing**,
+   subscribing a paid plan returns a Stripe Checkout URL instead of creating
+   the subscription immediately — the subscription is created by webhook once
+   the customer pays, so nothing dangles if they never do.
 
 <details>
 <summary><strong>Testing Stripe payments locally</strong></summary>

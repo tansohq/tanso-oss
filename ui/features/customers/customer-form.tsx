@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useForm } from "react-hook-form"
 
 import { Button } from "@/components/ui/button"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Spinner } from "@/components/ui/spinner"
 import type { CustomerDto } from "@/lib/api/types"
@@ -28,6 +28,7 @@ export function CustomerForm({ customer, isPending, onSubmit }: CustomerFormProp
     },
   })
   const errors = form.formState.errors
+  const referenceId = form.watch("customerReferenceId")
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -59,6 +60,15 @@ export function CustomerForm({ customer, isPending, onSubmit }: CustomerFormProp
             placeholder="Your internal customer ID"
             {...form.register("customerReferenceId")}
           />
+          <FieldDescription>
+            How your product&apos;s API calls identify this customer — entitlement checks and
+            events key off it.
+          </FieldDescription>
+          {!customer && !referenceId && (
+            <p className="text-xs text-amber-500">
+              Without a Reference ID, client-API entitlement checks for this customer will fail.
+            </p>
+          )}
         </Field>
         <Field>
           <FieldLabel htmlFor="customer-phone">Phone</FieldLabel>
