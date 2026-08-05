@@ -33,6 +33,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.transaction.TransactionSystemException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -176,11 +177,23 @@ public class GlobalExceptionHandlerController {
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException exception) {
         String errorId = assignErrorId();
         String details = exception.getConstraintViolations().stream()
-                .map(ConstraintViolation::getMessage)
+                .map(v -> v.getPropertyPath() + ": " + v.getMessage())
                 .collect(Collectors.joining(", "));
         log.warn("Constraint violation [errorId={}]: {}", errorId, details);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(processErrorMessage("Constraint violation: " + details, errorId));
+    }
+
+    // Entity-level validation failures surface at commit time wrapped in
+    // TransactionSystemException, which otherwise falls through to the
+    // catch-all and reports a 500 with no hint of the offending field.
+    @ExceptionHandler(TransactionSystemException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTransactionSystem(TransactionSystemException exception) {
+        Throwable cause = exception.getRootCause();
+        if (cause instanceof ConstraintViolationException violation) {
+            return handleConstraintViolation(violation);
+        }
+        return handleException(exception);
     }
 
     private static String assignErrorId() {
