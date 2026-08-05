@@ -97,7 +97,7 @@ public class AdminEventTools {
 
             var pageable = PageRequest.of(parsedPage, parsedSize, Sort.by(Sort.Direction.DESC, "createdAt"));
             var result = eventService.getEvents(accountId, parsedStart, parsedEnd,
-                    customerReferenceId, parsedPlanId, parsedFeatureId, parsedEventType,
+                    customerReferenceId, null, parsedPlanId, parsedFeatureId, parsedEventType,
                     model, modelProvider, eventName, pageable);
 
             Map<String, Object> response = new HashMap<>();

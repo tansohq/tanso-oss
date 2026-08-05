@@ -54,7 +54,7 @@ export default function CustomerDetailPage({
   const customer = useCustomer(customerId)
   const subscriptions = useCustomerSubscriptions(customerId)
   const pools = useCustomerCreditPools(customerId)
-  const events = useCustomerEvents(customer.data?.customerReferenceId ?? undefined)
+  const events = useCustomerEvents(customerId)
   const usage = useCustomerUsageTotals(customerId, customer.data?.customerReferenceId)
   const features = useFeatures()
   const featureById = new Map((features.data ?? []).map((f) => [f.id ?? "", f.key ?? ""]))

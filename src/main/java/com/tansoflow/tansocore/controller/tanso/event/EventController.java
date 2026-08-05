@@ -62,6 +62,7 @@ public class EventController {
             @Parameter(description = "Start of the occurredAt date range") @RequestParam(required = false) Instant start,
             @Parameter(description = "End of the occurredAt date range") @RequestParam(required = false) Instant end,
             @Parameter(description = "Customer reference ID filter") @RequestParam(required = false) String customerReferenceId,
+            @Parameter(description = "Internal customer ID filter") @RequestParam(required = false) UUID customerId,
             @Parameter(description = "Plan identifier filter") @RequestParam(required = false) UUID planId,
             @Parameter(description = "Feature identifier filter") @RequestParam(required = false) UUID featureId,
             @Parameter(description = "Event type filter") @RequestParam(required = false) EventType eventType,
@@ -76,7 +77,7 @@ public class EventController {
 
         UUID accountId = UUID.fromString(userContext.getAccountId());
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<EventDto> events = eventService.getEvents(accountId, start, end, customerReferenceId, planId, featureId, eventType, model, modelProvider, eventName, pageable);
+        Page<EventDto> events = eventService.getEvents(accountId, start, end, customerReferenceId, customerId, planId, featureId, eventType, model, modelProvider, eventName, pageable);
 
         return ResponseEntity.ok(ApiResponse.<PagedResponse<EventDto>>builder()
                 .success(true)

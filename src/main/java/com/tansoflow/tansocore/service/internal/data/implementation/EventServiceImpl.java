@@ -838,7 +838,7 @@ public class EventServiceImpl implements EventService {
     }
 
     @Override
-    public Page<EventDto> getEvents(UUID accountId, Instant start, Instant end, String customerReferenceId, UUID planId, UUID featureId, EventType eventType, String model, String modelProvider, String eventName, Pageable pageable) {
+    public Page<EventDto> getEvents(UUID accountId, Instant start, Instant end, String customerReferenceId, UUID customerId, UUID planId, UUID featureId, EventType eventType, String model, String modelProvider, String eventName, Pageable pageable) {
         log.info("Fetching events for account: {} with filters", accountId);
         Specification<Event> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
@@ -868,6 +868,9 @@ public class EventServiceImpl implements EventService {
                         .replace("%", "\\%")
                         .replace("_", "\\_");
                 predicates.add(cb.like(cb.lower(root.get("eventName")), "%" + escaped + "%", '\\'));
+            }
+            if (customerId != null) {
+                predicates.add(cb.equal(root.get("customerId"), customerId));
             }
             if (customerReferenceId != null && !customerReferenceId.isBlank() && query != null) {
                 jakarta.persistence.criteria.Subquery<UUID> customerSubquery = query.subquery(UUID.class);

@@ -40,14 +40,16 @@ export function useCustomerCreditPools(customerId: string) {
   })
 }
 
-export function useCustomerEvents(customerReferenceId: string | undefined) {
+export function useCustomerEvents(customerId: string | undefined) {
+  // Filter by internal customer id, not reference id — customers created
+  // without a Reference ID still have events, and the header KPI counts them.
   return useQuery({
-    queryKey: ["events", { customerReferenceId, page: 0, size: 10 }],
+    queryKey: ["events", { customerId, page: 0, size: 10 }],
     queryFn: () =>
       apiFetch<PagedResponseEventDto>(
-        `/api/v1/tanso/events${queryString({ page: 0, size: 10, customerReferenceId })}`,
+        `/api/v1/tanso/events${queryString({ page: 0, size: 10, customerId })}`,
       ),
-    enabled: !!customerReferenceId,
+    enabled: !!customerId,
   })
 }
 

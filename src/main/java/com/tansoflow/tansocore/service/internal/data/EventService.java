@@ -32,7 +32,7 @@ public interface EventService {
 
     EventIngestionResult createEvent(EventDto event);
 
-    Page<EventDto> getEvents(UUID accountId, Instant start, Instant end, String customerReferenceId, UUID planId, UUID featureId, EventType eventType, String model, String modelProvider, String eventName, Pageable pageable);
+    Page<EventDto> getEvents(UUID accountId, Instant start, Instant end, String customerReferenceId, UUID customerId, UUID planId, UUID featureId, EventType eventType, String model, String modelProvider, String eventName, Pageable pageable);
 
     List<EventGroupDto> getGroupedEvents(UUID accountId, String groupBy, Instant start, Instant end, String customerReferenceId, UUID planId, UUID featureId, EventType eventType, String model, String modelProvider, String eventName);
 

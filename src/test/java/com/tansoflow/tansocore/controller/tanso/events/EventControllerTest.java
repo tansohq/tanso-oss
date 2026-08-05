@@ -67,9 +67,9 @@ class EventControllerTest {
     @Test
     void testGetEvents_Success() {
         Page<EventDto> eventPage = new PageImpl<>(Collections.singletonList(new EventDto()));
-        when(eventService.getEvents(any(UUID.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(eventPage);
+        when(eventService.getEvents(any(UUID.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(eventPage);
 
-        ResponseEntity<ApiResponse<PagedResponse<EventDto>>> response = eventController.getEvents(userContext, null, null, null, null, null, null, null, null, null, 0, 10);
+        ResponseEntity<ApiResponse<PagedResponse<EventDto>>> response = eventController.getEvents(userContext, null, null, null, null, null, null, null, null, null, null, 0, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         Assertions.assertNotNull(response.getBody());
@@ -82,7 +82,7 @@ class EventControllerTest {
         assertEquals(eventPage.getNumber(), data.getPage());
         assertEquals(eventPage.getSize(), data.getSize());
 
-        verify(eventService).getEvents(any(UUID.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
+        verify(eventService).getEvents(any(UUID.class), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
     }
 
     @Test
@@ -94,11 +94,11 @@ class EventControllerTest {
         UUID planId = UUID.randomUUID();
         UUID featureId = UUID.randomUUID();
 
-        when(eventService.getEvents(any(UUID.class), eq(start), eq(end), eq(customerRef), eq(planId), eq(featureId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(eventPage);
+        when(eventService.getEvents(any(UUID.class), eq(start), eq(end), eq(customerRef), isNull(), eq(planId), eq(featureId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class))).thenReturn(eventPage);
 
-        ResponseEntity<ApiResponse<PagedResponse<EventDto>>> response = eventController.getEvents(userContext, start, end, customerRef, planId, featureId, null, null, null, null, 0, 10);
+        ResponseEntity<ApiResponse<PagedResponse<EventDto>>> response = eventController.getEvents(userContext, start, end, customerRef, null, planId, featureId, null, null, null, null, 0, 10);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
-        verify(eventService).getEvents(any(UUID.class), eq(start), eq(end), eq(customerRef), eq(planId), eq(featureId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
+        verify(eventService).getEvents(any(UUID.class), eq(start), eq(end), eq(customerRef), isNull(), eq(planId), eq(featureId), isNull(), isNull(), isNull(), isNull(), any(Pageable.class));
     }
 }
