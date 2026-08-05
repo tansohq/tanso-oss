@@ -226,6 +226,16 @@ public class StripeWebhookImpl implements StripeWebhook {
     }
 
     private void handleInvoiceCreated(Invoice invoiceObject) {
+        // Invoices Tanso itself created via syncNewInvoice carry tanso_invoice_id
+        // metadata, and the creating request saves the StripeInvoice mapping in its
+        // own (still-open) transaction. This webhook typically arrives before that
+        // commit, so linking here too races it into a duplicate row. Only link
+        // invoices that originated outside Tanso.
+        if (invoiceObject.getMetadata().get("tanso_invoice_id") != null) {
+            log.info("PAYMENT_PASS_THROUGH: Stripe invoice {} was created by Tanso, skipping webhook-side linking", invoiceObject.getId());
+            return;
+        }
+
         String accountId = invoiceObject.getMetadata().get("tanso_account_id");
         String subscriptionId = invoiceObject.getMetadata().get("tanso_subscription_id");
 

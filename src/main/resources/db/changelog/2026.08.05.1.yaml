@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260805-1"
+      author: tanso
+      comment: >
+        One Stripe invoice mapping per Tanso invoice. The pass-through
+        invoice.created webhook raced the checkout request's syncNewInvoice
+        (webhook lands before the creating transaction commits), producing
+        duplicate stripe_invoices rows for the same invoice_id, which then
+        broke retrieveStripeSession's unique lookup. The webhook handler now
+        skips Tanso-created invoices; this deduplicates any rows the race
+        already produced (keeping the earliest) and adds the constraint so a
+        regression fails loudly at insert instead of corrupting mappings.
+      changes:
+        - sql:
+            sql: >
+              DELETE FROM stripe_invoices a
+              USING stripe_invoices b
+              WHERE a.invoice_id = b.invoice_id
+                AND a.created_at > b.created_at;
+        - addUniqueConstraint:
+            tableName: stripe_invoices
+            columnNames: invoice_id
+            constraintName: uq_stripe_invoices_invoice_id
