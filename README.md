@@ -90,7 +90,7 @@ The repo ships a web console for the admin API — plans, features, customers,
 subscriptions, credits, invoices, events, and margin analytics:
 
 <div align="center">
-<img src=".github/assets/screenshots/overview.png" alt="Overview — revenue, cost, and per-model margin" width="800" />
+<img src=".github/assets/screenshots/margin-overview.png" alt="Overview — revenue, cost, and per-model margin" width="800" />
 <br /><em>Per-model margin from the same ledger that bills — a money-losing model shows up in red.</em>
 <br /><br />
 <img src=".github/assets/screenshots/weights.png" alt="Credit weights — tariff editor with observed cost per unit" width="800" />
