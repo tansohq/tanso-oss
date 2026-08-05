@@ -21,6 +21,7 @@ import type { CreditModelDto, CreditPoolDto } from "@/lib/api/types"
 import { formatNumber } from "@/lib/format"
 import { CreditModelForm } from "@/features/credits/credit-model-form"
 import { CreditPoolForm } from "@/features/credits/credit-pool-form"
+import { PricesTab } from "@/features/credits/prices-tab"
 import { WeightsTab } from "@/features/credits/weights-tab"
 import { useCreateCreditModel, useCreateCreditPool } from "@/features/credits/mutations"
 import { useCreditModels, useCreditPools } from "@/features/credits/queries"
@@ -102,6 +103,7 @@ export default function CreditsPage() {
   const [poolOpen, setPoolOpen] = useState(false)
   const [tab, setTab] = useState("models")
   const [weightsDirty, setWeightsDirty] = useState(false)
+  const [pricesDirty, setPricesDirty] = useState(false)
 
   const customerItems = (customers.data?.customers ?? []).map((c) => {
     const name = [c.firstName, c.lastName].filter(Boolean).join(" ")
@@ -116,7 +118,9 @@ export default function CreditsPage() {
           <p className="text-sm text-muted-foreground">
             {tab === "weights"
               ? "Weights set how many credits one usage unit burns, per feature and model."
-              : "Credit models define units; pools hold customer balances."}
+              : tab === "pricing"
+                ? "The price book sets what one credit costs to buy, per denomination."
+                : "Credit models define units; pools hold customer balances."}
           </p>
         </div>
         {tab === "models" && (
@@ -141,6 +145,12 @@ export default function CreditsPage() {
             !window.confirm("Discard unsaved weight changes?")
           )
             return
+          if (
+            tab === "pricing" &&
+            pricesDirty &&
+            !window.confirm("Discard unsaved price changes?")
+          )
+            return
           setTab(value as string)
         }}
       >
@@ -148,6 +158,7 @@ export default function CreditsPage() {
           <TabsTrigger value="models">Models</TabsTrigger>
           <TabsTrigger value="pools">Pools</TabsTrigger>
           <TabsTrigger value="weights">Weights</TabsTrigger>
+          <TabsTrigger value="pricing">Pricing</TabsTrigger>
         </TabsList>
         <TabsContent value="models">
           <DataTable
@@ -170,6 +181,9 @@ export default function CreditsPage() {
         </TabsContent>
         <TabsContent value="weights">
           <WeightsTab onDirtyChange={setWeightsDirty} />
+        </TabsContent>
+        <TabsContent value="pricing">
+          <PricesTab onDirtyChange={setPricesDirty} />
         </TabsContent>
       </Tabs>
       <Sheet open={modelOpen} onOpenChange={setModelOpen}>

@@ -27,9 +27,12 @@ import com.tansoflow.tansocore.model.credit.PlanCreditAllocationDto;
 import com.tansoflow.tansocore.model.credit.request.CreateCreditModelRequest;
 import com.tansoflow.tansocore.model.credit.request.CreateCreditPoolRequest;
 import com.tansoflow.tansocore.model.credit.request.CreditDeductionRequest;
+import com.tansoflow.tansocore.model.credit.CreditPriceDto;
 import com.tansoflow.tansocore.model.credit.request.CreditGrantRequest;
+import com.tansoflow.tansocore.model.credit.request.PublishCreditPricesRequest;
 import com.tansoflow.tansocore.model.credit.request.PublishCreditWeightsRequest;
 import com.tansoflow.tansocore.model.response.ApiResponse;
+import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -67,6 +70,7 @@ import java.util.UUID;
 public class CreditController {
     private final CreditService creditService;
     private final CreditWeightService creditWeightService;
+    private final CreditPriceService creditPriceService;
 
     // ─── Credit Model endpoints ───
 
@@ -313,6 +317,49 @@ public class CreditController {
             @AuthenticationPrincipal UserContext userContext,
             @PathVariable String weightId) {
         creditWeightService.deleteScheduledWeight(weightId, userContext.getAccountId());
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
+    }
+
+    // ─── Credit Prices (price book) ───
+
+    @GetMapping("/prices")
+    @Operation(summary = "List current and scheduled credit prices", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditPriceDto>>> getPrices(
+            @AuthenticationPrincipal UserContext userContext) {
+        List<CreditPriceDto> prices = creditPriceService.getPrices(userContext.getAccountId());
+        return ResponseEntity.ok(
+                ApiResponse.<List<CreditPriceDto>>builder().data(prices).success(true).build());
+    }
+
+    @GetMapping("/prices/history")
+    @Operation(summary = "Price history for a denomination", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditPriceDto>>> getPriceHistory(
+            @AuthenticationPrincipal UserContext userContext,
+            @RequestParam String denomination) {
+        List<CreditPriceDto> history = creditPriceService.getHistory(userContext.getAccountId(), denomination);
+        return ResponseEntity.ok(
+                ApiResponse.<List<CreditPriceDto>>builder().data(history).success(true).build());
+    }
+
+    @PostMapping("/prices/publish")
+    @Operation(summary = "Publish a price batch — one transaction, one shared effective time",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditPriceDto>>> publishPrices(
+            @AuthenticationPrincipal UserContext userContext,
+            @Valid @RequestBody PublishCreditPricesRequest request) {
+        List<CreditPriceDto> published = creditPriceService.publishPrices(
+                request, userContext.getAccountId(),
+                userContext.getUserId() != null ? UUID.fromString(userContext.getUserId()) : null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.<List<CreditPriceDto>>builder().data(published).success(true).build());
+    }
+
+    @DeleteMapping("/prices/{priceId}")
+    @Operation(summary = "Delete a scheduled (not-yet-effective) price row", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<Void>> deleteScheduledPrice(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String priceId) {
+        creditPriceService.deleteScheduledPrice(priceId, userContext.getAccountId());
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
     }
 

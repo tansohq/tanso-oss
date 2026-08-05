@@ -1,0 +1,97 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260805-2"
+      author: tanso
+      comment: >
+        Credit price book: server-side price-per-credit, versioned by
+        effective_from — the second dial of credit pricing alongside the
+        weight tariff. One price per (account, denomination) at a time,
+        append-only once effective, resolved point-in-time like weights.
+        Also adds unit_price/currency to credit_grants so purchased top-ups
+        carry the monetary price they were sold at (negotiated overrides or
+        the resolved book price), instead of credits entering pools with no
+        revenue record.
+      changes:
+        - createTable:
+            tableName: credit_prices
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: denomination
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: price_per_credit
+                  type: NUMERIC(18,6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: effective_from
+                  type: TIMESTAMP WITH TIME ZONE
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_by
+                  type: UUID
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: credit_prices
+            baseColumnNames: account_id
+            constraintName: fk_credit_prices_account
+            referencedTableName: accounts
+            referencedColumnNames: account_id
+            onDelete: CASCADE
+        - sql:
+            sql: >
+              ALTER TABLE credit_prices
+                ADD CONSTRAINT chk_credit_prices_positive
+                CHECK (price_per_credit > 0);
+              ALTER TABLE credit_prices
+                ADD CONSTRAINT uq_credit_prices_denomination
+                UNIQUE (account_id, denomination, effective_from);
+        - createIndex:
+            tableName: credit_prices
+            indexName: idx_credit_prices_lookup
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: denomination
+              - column:
+                  name: effective_from
+        - addColumn:
+            tableName: credit_grants
+            columns:
+              - column:
+                  name: unit_price
+                  type: NUMERIC(18,6)
+              - column:
+                  name: currency
+                  type: VARCHAR(3)
+        - sql:
+            sql: >
+              ALTER TABLE credit_grants
+                ADD CONSTRAINT chk_credit_grants_unit_price_positive
+                CHECK (unit_price IS NULL OR unit_price > 0);

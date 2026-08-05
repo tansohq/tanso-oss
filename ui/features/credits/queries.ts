@@ -7,7 +7,7 @@ import type {
   CreditPoolDto,
   CreditTransactionDto,
 } from "@/lib/api/types"
-import type { CreditFeatureWeightDto } from "./types"
+import type { CreditFeatureWeightDto, CreditPriceDto } from "./types"
 
 export function useCreditModels() {
   return useQuery({
@@ -58,6 +58,24 @@ export function useCreditWeightUnitCosts() {
     queryKey: ["credit-weights", "unit-costs"],
     queryFn: () =>
       apiFetch<Record<string, number>>("/api/v1/monetization/credits/weights/unit-costs"),
+  })
+}
+
+export function useCreditPrices() {
+  return useQuery({
+    queryKey: ["credit-prices"],
+    queryFn: () => apiFetch<CreditPriceDto[]>("/api/v1/monetization/credits/prices"),
+  })
+}
+
+export function useCreditPriceHistory(denomination: string | undefined) {
+  return useQuery({
+    queryKey: ["credit-prices", "history", denomination],
+    queryFn: () =>
+      apiFetch<CreditPriceDto[]>(
+        `/api/v1/monetization/credits/prices/history${queryString({ denomination })}`,
+      ),
+    enabled: !!denomination,
   })
 }
 

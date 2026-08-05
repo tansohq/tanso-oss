@@ -110,6 +110,9 @@ class CreditServiceImplTest {
     @Mock
     private CreditMapper creditMapper;
 
+    @Mock
+    private com.tansoflow.tansocore.service.internal.monetization.CreditPriceService creditPriceService;
+
     @InjectMocks
     private CreditServiceImpl creditService;
 
@@ -924,6 +927,125 @@ class CreditServiceImplTest {
 
         assertThrows(IllegalStateException.class, () ->
                 creditService.grantCredits(request, account.getId().toString()));
+    }
+
+    // ── grant pricing (price dial) ───────────────────────────────────────────
+
+    private CreditPool stubGrantablePool() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setBalance(BigDecimal.ZERO);
+        pool.setVersion(0L);
+        pool.setDenomination("api_credits");
+
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+        when(creditPoolRepository.findById(pool.getId())).thenReturn(Optional.of(pool));
+        when(creditPoolRepository.updatePoolBalanceAtomically(eq(pool.getId()), any(BigDecimal.class), anyString(), anyLong()))
+                .thenReturn(1);
+        when(creditGrantRepository.saveAndFlush(any(CreditGrant.class))).thenAnswer(i -> {
+            CreditGrant g = i.getArgument(0);
+            g.setId(UUID.randomUUID());
+            return g;
+        });
+        when(creditTransactionRepository.saveAndFlush(any(CreditTransaction.class)))
+                .thenAnswer(i -> i.getArgument(0));
+        return pool;
+    }
+
+    @Test
+    void grantCredits_explicitUnitPrice_stampedOnGrant() {
+        CreditPool pool = stubGrantablePool();
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+        request.setUnitPrice(new BigDecimal("0.08"));
+        request.setCurrency("eur");
+
+        creditService.grantCredits(request, account.getId().toString());
+
+        ArgumentCaptor<CreditGrant> captor = ArgumentCaptor.forClass(CreditGrant.class);
+        verify(creditGrantRepository).saveAndFlush(captor.capture());
+        assertEquals(new BigDecimal("0.08"), captor.getValue().getUnitPrice());
+        assertEquals("EUR", captor.getValue().getCurrency());
+        // Explicit price wins — the book is never consulted
+        verify(creditPriceService, never()).resolvePrice(any(), anyString(), any());
+    }
+
+    @Test
+    void grantCredits_purchasedWithoutUnitPrice_resolvesFromPriceBook() {
+        CreditPool pool = stubGrantablePool();
+        when(creditPriceService.resolvePrice(eq(account.getId()), eq("api_credits"), any(Instant.class)))
+                .thenReturn(Optional.of(new com.tansoflow.tansocore.service.internal.monetization.CreditPriceService.ResolvedPrice(
+                        new BigDecimal("0.10"), "USD", UUID.randomUUID())));
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+
+        creditService.grantCredits(request, account.getId().toString());
+
+        ArgumentCaptor<CreditGrant> captor = ArgumentCaptor.forClass(CreditGrant.class);
+        verify(creditGrantRepository).saveAndFlush(captor.capture());
+        assertEquals(new BigDecimal("0.10"), captor.getValue().getUnitPrice());
+        assertEquals("USD", captor.getValue().getCurrency());
+    }
+
+    @Test
+    void grantCredits_purchasedWithUnpricedDenomination_leavesPriceNull() {
+        CreditPool pool = stubGrantablePool();
+        when(creditPriceService.resolvePrice(eq(account.getId()), eq("api_credits"), any(Instant.class)))
+                .thenReturn(Optional.empty());
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+
+        creditService.grantCredits(request, account.getId().toString());
+
+        ArgumentCaptor<CreditGrant> captor = ArgumentCaptor.forClass(CreditGrant.class);
+        verify(creditGrantRepository).saveAndFlush(captor.capture());
+        assertNull(captor.getValue().getUnitPrice());
+        assertNull(captor.getValue().getCurrency());
+    }
+
+    @Test
+    void grantCredits_nonPurchasedWithoutUnitPrice_skipsPriceBook() {
+        CreditPool pool = stubGrantablePool();
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PROMOTIONAL");
+
+        creditService.grantCredits(request, account.getId().toString());
+
+        verify(creditPriceService, never()).resolvePrice(any(), anyString(), any());
+    }
+
+    @Test
+    void grantCredits_zeroUnitPrice_rejected() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setDenomination("api_credits");
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+        request.setUnitPrice(BigDecimal.ZERO);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                creditService.grantCredits(request, account.getId().toString()));
+        verify(creditGrantRepository, never()).saveAndFlush(any(CreditGrant.class));
     }
 
     // ── applyRolloverPoliciesForSubscription tests ───────────────────────────

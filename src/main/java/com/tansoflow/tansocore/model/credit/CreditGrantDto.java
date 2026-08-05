@@ -48,6 +48,12 @@ public class CreditGrantDto {
     @Schema(description = "Remaining credits from this grant")
     private BigDecimal remaining;
 
+    @Schema(description = "Price paid per credit, if this grant was sold")
+    private BigDecimal unitPrice;
+
+    @Schema(description = "ISO 4217 currency for unitPrice")
+    private String currency;
+
     @Schema(description = "When this grant expires")
     private Instant expiresAt;
 

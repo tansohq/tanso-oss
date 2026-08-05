@@ -49,6 +49,12 @@ public class CreditGrantRequest {
     @Schema(description = "Invoice linked to purchased credits")
     private String invoiceId;
 
+    @Schema(description = "Price paid per credit (e.g. a negotiated top-up price). For PURCHASED grants left null, the current price book entry for the pool's denomination is stamped instead.")
+    private BigDecimal unitPrice;
+
+    @Schema(description = "ISO 4217 currency for unitPrice. Defaults to the pool's currency, then USD.")
+    private String currency;
+
     @Schema(description = "When credits expire (null = never)")
     private Instant expiresAt;
 
