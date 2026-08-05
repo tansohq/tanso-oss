@@ -126,13 +126,45 @@ for configuration.
    404.
 4. A new subscription on a paid plan starts **inactive** until its first
    invoice is marked paid — that's expected, not a bug. Free ($0) plans
-   activate immediately.
+   activate immediately. To pay it: without Stripe, call
+   `POST /api/v1/client/billing/invoices/{invoiceId}/mark-paid`; with Stripe
+   connected, `POST /api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout`
+   returns a hosted payment page, and the `invoice.paid` webhook activates
+   the subscription.
 5. Stripe mode (Settings → Billing) is locked to `None` until you connect a
    secret key. Once connected, pick one of exactly two choices: **Stripe
    drives billing** (Stripe is the source of truth; Tanso becomes your
    entitlements/usage/analytics plane) or **Tanso handles billing** (Tanso
    manages subscriptions and invoices; Stripe only collects payment).
    Disconnecting resets the mode back to `None`.
+
+<details>
+<summary><strong>Testing Stripe payments locally</strong></summary>
+
+Stripe can't reach `localhost`, so the webhook endpoint Tanso registers won't
+receive events. Forward them with the
+[Stripe CLI](https://docs.stripe.com/stripe-cli) instead — the account ID is in
+the JWT printed by `setup.sh` (or the console URL after login):
+
+```bash
+stripe listen --api-key sk_test_... \
+  --forward-to http://localhost:8080/public/stripe/ingest/webhook/<accountId>
+```
+
+`stripe listen` prints its own signing secret (`whsec_…`). Tanso verifies
+signatures against the secret stored when you connected Stripe, so swap in the
+CLI's one:
+
+```bash
+docker exec deploy-postgres-1 psql -U tanso -d tanso -c \
+  "UPDATE external_api_keys SET key_value='whsec_…' \
+   WHERE key_type='WEBHOOK_SECRET_SIGNING';"
+```
+
+Then pay a checkout with Stripe's test card `4242 4242 4242 4242` and watch
+the invoice flip to `PAID` and the subscription activate.
+
+</details>
 
 ### Try the five-credit Next.js example
 

@@ -241,6 +241,7 @@ The `EventService` is designed for high throughput:
 *   **"Cannot subscribe to plan: status is DRAFT"**: New plans are created as `DRAFT` and cannot accept subscriptions. Attach features first, then edit the plan to `ACTIVE` — activation also requires a non-empty `description`, enforced server-side.
 *   **404 on `GET /entitlements/{refId}/{key}`**: `refId` is the customer's `externalClientCustomerId` (Reference ID), not the internal customer UUID. Events can be ingested by internal `customerId`, but entitlement checks require the customer to have been created with a Reference ID.
 *   **New paid subscription shows `isActive: false`**: Expected. A subscription only flips to active once its first invoice is marked paid (`markInvoiceAsPaid` in `SubscriptionServiceImpl`). Free ($0) plans activate immediately since there's nothing to collect.
+*   **Webhooks never arrive on localhost**: Stripe can't reach the registered endpoint. Run `stripe listen --forward-to http://localhost:8080/public/stripe/ingest/webhook/{accountId}`, then overwrite the stored `WEBHOOK_SECRET_SIGNING` row in `external_api_keys` with the CLI's printed `whsec_…` — signature verification uses the stored secret, not the CLI's.
 *   **Console: "Attach feature" / "New subscription" panel — Base UI Select fields**: clicking a `Select` trigger and immediately typing inserts characters into the trigger's placeholder text without registering a selection, so the form submits with an empty value. Click the trigger, wait for the popover, then click an option from the list.
 
 ---
