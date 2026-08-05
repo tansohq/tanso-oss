@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
@@ -30,6 +31,8 @@ import {
 } from "@/components/ui/table"
 import { formatCurrency, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
+import type { CustomerAnalyticsDto, ModelSummaryDto } from "@/lib/api/types"
+import { CustomerDetailSheet, ModelDetailSheet } from "@/features/analytics/detail-sheets"
 import { GettingStartedCard } from "@/features/analytics/getting-started-card"
 import { useModelsAnalytics, usePortfolio, useRevenueBridge } from "@/features/analytics/queries"
 
@@ -47,6 +50,10 @@ export default function OverviewPage() {
   const portfolio = usePortfolio()
   const bridge = useRevenueBridge()
   const models = useModelsAnalytics()
+  const [selectedCustomer, setSelectedCustomer] = useState<CustomerAnalyticsDto | null>(null)
+  const [customerOpen, setCustomerOpen] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<ModelSummaryDto | null>(null)
+  const [modelOpen, setModelOpen] = useState(false)
 
   const summary = portfolio.data?.summary
   const customers = [...(portfolio.data?.customers ?? [])].sort(
@@ -204,7 +211,14 @@ export default function OverviewPage() {
                 </TableHeader>
                 <TableBody>
                   {customers.slice(0, 10).map((c) => (
-                    <TableRow key={c.customerId}>
+                    <TableRow
+                      key={c.customerId}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSelectedCustomer(c)
+                        setCustomerOpen(true)
+                      }}
+                    >
                       <TableCell className="max-w-40 truncate">
                         {c.customerName || c.email || c.customerReferenceId}
                       </TableCell>
@@ -266,7 +280,14 @@ export default function OverviewPage() {
                 </TableHeader>
                 <TableBody>
                   {(models.data?.models ?? []).slice(0, 10).map((m) => (
-                    <TableRow key={`${m.modelProvider}-${m.model}`}>
+                    <TableRow
+                      key={`${m.modelProvider}-${m.model}`}
+                      className="cursor-pointer"
+                      onClick={() => {
+                        setSelectedModel(m)
+                        setModelOpen(true)
+                      }}
+                    >
                       <TableCell>
                         <span className="font-mono text-xs">{m.model}</span>{" "}
                         <span className="text-xs text-muted-foreground">{m.modelProvider}</span>
@@ -296,6 +317,18 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       </div>
+
+      <CustomerDetailSheet
+        customer={selectedCustomer}
+        open={customerOpen}
+        onOpenChange={setCustomerOpen}
+      />
+      <ModelDetailSheet
+        model={selectedModel}
+        customers={portfolio.data?.customers ?? []}
+        open={modelOpen}
+        onOpenChange={setModelOpen}
+      />
     </>
   )
 }

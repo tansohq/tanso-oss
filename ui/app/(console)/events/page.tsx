@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
@@ -57,8 +58,20 @@ const groupByOptions: { label: string; value: EventGroupBy }[] = [
 ]
 
 function EventsTable() {
-  const [draft, setDraft] = useState({ eventName: "", customerReferenceId: "", model: "" })
-  const [filters, setFilters] = useState<EventFilters>({ page: 0, size: 25 })
+  // The Overview detail sheets link here pre-filtered (?customerReferenceId=…, ?model=…).
+  const searchParams = useSearchParams()
+  const [draft, setDraft] = useState({
+    eventName: searchParams.get("eventName") ?? "",
+    customerReferenceId: searchParams.get("customerReferenceId") ?? "",
+    model: searchParams.get("model") ?? "",
+  })
+  const [filters, setFilters] = useState<EventFilters>({
+    page: 0,
+    size: 25,
+    eventName: searchParams.get("eventName") ?? undefined,
+    customerReferenceId: searchParams.get("customerReferenceId") ?? undefined,
+    model: searchParams.get("model") ?? undefined,
+  })
   const events = useEvents(filters)
   const customers = useCustomers()
   const features = useFeatures()
@@ -319,7 +332,9 @@ export default function EventsPage() {
           <TabsTrigger value="grouped">Grouped</TabsTrigger>
         </TabsList>
         <TabsContent value="stream">
-          <EventsTable />
+          <Suspense>
+            <EventsTable />
+          </Suspense>
         </TabsContent>
         <TabsContent value="grouped">
           <GroupedEvents />
