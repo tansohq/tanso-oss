@@ -13,3 +13,13 @@ export function useMarkInvoicePaid() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["invoices"] }),
   })
 }
+
+export function useInvoiceCheckoutLink() {
+  return useMutation({
+    mutationFn: (invoiceId: string) =>
+      apiFetch<{ url?: string }>(
+        `/api/v1/monetization/billing/invoices/${invoiceId}/checkout-link`,
+        { method: "POST" },
+      ),
+  })
+}

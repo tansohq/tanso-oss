@@ -27,7 +27,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import type { InvoiceDto } from "@/lib/api/types"
 import { formatCurrency, formatDate } from "@/lib/format"
-import { useMarkInvoicePaid } from "@/features/invoices/mutations"
+import { useInvoiceCheckoutLink, useMarkInvoicePaid } from "@/features/invoices/mutations"
 import { useInvoice, useInvoices } from "@/features/invoices/queries"
 
 function statusVariant(status: string | undefined) {
@@ -96,6 +96,7 @@ export default function InvoicesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const detail = useInvoice(selectedId)
   const markPaid = useMarkInvoicePaid()
+  const checkoutLink = useInvoiceCheckoutLink()
 
   const invoice = detail.data
 
@@ -166,6 +167,33 @@ export default function InvoicesPage() {
             </div>
           )}
           <DialogFooter>
+            {invoice?.status === "DUE" && (
+              <Button
+                variant="outline"
+                disabled={checkoutLink.isPending || !selectedId}
+                onClick={() =>
+                  selectedId &&
+                  checkoutLink.mutate(selectedId, {
+                    onSuccess: async (data) => {
+                      if (!data.url) {
+                        toast.add({ title: "No checkout URL returned" })
+                        return
+                      }
+                      await navigator.clipboard.writeText(data.url)
+                      toast.add({
+                        title: "Checkout link copied",
+                        description: "Send it to the customer — payment activates the subscription.",
+                      })
+                    },
+                    onError: (error) =>
+                      toast.add({ title: "Checkout link failed", description: error.message }),
+                  })
+                }
+              >
+                {checkoutLink.isPending && <Spinner data-icon="inline-start" />}
+                Copy checkout link
+              </Button>
+            )}
             {invoice?.status !== "PAID" && invoice?.status !== "VOID" && (
               <Button
                 disabled={markPaid.isPending || !selectedId}
