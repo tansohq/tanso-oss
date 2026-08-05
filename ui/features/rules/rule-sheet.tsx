@@ -74,7 +74,7 @@ export function RuleSheet({ open, onOpenChange, features, rule, isPending, onSub
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <FieldGroup>
               <Field data-invalid={!!errors.featureId || undefined}>
-                <FieldLabel>Feature</FieldLabel>
+                <FieldLabel htmlFor="rule-feature">Feature</FieldLabel>
                 <Controller
                   control={form.control}
                   name="featureId"
@@ -85,7 +85,7 @@ export function RuleSheet({ open, onOpenChange, features, rule, isPending, onSub
                       onValueChange={field.onChange}
                       disabled={!!rule}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="rule-feature">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

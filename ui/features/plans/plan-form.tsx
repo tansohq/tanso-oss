@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
+import type { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -18,6 +19,8 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import type { PlanDto } from "@/lib/api/types"
 import { planSchema, type PlanInput } from "./schemas"
+
+type PlanFormValues = z.input<typeof planSchema>
 
 const billingTimingItems = [
   { label: "In advance", value: "IN_ADVANCE" },
@@ -37,7 +40,7 @@ interface PlanFormProps {
 }
 
 export function PlanForm({ plan, isPending, onSubmit }: PlanFormProps) {
-  const form = useForm<PlanInput>({
+  const form = useForm<PlanFormValues, unknown, PlanInput>({
     resolver: zodResolver(planSchema),
     defaultValues: {
       key: plan?.key ?? "",
@@ -100,7 +103,7 @@ export function PlanForm({ plan, isPending, onSubmit }: PlanFormProps) {
         </div>
         <div className="grid grid-cols-2 gap-4">
           <Field>
-            <FieldLabel>Billing timing</FieldLabel>
+            <FieldLabel htmlFor="plan-billing-timing">Billing timing</FieldLabel>
             <Controller
               control={form.control}
               name="billingTiming"
@@ -110,7 +113,7 @@ export function PlanForm({ plan, isPending, onSubmit }: PlanFormProps) {
                   value={field.value}
                   onValueChange={field.onChange}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger id="plan-billing-timing">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -128,13 +131,13 @@ export function PlanForm({ plan, isPending, onSubmit }: PlanFormProps) {
           </Field>
           {plan && (
             <Field>
-              <FieldLabel>Status</FieldLabel>
+              <FieldLabel htmlFor="plan-status">Status</FieldLabel>
               <Controller
                 control={form.control}
                 name="status"
                 render={({ field }) => (
                   <Select items={statusItems} value={field.value} onValueChange={field.onChange}>
-                    <SelectTrigger>
+                    <SelectTrigger id="plan-status">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>

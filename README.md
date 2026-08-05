@@ -98,6 +98,9 @@ subscriptions, credits, invoices, events, and margin analytics:
 <br /><br />
 <img src=".github/assets/screenshots/ledger.png" alt="Credit pool ledger — weighted deductions with running balances" width="800" />
 <br /><em>Every deduction auditable to the unit: weighted burns, grants, running balances.</em>
+<br /><br />
+<img src=".github/assets/gifs/create-plan-attach-feature.gif" alt="Creating a plan and attaching a feature to it" width="800" />
+<br /><em>Creating a plan and attaching a feature — the full catalog flow, end to end.</em>
 </div>
 
 ```bash
@@ -107,6 +110,29 @@ npm run dev:ui
 
 Sign in with the credentials `setup.sh` printed. See [`ui/README.md`](ui/README.md)
 for configuration.
+
+**Plan → feature → customer → subscription → usage, in order:**
+
+1. New plans start as `DRAFT`. A `DRAFT` plan can't accept subscriptions —
+   attach features to it first, then edit it to `ACTIVE`. Activation also
+   requires a non-empty description.
+2. Attach a feature via the **Feature** dropdown in the "Attach feature"
+   panel — click to open it, then pick from the list. Typing into the box
+   only edits its placeholder text and won't register a selection.
+3. Give customers a **Reference ID** at creation time. The client API's
+   entitlement and event endpoints key off that reference, not the internal
+   customer UUID — a customer created without one can still receive events
+   by UUID, but entitlement checks (`GET /entitlements/{refId}/{key}`) will
+   404.
+4. A new subscription on a paid plan starts **inactive** until its first
+   invoice is marked paid — that's expected, not a bug. Free ($0) plans
+   activate immediately.
+5. Stripe mode (Settings → Billing) is locked to `None` until you connect a
+   secret key. Once connected, pick one of exactly two choices: **Stripe
+   drives billing** (Stripe is the source of truth; Tanso becomes your
+   entitlements/usage/analytics plane) or **Tanso handles billing** (Tanso
+   manages subscriptions and invoices; Stripe only collects payment).
+   Disconnecting resets the mode back to `None`.
 
 ### Try the five-credit Next.js example
 

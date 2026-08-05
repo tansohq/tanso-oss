@@ -36,7 +36,12 @@ export function useDeleteStripeKeys() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: () => apiFetch<void>("/api/v1/data/stripe/api", { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["stripe-keys"] }),
+    // Disconnecting also resets stripeMode server-side (see StripeServiceImpl),
+    // so the settings query is stale too, not just stripe-keys.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["stripe-keys"] })
+      queryClient.invalidateQueries({ queryKey: ["settings"] })
+    },
   })
 }
 

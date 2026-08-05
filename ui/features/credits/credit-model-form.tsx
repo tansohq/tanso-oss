@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
+import type { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -19,6 +20,8 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { creditModelSchema, type CreditModelInput } from "./schemas"
 
+type CreditModelFormValues = z.input<typeof creditModelSchema>
+
 const rolloverItems = [
   { label: "None", value: "NONE" },
   { label: "Full", value: "FULL" },
@@ -31,7 +34,7 @@ interface CreditModelFormProps {
 }
 
 export function CreditModelForm({ isPending, onSubmit }: CreditModelFormProps) {
-  const form = useForm<CreditModelInput>({
+  const form = useForm<CreditModelFormValues, unknown, CreditModelInput>({
     resolver: zodResolver(creditModelSchema),
     defaultValues: {
       name: "",
@@ -69,13 +72,13 @@ export function CreditModelForm({ isPending, onSubmit }: CreditModelFormProps) {
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field>
-            <FieldLabel>Rollover policy</FieldLabel>
+            <FieldLabel htmlFor="credit-model-rollover">Rollover policy</FieldLabel>
             <Controller
               control={form.control}
               name="rolloverPolicy"
               render={({ field }) => (
                 <Select items={rolloverItems} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                  <SelectTrigger id="credit-model-rollover">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

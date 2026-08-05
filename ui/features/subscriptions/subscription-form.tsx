@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
+import type { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -17,6 +18,8 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { subscriptionSchema, type SubscriptionInput } from "./schemas"
 
+type SubscriptionFormValues = z.input<typeof subscriptionSchema>
+
 interface Option {
   label: string
   value: string
@@ -30,7 +33,7 @@ interface SubscriptionFormProps {
 }
 
 export function SubscriptionForm({ customers, plans, isPending, onSubmit }: SubscriptionFormProps) {
-  const form = useForm<SubscriptionInput>({
+  const form = useForm<SubscriptionFormValues, unknown, SubscriptionInput>({
     resolver: zodResolver(subscriptionSchema),
     defaultValues: { customerId: "", planId: "", gracePeriod: undefined },
   })
@@ -40,13 +43,13 @@ export function SubscriptionForm({ customers, plans, isPending, onSubmit }: Subs
     <form onSubmit={form.handleSubmit(onSubmit)}>
       <FieldGroup>
         <Field data-invalid={!!errors.customerId || undefined}>
-          <FieldLabel>Customer</FieldLabel>
+          <FieldLabel htmlFor="subscription-customer">Customer</FieldLabel>
           <Controller
             control={form.control}
             name="customerId"
             render={({ field }) => (
               <Select items={customers} value={field.value || null} onValueChange={field.onChange}>
-                <SelectTrigger>
+                <SelectTrigger id="subscription-customer">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -64,13 +67,13 @@ export function SubscriptionForm({ customers, plans, isPending, onSubmit }: Subs
           {errors.customerId && <FieldError>{errors.customerId.message}</FieldError>}
         </Field>
         <Field data-invalid={!!errors.planId || undefined}>
-          <FieldLabel>Plan</FieldLabel>
+          <FieldLabel htmlFor="subscription-plan">Plan</FieldLabel>
           <Controller
             control={form.control}
             name="planId"
             render={({ field }) => (
               <Select items={plans} value={field.value || null} onValueChange={field.onChange}>
-                <SelectTrigger>
+                <SelectTrigger id="subscription-plan">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>

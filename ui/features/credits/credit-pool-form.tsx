@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
+import type { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -17,6 +18,8 @@ import {
 import { Spinner } from "@/components/ui/spinner"
 import { Switch } from "@/components/ui/switch"
 import { creditPoolSchema, type CreditPoolInput } from "./schemas"
+
+type CreditPoolFormValues = z.input<typeof creditPoolSchema>
 
 const rolloverItems = [
   { label: "None", value: "NONE" },
@@ -36,7 +39,7 @@ interface CreditPoolFormProps {
 }
 
 export function CreditPoolForm({ customers, isPending, onSubmit }: CreditPoolFormProps) {
-  const form = useForm<CreditPoolInput>({
+  const form = useForm<CreditPoolFormValues, unknown, CreditPoolInput>({
     resolver: zodResolver(creditPoolSchema),
     defaultValues: {
       name: "",
@@ -77,7 +80,7 @@ export function CreditPoolForm({ customers, isPending, onSubmit }: CreditPoolFor
           </Field>
         </div>
         <Field>
-          <FieldLabel>Customer (optional)</FieldLabel>
+          <FieldLabel htmlFor="credit-pool-customer">Customer (optional)</FieldLabel>
           <Controller
             control={form.control}
             name="customerId"
@@ -87,7 +90,7 @@ export function CreditPoolForm({ customers, isPending, onSubmit }: CreditPoolFor
                 value={field.value || null}
                 onValueChange={(value) => field.onChange(value ?? "")}
               >
-                <SelectTrigger>
+                <SelectTrigger id="credit-pool-customer">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -105,13 +108,13 @@ export function CreditPoolForm({ customers, isPending, onSubmit }: CreditPoolFor
         </Field>
         <div className="grid grid-cols-2 gap-4">
           <Field>
-            <FieldLabel>Rollover policy</FieldLabel>
+            <FieldLabel htmlFor="credit-pool-rollover">Rollover policy</FieldLabel>
             <Controller
               control={form.control}
               name="rolloverPolicy"
               render={({ field }) => (
                 <Select items={rolloverItems} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                  <SelectTrigger id="credit-pool-rollover">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

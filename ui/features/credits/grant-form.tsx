@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod"
 import { Controller, useForm } from "react-hook-form"
+import type { z } from "zod"
 
 import { Button } from "@/components/ui/button"
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
@@ -18,6 +19,8 @@ import { Spinner } from "@/components/ui/spinner"
 import { Textarea } from "@/components/ui/textarea"
 import { creditGrantSchema, type CreditGrantInput } from "./schemas"
 
+type CreditGrantFormValues = z.input<typeof creditGrantSchema>
+
 const grantTypeItems = [
   { label: "Plan included", value: "PLAN_INCLUDED" },
   { label: "Purchased", value: "PURCHASED" },
@@ -33,7 +36,7 @@ interface GrantFormProps {
 }
 
 export function GrantForm({ isPending, onSubmit }: GrantFormProps) {
-  const form = useForm<CreditGrantInput>({
+  const form = useForm<CreditGrantFormValues, unknown, CreditGrantInput>({
     resolver: zodResolver(creditGrantSchema),
     defaultValues: {
       amount: undefined,
@@ -61,13 +64,13 @@ export function GrantForm({ isPending, onSubmit }: GrantFormProps) {
             {errors.amount && <FieldError>{errors.amount.message}</FieldError>}
           </Field>
           <Field>
-            <FieldLabel>Grant type</FieldLabel>
+            <FieldLabel htmlFor="grant-type">Grant type</FieldLabel>
             <Controller
               control={form.control}
               name="grantType"
               render={({ field }) => (
                 <Select items={grantTypeItems} value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger>
+                  <SelectTrigger id="grant-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

@@ -13,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -28,23 +28,42 @@ import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { useUpdateAccountSettings } from "@/features/settings/mutations"
 import { StripeCard } from "@/features/settings/stripe-card"
-import { useAccountSettings, useApiKey } from "@/features/settings/queries"
+import { useAccountSettings, useApiKey, useStripeKeys } from "@/features/settings/queries"
 import {
   accountSettingsSchema,
   type AccountSettingsInput,
 } from "@/features/settings/schemas"
 
+// Once Stripe is connected, "who handles billing" is a choice between exactly
+// these two — matching the original setup wizard. FULL_SYNC (a deprecated
+// alias for STRIPE_INTEGRATION) and STRIPE_DRIVEN (webhook-driven
+// auto-creation from Stripe events) are real backend modes but were never
+// user-facing choices; they're reachable via the API/MCP tools, not this
+// dropdown. If an account is already on one of them, it's shown as its
+// current value so saving doesn't silently change it.
 const stripeModeItems = [
-  { label: "None", value: "NONE" },
-  { label: "Payment pass-through", value: "PAYMENT_PASS_THROUGH" },
-  { label: "Full sync", value: "FULL_SYNC" },
-  { label: "Stripe integration", value: "STRIPE_INTEGRATION" },
-  { label: "Stripe driven", value: "STRIPE_DRIVEN" },
+  {
+    label: "Stripe drives billing",
+    value: "STRIPE_INTEGRATION",
+    description: "Stripe drives billing. Tanso becomes your management plane for entitlements, usage tracking, and revenue analytics.",
+  },
+  {
+    label: "Tanso handles billing",
+    value: "PAYMENT_PASS_THROUGH",
+    description: "Tanso manages subscriptions, pricing, and invoices. Stripe collects payments via Checkout.",
+  },
 ]
+
+const otherStripeModeLabels: Record<string, string> = {
+  FULL_SYNC: "Full sync (legacy alias for Stripe drives billing)",
+  STRIPE_DRIVEN: "Stripe driven (set via API — not offered here)",
+}
 
 function SettingsForm() {
   const settings = useAccountSettings()
   const updateSettings = useUpdateAccountSettings()
+  const stripeKeys = useStripeKeys()
+  const stripeConnected = !!stripeKeys.data?.stripeApiKey
 
   const form = useForm<AccountSettingsInput>({
     resolver: zodResolver(accountSettingsSchema),
@@ -90,31 +109,74 @@ function SettingsForm() {
                 {errors.currency && <FieldError>{errors.currency.message}</FieldError>}
               </Field>
               <Field>
-                <FieldLabel>Stripe mode</FieldLabel>
-                <Controller
-                  control={form.control}
-                  name="stripeMode"
-                  render={({ field }) => (
-                    <Select
-                      items={stripeModeItems}
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectGroup>
-                          {stripeModeItems.map((item) => (
-                            <SelectItem key={item.value} value={item.value}>
-                              {item.label}
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
+                <FieldLabel htmlFor="stripe-mode">Stripe mode</FieldLabel>
+                {!stripeConnected && form.getValues("stripeMode") === "NONE" ? (
+                  <>
+                    <Input id="stripe-mode" value="None" disabled />
+                    <FieldDescription>
+                      No Stripe involvement — bill inside Tanso only. Connect Stripe below to
+                      choose who handles billing.
+                    </FieldDescription>
+                  </>
+                ) : !stripeConnected ? (
+                  <>
+                    <Input
+                      id="stripe-mode"
+                      value={
+                        stripeModeItems.find((item) => item.value === form.getValues("stripeMode"))
+                          ?.label ?? otherStripeModeLabels[form.getValues("stripeMode")]
+                      }
+                      disabled
+                    />
+                    <FieldDescription className="text-destructive">
+                      Set to this mode but no Stripe key is connected — sync calls will fail.
+                      Reconnect Stripe below, or this setting has no effect.
+                    </FieldDescription>
+                  </>
+                ) : (
+                  <Controller
+                    control={form.control}
+                    name="stripeMode"
+                    render={({ field }) => {
+                      // Connected but never chosen yet — show unselected rather
+                      // than a bare "NONE" that isn't one of the two real choices.
+                      const unset = field.value === "NONE"
+                      const otherLabel = otherStripeModeLabels[field.value]
+                      const items = otherLabel
+                        ? [...stripeModeItems, { label: otherLabel, value: field.value, description: undefined }]
+                        : stripeModeItems
+                      return (
+                        <>
+                          <Select
+                            items={items}
+                            value={unset ? null : field.value}
+                            onValueChange={field.onChange}
+                          >
+                            <SelectTrigger id="stripe-mode">
+                              <SelectValue placeholder="Choose who handles billing" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectGroup>
+                                {items.map((item) => (
+                                  <SelectItem key={item.value} value={item.value}>
+                                    {item.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectGroup>
+                            </SelectContent>
+                          </Select>
+                          <FieldDescription>
+                            {unset
+                              ? "Stripe is connected but no billing owner is chosen yet — pick one."
+                              : otherLabel
+                                ? "Set outside this dropdown (API or MCP tools). Pick one of the two options above to move off it."
+                                : stripeModeItems.find((item) => item.value === field.value)?.description}
+                          </FieldDescription>
+                        </>
+                      )
+                    }}
+                  />
+                )}
               </Field>
             </div>
             <Field data-invalid={!!errors.stripeCheckoutSuccessUrl || undefined}>

@@ -224,6 +224,8 @@ Tanso uses Stripe as the primary payment processor. The `StripeSyncService` acts
 *   **Customer Sync**: Every Tanso `Customer` is mapped to a `StripeCustomer` via `createStripeCustomer`.
 *   **Invoice Sync**: When an internal Tanso `Invoice` reaches the `DUE` state, it is pushed to Stripe via `syncNewInvoice`.
 *   **Webhooks**: Stripe events (like `invoice.paid` or `subscription.deleted`) are ingested at `/public/stripe/ingest/webhook` and processed to update internal states.
+*   **`StripeMode` (`AccountSetting.stripeMode`)**: `NONE`, `PAYMENT_PASS_THROUGH`, `STRIPE_INTEGRATION`, `STRIPE_DRIVEN`, plus `FULL_SYNC` (deprecated alias for `STRIPE_INTEGRATION`, changelog `2026.03.26.1`). The console (`Settings` page) only ever offers a **binary choice, gated on having a key connected** — matching the original product's setup wizard: before a key is connected, mode is locked to `NONE`; once connected, the operator picks "Stripe drives billing" (`STRIPE_INTEGRATION`) or "Tanso handles billing" (`PAYMENT_PASS_THROUGH`). `FULL_SYNC` and `STRIPE_DRIVEN` are real, working modes but were never user-facing choices in the wizard — they're reachable via the API/MCP tools (`StripeSetupTools`) only. If an account is already on one of them, the console shows it as the current value (doesn't silently overwrite it) but still won't offer it as a pick.
+*   **Disconnecting Stripe** (`StripeServiceImpl.deleteStripeKeys`) deletes the stored API key and webhook secret **and** resets `stripeMode` back to `NONE`. Before 2026-08-04 it only deleted the keys, leaving the account's mode pointed at a Stripe integration with no working key — any code path gating on `stripeMode`/`isStripeIntegration()` would still try to call Stripe and fail. This was a pre-existing bug in the original tansoflow codebase too, not something introduced by the OSS port. The `useDeleteStripeKeys` mutation (`ui/features/settings/mutations.ts`) invalidates both the `stripe-keys` and `settings` queries on success, since disconnect now touches both.
 
 ### B. Event Ingestion Pipeline
 The `EventService` is designed for high throughput:
@@ -237,6 +239,10 @@ The `EventService` is designed for high throughput:
 *   **"Missing Entitlement"**: Check if the client's `accountId` exists as a `Customer` under the Master Account and has a `Subscription` to a plan that includes the feature key.
 *   **"Stripe Out of Sync"**: Verify the `StripeInvoice` record exists and check the logs for webhook delivery failures.
 *   **"Duplicate Event"**: Ensure the `eventIdempotencyKey` provided by the client is truly unique. Check `event_idempotency_key_idx` in Postgres.
+*   **"Cannot subscribe to plan: status is DRAFT"**: New plans are created as `DRAFT` and cannot accept subscriptions. Attach features first, then edit the plan to `ACTIVE` — activation also requires a non-empty `description`, enforced server-side.
+*   **404 on `GET /entitlements/{refId}/{key}`**: `refId` is the customer's `externalClientCustomerId` (Reference ID), not the internal customer UUID. Events can be ingested by internal `customerId`, but entitlement checks require the customer to have been created with a Reference ID.
+*   **New paid subscription shows `isActive: false`**: Expected. A subscription only flips to active once its first invoice is marked paid (`markInvoiceAsPaid` in `SubscriptionServiceImpl`). Free ($0) plans activate immediately since there's nothing to collect.
+*   **Console: "Attach feature" / "New subscription" panel — Base UI Select fields**: clicking a `Select` trigger and immediately typing inserts characters into the trigger's placeholder text without registering a selection, so the form submits with an empty value. Click the trigger, wait for the popover, then click an option from the list.
 
 ---
 *Last Updated: 2026-02-03*

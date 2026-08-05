@@ -23,13 +23,16 @@ import com.stripe.model.v2.core.EventDestination;
 import com.stripe.param.WebhookEndpointCreateParams;
 import com.stripe.param.v2.core.EventDestinationCreateParams;
 import com.tansoflow.tansocore.entity.Account;
+import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.ExternalApiKey;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripeService;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyEntityName;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyType;
+import com.tansoflow.tansocore.model.api.external.StripeMode;
 import com.tansoflow.tansocore.model.data.stripe.response.StripeApiKeysResponse;
 import com.tansoflow.tansocore.property.AppProperty;
+import com.tansoflow.tansocore.repository.AccountSettingRepository;
 import com.tansoflow.tansocore.repository.ExternalApiKeyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +44,7 @@ import org.springframework.stereotype.Service;
 public class StripeServiceImpl implements StripeService {
     private final AppProperty appProperty;
     private final ExternalApiKeyRepository externalApiKeyRepository;
+    private final AccountSettingRepository accountSettingRepository;
 
 
     private static final String TANSO_WEBHOOK_NAME = "Tanso Webhook StripeController Endpoint";
@@ -89,6 +93,16 @@ public class StripeServiceImpl implements StripeService {
         ExternalApiKey webhookSigningKey = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.WEBHOOK_SECRET_SIGNING.name(), account.getId());
         if (webhookSigningKey != null) {
             externalApiKeyRepository.delete(webhookSigningKey);
+        }
+
+        // Without a key, any stripeMode other than NONE leaves the account
+        // believing Stripe is still wired up (isStripeIntegration()/isEnabled()
+        // checks stay true), so webhook and sync code paths keep trying to call
+        // an account that just had its credentials removed. Reset it.
+        AccountSetting accountSetting = accountSettingRepository.findAccountSettingById(account.getId());
+        if (accountSetting != null && accountSetting.getStripeMode() != StripeMode.NONE) {
+            accountSetting.setStripeMode(StripeMode.NONE);
+            accountSettingRepository.save(accountSetting);
         }
     }
 
