@@ -34,14 +34,20 @@ import com.tansoflow.tansocore.mcp.tools.StripeSetupTools;
 import com.tansoflow.tansocore.mcp.tools.SubscriptionTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Configuration
 @ConditionalOnProperty(name = "app.mcp.enabled", havingValue = "true")
 public class McpServerConfig {
 
+    // Admin tool beans only exist when app.mcp.admin-tools.enabled is also true —
+    // a plain client API key must never reach tenant-configuration tools.
     @Bean
     public ToolCallbackProvider toolCallbackProvider(
             PlanTools planTools,
@@ -51,20 +57,26 @@ public class McpServerConfig {
             CreditTools creditTools,
             SubscriptionTools subscriptionTools,
             EventTools eventTools,
-            AdminFeatureTools adminFeatureTools,
-            AdminPlanTools adminPlanTools,
-            AdminPlanFeatureRuleTools adminPlanFeatureRuleTools,
-            StripeSetupTools stripeSetupTools,
             AnalyticsTools analyticsTools,
             AiInsightTools aiInsightTools,
-            AdminEventTools adminEventTools,
-            AdminCreditTools adminCreditTools) {
+            ObjectProvider<AdminFeatureTools> adminFeatureTools,
+            ObjectProvider<AdminPlanTools> adminPlanTools,
+            ObjectProvider<AdminPlanFeatureRuleTools> adminPlanFeatureRuleTools,
+            ObjectProvider<StripeSetupTools> stripeSetupTools,
+            ObjectProvider<AdminEventTools> adminEventTools,
+            ObjectProvider<AdminCreditTools> adminCreditTools) {
+        List<Object> tools = new ArrayList<>(List.of(
+                planTools, entitlementTools, customerTools,
+                billingTools, creditTools, subscriptionTools, eventTools,
+                analyticsTools, aiInsightTools));
+        adminFeatureTools.ifAvailable(tools::add);
+        adminPlanTools.ifAvailable(tools::add);
+        adminPlanFeatureRuleTools.ifAvailable(tools::add);
+        stripeSetupTools.ifAvailable(tools::add);
+        adminEventTools.ifAvailable(tools::add);
+        adminCreditTools.ifAvailable(tools::add);
         return MethodToolCallbackProvider.builder()
-                .toolObjects(planTools, entitlementTools, customerTools,
-                        billingTools, creditTools, subscriptionTools, eventTools,
-                        adminFeatureTools, adminPlanTools, adminPlanFeatureRuleTools,
-                        stripeSetupTools, analyticsTools, aiInsightTools,
-                        adminEventTools, adminCreditTools)
+                .toolObjects(tools.toArray())
                 .build();
     }
 }
