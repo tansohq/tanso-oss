@@ -53,6 +53,7 @@ import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.repository.PlanCreditAllocationRepository;
 import com.tansoflow.tansocore.repository.PlanRepository;
 import com.tansoflow.tansocore.repository.SubscriptionRepository;
+import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -71,6 +72,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CreditServiceImpl implements CreditService {
     private static final int MAX_RETRY_ATTEMPTS = 3;
+    // Same bounds the price book enforces — a price is a price, wherever it enters
+    private static final BigDecimal MAX_UNIT_PRICE = new BigDecimal("1000000");
 
     private final CreditPoolRepository creditPoolRepository;
     private final CreditPoolSubscriptionRepository creditPoolSubscriptionRepository;
@@ -83,6 +86,7 @@ public class CreditServiceImpl implements CreditService {
     private final PlanCreditAllocationRepository planCreditAllocationRepository;
     private final PlanRepository planRepository;
     private final CreditMapper creditMapper;
+    private final CreditPriceService creditPriceService;
 
     // ─── Credit Model CRUD ───
 
@@ -288,6 +292,7 @@ public class CreditServiceImpl implements CreditService {
         grant.setExpiresAt(request.getExpiresAt());
         grant.setDescription(request.getDescription());
         grant.setIdempotencyKey(request.getIdempotencyKey());
+        applyGrantPricing(grant, request, pool);
         if (request.getMetadata() != null) {
             grant.setMetadata(request.getMetadata());
         }
@@ -310,6 +315,43 @@ public class CreditServiceImpl implements CreditService {
 
         log.info("Granted {} {} to pool {} (grant {})", request.getAmount(), pool.getDenomination(), pool.getId(), grant.getId());
         return creditMapper.creditGrantToDto(grant);
+    }
+
+    /**
+     * Stamps the monetary price on a grant. An explicit unitPrice wins (a
+     * negotiated top-up); a PURCHASED grant without one gets the current
+     * price book entry for the pool's denomination, so every sale carries
+     * the price it happened at even after the book moves.
+     */
+    private void applyGrantPricing(CreditGrant grant, CreditGrantRequest request, CreditPool pool) {
+        if (request.getUnitPrice() == null
+                && request.getCurrency() != null && !request.getCurrency().isBlank()) {
+            throw new IllegalArgumentException("currency requires unitPrice — omit both to use the price book");
+        }
+        if (request.getUnitPrice() != null) {
+            if (request.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
+                throw new IllegalArgumentException("unitPrice must be positive");
+            }
+            if (request.getUnitPrice().compareTo(MAX_UNIT_PRICE) > 0) {
+                throw new IllegalArgumentException("unitPrice exceeds maximum " + MAX_UNIT_PRICE);
+            }
+            if (request.getUnitPrice().stripTrailingZeros().scale() > 6) {
+                throw new IllegalArgumentException("unitPrice allows at most 6 decimals");
+            }
+            grant.setUnitPrice(request.getUnitPrice());
+            String currency = request.getCurrency() != null && !request.getCurrency().isBlank()
+                    ? request.getCurrency().trim().toUpperCase()
+                    : (pool.getCurrency() != null ? pool.getCurrency() : "USD");
+            grant.setCurrency(currency);
+            return;
+        }
+        if (GrantType.PURCHASED.name().equals(request.getGrantType())) {
+            creditPriceService.resolvePrice(pool.getAccount().getId(), pool.getDenomination(), Instant.now())
+                    .ifPresent(price -> {
+                        grant.setUnitPrice(price.pricePerCredit());
+                        grant.setCurrency(price.currency());
+                    });
+        }
     }
 
     @Override

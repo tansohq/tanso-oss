@@ -115,6 +115,12 @@ public class EntitlementResponse {
         private String weightId;
         @Schema(description = "Which tariff tier matched: MODEL, FEATURE_DEFAULT, or NONE")
         private String weightMatch;
+        @Schema(description = "Current price of one credit from the account's price book. Null when the denomination is unpriced.")
+        private BigDecimal pricePerCredit;
+        @Schema(description = "ISO 4217 currency for pricePerCredit and estimatedCost")
+        private String currency;
+        @Schema(description = "estimatedCredits × pricePerCredit — what the requested usage is worth in money. Null when unpriced.")
+        private BigDecimal estimatedCost;
     }
 
     @Data

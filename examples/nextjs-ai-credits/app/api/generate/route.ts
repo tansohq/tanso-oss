@@ -51,8 +51,22 @@ export async function POST(request: Request) {
     }
 
     // The quote resolves now; the charge resolves at the event's occurredAt.
+    // pricePerCredit/estimatedCost arrive when the account's price book has a
+    // price for the denomination (SDK types gain these fields in the next
+    // release; until then they ride along untyped).
+    const quote = before.creditQuote as
+      | (NonNullable<typeof before.creditQuote> & {
+          pricePerCredit?: number;
+          currency?: string;
+          estimatedCost?: number;
+        })
+      | undefined;
     console.log(
-      `credit quote: ${before.creditQuote?.estimatedCredits ?? 1} (match: ${before.creditQuote?.weightMatch ?? "NONE"})`,
+      `credit quote: ${quote?.estimatedCredits ?? 1} credits` +
+        (quote?.estimatedCost != null
+          ? ` ≈ ${quote.estimatedCost} ${quote.currency ?? ""}`
+          : "") +
+        ` (match: ${quote?.weightMatch ?? "NONE"})`,
     );
 
     // 2. Run the billable work.

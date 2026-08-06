@@ -47,6 +47,11 @@ not the source of truth.
 - **Credit weights (tariff)** — server-side table mapping usage units to
   credits per feature and model, with scheduled effective times, a console
   editor, and a pre-flight credit quote on entitlement checks.
+- **Credit price book** — the second pricing dial: what one credit costs to
+  buy, per denomination, with the same scheduled-publish mechanics as
+  weights. Purchased top-ups are stamped with the price in force at sale
+  time, entitlement quotes carry the money equivalent, and a client
+  endpoint exposes current prices for paywall and top-up screens.
 - **Billing & payments** — invoice generation and cycle rollover, synchronized
   with [Stripe](https://stripe.com).
 - **Agent-native (MCP)** — an optional MCP server so AI agents can operate the
@@ -288,7 +293,23 @@ The server exposes `/mcp`. See `McpServerConfig` and
 
 ---
 
-## Credit weights (tariff)
+## Credit pricing: the two dials
+
+Credit pricing has exactly two controls, both adjustable at runtime from the
+console — no deploy, no plan migration:
+
+1. **Burn rate (weights)** — how many credits one usage unit burns, per
+   feature and optionally per model (**Credits → Weights**).
+2. **Credit price (price book)** — what one credit costs the customer to buy,
+   per denomination (**Credits → Pricing**).
+
+`usage × weight = credits burned · credits × price = what customers pay.`
+Both tabs open with an explainer and a worked example, and the Weights table
+shows the money implication of each weight live against your observed cost
+per unit. The full guide, including when to turn which dial, is in
+[PRICING.md](PRICING.md).
+
+### Dial 1 — weights (tariff)
 
 By default one usage unit burns one credit. The weight table lets you reprice
 server-side — "a `deep-research` call costs 5 credits, and 8 on `gpt-4.1`" —
@@ -301,15 +322,37 @@ one effective time, which must be in the future — effective rows are
 append-only and never repriced; only rows that haven't taken effect yet can be
 deleted.
 
+### Dial 2 — the price book
+
+Publish what one credit costs (**Credits → Pricing** or
+`POST /api/v1/monetization/credits/prices/publish`) with the same mechanics:
+batched, effective-dated, append-only once effective. There is no default
+price — an unpriced denomination simply quotes credits without money.
+
+The price book feeds three places:
+
+- **Entitlement quotes** carry `pricePerCredit`, `currency`, and
+  `estimatedCost`, so your app can show "this action ≈ $0.30" before doing
+  billable work.
+- **Purchased grants** (`grantType: "PURCHASED"`) are stamped with the book
+  price in force at sale time. Pass an explicit `unitPrice` for negotiated
+  or volume deals — it always wins, and currency without a `unitPrice` is
+  rejected.
+- **`GET /api/v1/client/credits/prices`** returns current prices per
+  denomination for paywall and top-up screens.
+
+### Quote, then record
+
 Quote the cost before doing billable work, then record it:
 
 ```bash
-# Pre-flight: is the customer allowed, and what would this burn?
+# Pre-flight: is the customer allowed, and what would this burn (and cost)?
 curl -X POST http://localhost:8080/api/v1/client/entitlements \
   -H "X-API-Key: $TANSO_API_KEY" -H 'Content-Type: application/json' \
   -d '{"customerReferenceId":"demo-user","featureKey":"ai.chat",
        "usage":{"usageUnits":1,"model":"gpt-4.1"}}'
-# → "creditQuote": {"weight":8, "estimatedCredits":8, "weightMatch":"MODEL"}
+# → "creditQuote": {"weight":8, "estimatedCredits":8, "weightMatch":"MODEL",
+#                   "pricePerCredit":0.10, "currency":"USD", "estimatedCost":0.80}
 
 # Record the usage — the same weight resolution applies at ingestion
 curl -X POST http://localhost:8080/api/v1/client/events \
@@ -323,7 +366,8 @@ curl -X POST http://localhost:8080/api/v1/client/events \
 The quote is a quote, not a promise — the charge resolves at the event's
 `occurredAt`, so a tariff change between quote and charge can change the
 outcome. The `model` string on evaluate and ingest must match the tariff's
-model exactly.
+model exactly. Monetary quote fields appear only when the denomination has a
+published price.
 
 **Migrating existing integrations:** if your client already sends
 pre-multiplied units (`usageUnits: 5` for a "5-credit action"), deploy the

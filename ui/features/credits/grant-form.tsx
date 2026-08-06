@@ -41,6 +41,8 @@ export function GrantForm({ isPending, onSubmit }: GrantFormProps) {
     defaultValues: {
       amount: undefined,
       grantType: "PROMOTIONAL",
+      unitPrice: "",
+      currency: "",
       expiresAt: "",
       description: "",
     },
@@ -87,6 +89,37 @@ export function GrantForm({ isPending, onSubmit }: GrantFormProps) {
             />
           </Field>
         </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Field data-invalid={!!errors.unitPrice || undefined}>
+            <FieldLabel htmlFor="grant-unit-price">Unit price (optional)</FieldLabel>
+            <Input
+              id="grant-unit-price"
+              type="number"
+              step="any"
+              min="0"
+              placeholder="Book price"
+              aria-invalid={!!errors.unitPrice}
+              {...form.register("unitPrice")}
+            />
+            {errors.unitPrice && <FieldError>{errors.unitPrice.message}</FieldError>}
+          </Field>
+          <Field data-invalid={!!errors.currency || undefined}>
+            <FieldLabel htmlFor="grant-currency">Currency</FieldLabel>
+            <Input
+              id="grant-currency"
+              className="uppercase"
+              maxLength={3}
+              placeholder="USD"
+              aria-invalid={!!errors.currency}
+              {...form.register("currency")}
+            />
+            {errors.currency && <FieldError>{errors.currency.message}</FieldError>}
+          </Field>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Leave unit price empty to stamp purchased grants with the current price book entry.
+          Set it for negotiated top-ups and volume deals.
+        </p>
         <Field>
           <FieldLabel htmlFor="grant-expires">Expires (optional)</FieldLabel>
           <Input id="grant-expires" type="datetime-local" {...form.register("expiresAt")} />

@@ -154,6 +154,7 @@ erDiagram
     *   `ENTITLEMENT_CHECKED`: Metadata event recorded for billing audit trails.
 4.  **Invoice**: Generated at cycle end. Orchestrates payment via Stripe. Statuses: `PENDING`, `DUE`, `PAID`, `VOID`.
 5.  **CreditFeatureWeight**: Append-only, effective-dated tariff mapping usage units to credits, resolved `(feature, model)` → `(feature, NULL)` → identity 1.0. Managed by `CreditWeightService` (batch publish, one shared future `effectiveFrom`, advisory-locked; future-only delete). Entitlement evaluate returns a `creditQuote`; ingestion applies the same resolution at the event's clamped `occurredAt` and reports `creditsDeducted`/`weightApplied`/`weightMatch`/`remainingBalance`. Console editor: Credits → Weights.
+6.  **CreditPrice**: Append-only, effective-dated price book mapping a credit denomination to a buyer price (`pricePerCredit` + ISO currency) — the second pricing dial alongside the weight tariff. Managed by `CreditPriceService` with the same mechanics as weights (batch publish, one shared future `effectiveFrom`, advisory-locked; future-only delete); no default — an unpriced denomination resolves to empty. `PURCHASED` grants without an explicit `unitPrice` are stamped with the book price at grant time; an explicit `unitPrice` (negotiated top-up) always wins. Console editor: Credits → Pricing.
 
 ---
 

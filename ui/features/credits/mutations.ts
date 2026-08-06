@@ -3,7 +3,12 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiFetch } from "@/lib/api/client"
 import type { CreditGrantDto, CreditModelDto, CreditPoolDto } from "@/lib/api/types"
 import type { CreditGrantInput, CreditModelInput, CreditPoolInput } from "./schemas"
-import type { CreditFeatureWeightDto, PublishCreditWeightsInput } from "./types"
+import type {
+  CreditFeatureWeightDto,
+  CreditPriceDto,
+  PublishCreditPricesInput,
+  PublishCreditWeightsInput,
+} from "./types"
 
 export function useCreateCreditModel() {
   const queryClient = useQueryClient()
@@ -47,6 +52,27 @@ export function useDeleteCreditWeight() {
     mutationFn: (weightId: string) =>
       apiFetch<void>(`/api/v1/monetization/credits/weights/${weightId}`, { method: "DELETE" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["credit-weights"] }),
+  })
+}
+
+export function usePublishCreditPrices() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: PublishCreditPricesInput) =>
+      apiFetch<CreditPriceDto[]>("/api/v1/monetization/credits/prices/publish", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["credit-prices"] }),
+  })
+}
+
+export function useDeleteCreditPrice() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (priceId: string) =>
+      apiFetch<void>(`/api/v1/monetization/credits/prices/${priceId}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["credit-prices"] }),
   })
 }
 

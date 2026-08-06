@@ -17,3 +17,22 @@ export interface PublishCreditWeightsInput {
     creditsPerUnit: number
   }[]
 }
+
+export interface CreditPriceDto {
+  id: string
+  denomination: string
+  currency: string
+  pricePerCredit: number
+  effectiveFrom: string
+  createdBy: string | null
+  createdAt: string
+}
+
+export interface PublishCreditPricesInput {
+  effectiveFrom: string
+  entries: {
+    denomination: string
+    currency?: string
+    pricePerCredit: number
+  }[]
+}
