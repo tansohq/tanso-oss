@@ -19,7 +19,7 @@ package com.tansoflow.tansocore.mcp.tools;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.tansoflow.tansocore.auth.UserContext;
+import com.tansoflow.tansocore.mcp.config.McpToolGuard;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.feature.request.FeatureRequest;
 import com.tansoflow.tansocore.service.internal.monetization.FeatureService;
@@ -27,16 +27,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.mcp.enabled", havingValue = "true")
+@ConditionalOnProperty(name = {"app.mcp.enabled", "app.mcp.admin-tools.enabled"}, havingValue = "true")
 public class AdminFeatureTools {
 
+    private final McpToolGuard mcpToolGuard;
     private final FeatureService featureService;
     private final ObjectMapper objectMapper;
 
@@ -102,8 +102,6 @@ public class AdminFeatureTools {
     }
 
     private String getAccountId() {
-        UserContext ctx = (UserContext) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        return ctx.getAccountId();
+        return mcpToolGuard.requireAdminAccountId();
     }
 }

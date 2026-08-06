@@ -8,6 +8,8 @@ app:
   api-key-prefix: sk_test_
   mcp:
     enabled: false
+    admin-tools:
+      enabled: false   # tenant-configuration MCP tools (Admin*, Stripe setup); keep off unless the key holder is the operator
 
 security:
   jwt:

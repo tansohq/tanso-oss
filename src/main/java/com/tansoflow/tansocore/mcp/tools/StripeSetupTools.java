@@ -21,6 +21,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stripe.exception.StripeException;
 import com.tansoflow.tansocore.auth.UserContext;
+import com.tansoflow.tansocore.mcp.config.McpToolGuard;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.integration.stripe.StripeImportService;
@@ -48,9 +49,10 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "app.mcp.enabled", havingValue = "true")
+@ConditionalOnProperty(name = {"app.mcp.enabled", "app.mcp.admin-tools.enabled"}, havingValue = "true")
 public class StripeSetupTools {
 
+    private final McpToolGuard mcpToolGuard;
     private final StripeService stripeService;
     private final StripeImportService stripeImportService;
     private final AccountService accountService;
@@ -282,9 +284,7 @@ public class StripeSetupTools {
     }
 
     private String getAccountId() {
-        UserContext ctx = (UserContext) SecurityContextHolder.getContext()
-                .getAuthentication().getPrincipal();
-        return ctx.getAccountId();
+        return mcpToolGuard.requireAdminAccountId();
     }
 
     private UUID getUserId() {

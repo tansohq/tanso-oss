@@ -288,6 +288,13 @@ spring:
         enabled: true
 ```
 
+The `Admin*` tools and Stripe setup tools reconfigure the tenant itself
+(plans, tariffs, prices, Stripe keys). They are gated behind a second flag,
+`app.mcp.admin-tools.enabled` (default `false`), and should only be enabled
+when every holder of a client API key is the operator. Before this flag
+existed, any client key could reach them — if you relied on that, opt back
+in explicitly.
+
 The server exposes `/mcp`. See `McpServerConfig` and
 `src/main/java/com/tansoflow/tansocore/mcp/tools/` for the full tool catalog.
 
