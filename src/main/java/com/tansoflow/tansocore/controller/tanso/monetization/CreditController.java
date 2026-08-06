@@ -373,4 +373,14 @@ public class CreditController {
         return ResponseEntity.ok(
                 ApiResponse.<Map<String, BigDecimal>>builder().data(costs).success(true).build());
     }
+
+    @GetMapping("/weights/denominations")
+    @Operation(summary = "Credit denomination each feature burns, keyed by featureId (ambiguous features omitted)",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<Map<String, String>>> getFeatureDenominations(
+            @AuthenticationPrincipal UserContext userContext) {
+        Map<String, String> denominations = creditWeightService.getFeatureDenominations(userContext.getAccountId());
+        return ResponseEntity.ok(
+                ApiResponse.<Map<String, String>>builder().data(denominations).success(true).build());
+    }
 }

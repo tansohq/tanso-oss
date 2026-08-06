@@ -37,6 +37,7 @@ import com.tansoflow.tansocore.repository.SubscriptionRepository;
 import com.tansoflow.tansocore.service.client.ClientEntitlementService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.data.EventService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditWeightService;
 import com.tansoflow.tansocore.service.internal.monetization.EntitlementService;
@@ -63,6 +64,7 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
     private final EntitlementService entitlementService;
     private final CreditService creditService;
     private final CreditWeightService creditWeightService;
+    private final CreditPriceService creditPriceService;
     private final CustomerService customerService;
     private final EventService eventService;
     private final FeatureRepository featureRepository;
@@ -466,6 +468,18 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
             quote.setEstimatedCredits(requestedUnits.multiply(resolved.weight()).setScale(4, java.math.RoundingMode.HALF_UP));
             quote.setWeightId(resolved.weightId() != null ? resolved.weightId().toString() : null);
             quote.setWeightMatch(resolved.match().name());
+
+            // Second dial: monetary value of the quote, from the price book. Unpriced
+            // denominations quote credits only — no invented price.
+            creditPriceService.resolvePrice(
+                            UUID.fromString(accountUuid), rule.getCreditModel().getDenomination(), Instant.now())
+                    .ifPresent(price -> {
+                        quote.setPricePerCredit(price.pricePerCredit());
+                        quote.setCurrency(price.currency());
+                        quote.setEstimatedCost(quote.getEstimatedCredits()
+                                .multiply(price.pricePerCredit())
+                                .setScale(4, java.math.RoundingMode.HALF_UP));
+                    });
             return quote;
         } catch (Exception e) {
             log.error("Failed to resolve credit quote for customer {} and feature {}: {}",

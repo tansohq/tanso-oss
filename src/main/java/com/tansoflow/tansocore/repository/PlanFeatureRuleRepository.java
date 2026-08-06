@@ -45,5 +45,9 @@ public interface PlanFeatureRuleRepository extends JpaRepository<PlanFeatureRule
     @Query("SELECT pfr from PlanFeatureRule pfr WHERE pfr.plan.id = :planUuid AND pfr.feature.id = :featureUuid")
     PlanFeatureRule findPlanFeatureRuleByPlan_IdAndFeature_Id(UUID planUuid, UUID featureUuid);
 
+    @Query("SELECT DISTINCT pfr.feature.id, pfr.creditModel.denomination FROM PlanFeatureRule pfr "
+            + "WHERE pfr.plan.account.id = :accountUuid AND pfr.creditModel IS NOT NULL")
+    List<Object[]> findFeatureDenominationsByAccountId(@Param("accountUuid") UUID accountUuid);
+
     boolean existsByPlanIdAndFeatureIdAndDeletedAtIsNull(UUID planId, UUID featureId);
 }

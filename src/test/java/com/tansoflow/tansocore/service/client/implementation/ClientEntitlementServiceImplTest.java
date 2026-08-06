@@ -80,6 +80,8 @@ class ClientEntitlementServiceImplTest {
     @Mock
     private com.tansoflow.tansocore.service.internal.monetization.CreditWeightService creditWeightService;
     @Mock
+    private com.tansoflow.tansocore.service.internal.monetization.CreditPriceService creditPriceService;
+    @Mock
     private CustomerService customerService;
     @Mock
     private EventService eventService;
@@ -902,8 +904,58 @@ class ClientEntitlementServiceImplTest {
         assertEquals(0, new BigDecimal("15.0000").compareTo(response.getCreditQuote().getEstimatedCredits()));
         assertEquals(weightId.toString(), response.getCreditQuote().getWeightId());
         assertEquals("MODEL", response.getCreditQuote().getWeightMatch());
+        // Unpriced denomination — the quote carries credits only, no invented money
+        assertNull(response.getCreditQuote().getPricePerCredit());
+        assertNull(response.getCreditQuote().getEstimatedCost());
         // No usage limit configured — Simulation stays unset, proving the quote is independent of it
         assertNull(response.getSimulation());
+    }
+
+    @Test
+    void testEvaluateEntitlement_CreditQuote_PricedDenomination_CarriesMoney() {
+        Subscription subscription = createActiveSubscription();
+        CreditModel creditModel = createCreditModel("TOKENS", true);
+        PlanFeatureRule rule = createRuleWithCreditModel(subscription, creditModel);
+
+        EntitlementEvaluationRequest request = new EntitlementEvaluationRequest();
+        request.setCustomerReferenceId(referenceCustomerId);
+        request.setFeatureKey(featureKey);
+        UsageContext usage = new UsageContext();
+        usage.setUsageUnits(new BigDecimal("5"));
+        request.setUsage(usage);
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(creditService.checkHardLimitForSubscription(
+                eq(subscription.getId()), any(UUID.class), eq("TOKENS"), eq(new BigDecimal("5"))))
+                .thenReturn(true);
+        when(creditService.getCreditPoolsByCustomer(customer.getId().toString(), accountUuid))
+                .thenReturn(List.of());
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+        when(creditWeightService.resolveWeight(any(UUID.class), eq(feature.getId()), isNull(), any()))
+                .thenReturn(new com.tansoflow.tansocore.service.internal.monetization.CreditWeightService.ResolvedWeight(
+                        new BigDecimal("3"), UUID.randomUUID(), com.tansoflow.tansocore.model.credit.type.WeightMatch.FEATURE_DEFAULT));
+        when(creditPriceService.resolvePrice(any(UUID.class), eq("TOKENS"), any()))
+                .thenReturn(Optional.of(new com.tansoflow.tansocore.service.internal.monetization.CreditPriceService.ResolvedPrice(
+                        new BigDecimal("0.10"), "USD", UUID.randomUUID())));
+
+        EntitlementResponse response = clientEntitlementService.evaluateEntitlement(accountUuid, request);
+
+        assertNotNull(response.getCreditQuote());
+        // 5 units × weight 3 = 15 credits; 15 × $0.10 = $1.50
+        assertEquals(0, new BigDecimal("15.0000").compareTo(response.getCreditQuote().getEstimatedCredits()));
+        assertEquals(0, new BigDecimal("0.10").compareTo(response.getCreditQuote().getPricePerCredit()));
+        assertEquals("USD", response.getCreditQuote().getCurrency());
+        assertEquals(0, new BigDecimal("1.5000").compareTo(response.getCreditQuote().getEstimatedCost()));
     }
 
     @Test

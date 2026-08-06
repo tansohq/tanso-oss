@@ -41,6 +41,9 @@ public interface CreditPriceService {
 
     List<CreditPriceDto> getPrices(String accountId);
 
+    /** The price in force right now for each priced denomination — one row each, unpriced omitted. */
+    List<CreditPriceDto> getCurrentPrices(String accountId);
+
     List<CreditPriceDto> getHistory(String accountId, String denomination);
 
     /** Batch price publish: one transaction, one shared effectiveFrom. Idempotent on exact replay. */

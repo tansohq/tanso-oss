@@ -61,6 +61,14 @@ export function useCreditWeightUnitCosts() {
   })
 }
 
+export function useFeatureDenominations() {
+  return useQuery({
+    queryKey: ["credit-weights", "denominations"],
+    queryFn: () =>
+      apiFetch<Record<string, string>>("/api/v1/monetization/credits/weights/denominations"),
+  })
+}
+
 export function useCreditPrices() {
   return useQuery({
     queryKey: ["credit-prices"],

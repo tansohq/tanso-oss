@@ -38,7 +38,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -77,6 +79,20 @@ public class CreditPriceServiceImpl implements CreditPriceService {
                 .stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CreditPriceDto> getCurrentPrices(String accountId) {
+        Instant now = Instant.now();
+        Map<String, CreditPrice> latestByDenomination = new LinkedHashMap<>();
+        for (CreditPrice row : creditPriceRepository
+                .findByAccountIdOrderByDenominationAscEffectiveFromDesc(UUID.fromString(accountId))) {
+            if (row.getEffectiveFrom().isAfter(now)) continue;
+            // Rows arrive newest-first per denomination, so the first effective row wins
+            latestByDenomination.putIfAbsent(row.getDenomination(), row);
+        }
+        return latestByDenomination.values().stream().map(this::toDto).toList();
     }
 
     @Override

@@ -32,6 +32,7 @@ import { creditPriceValueSchema } from "./schemas"
 import type { CreditPriceDto } from "./types"
 import { PublishBatchDialog } from "./publish-batch-dialog"
 import { PriceHistorySheet } from "./price-history-sheet"
+import { TwoDialsExplainer } from "./two-dials-explainer"
 import { formatUtc } from "./weight-utils"
 
 interface PricesTabProps {
@@ -181,19 +182,25 @@ export function PricesTab({ onDirtyChange }: PricesTabProps) {
 
   if (rows.length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No denominations to price</EmptyTitle>
-          <EmptyDescription>
-            Create a credit model first — its denomination is what gets a price.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div className="flex flex-col gap-4">
+        <TwoDialsExplainer dial="pricing" />
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No denominations to price</EmptyTitle>
+            <EmptyDescription>
+              Create a credit model first — its denomination is what gets a price here. Once it
+              exists, publish what one credit costs (e.g. 1 CREDIT = $0.10) and purchased top-ups
+              are stamped with it automatically.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     )
   }
 
   return (
     <div className="flex flex-col gap-4">
+      <TwoDialsExplainer dial="pricing" />
       {scheduledBatches.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border bg-muted/50 p-4">
           <div className="flex items-center gap-2">

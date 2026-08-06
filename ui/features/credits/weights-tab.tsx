@@ -37,12 +37,18 @@ import { toast } from "@/components/ui/toast"
 import { ApiError } from "@/lib/api/client"
 import { useFeatures } from "@/features/features/queries"
 import { useDeleteCreditWeight, usePublishCreditWeights } from "./mutations"
-import { useCreditWeights, useCreditWeightUnitCosts } from "./queries"
+import {
+  useCreditPrices,
+  useCreditWeights,
+  useCreditWeightUnitCosts,
+  useFeatureDenominations,
+} from "./queries"
 import { creditWeightValueSchema } from "./schemas"
-import type { CreditFeatureWeightDto } from "./types"
+import type { CreditFeatureWeightDto, CreditPriceDto } from "./types"
 import { PublishWeightsDialog, type WeightChange } from "./publish-weights-dialog"
+import { TwoDialsExplainer } from "./two-dials-explainer"
 import { WeightHistorySheet, type WeightPair } from "./weight-history-sheet"
-import { formatUnitCost, formatUtc, pairKey } from "./weight-utils"
+import { formatMoney, formatUnitCost, formatUtc, pairKey } from "./weight-utils"
 
 interface WeightsTabProps {
   onDirtyChange: (dirty: boolean) => void
@@ -59,6 +65,8 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
   const features = useFeatures()
   const weights = useCreditWeights()
   const unitCosts = useCreditWeightUnitCosts()
+  const denominations = useFeatureDenominations()
+  const prices = useCreditPrices()
   const publish = usePublishCreditWeights()
   const deleteWeight = useDeleteCreditWeight()
 
@@ -75,6 +83,19 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
   const allWeights = weights.data ?? []
   const scheduled = allWeights.filter((w) => new Date(w.effectiveFrom).getTime() > now)
   const effective = allWeights.filter((w) => new Date(w.effectiveFrom).getTime() <= now)
+
+  // Current book price per denomination, to translate weights into money
+  const currentPriceByDenomination = new Map<string, CreditPriceDto>()
+  for (const row of prices.data ?? []) {
+    if (new Date(row.effectiveFrom).getTime() > now) continue
+    const existing = currentPriceByDenomination.get(row.denomination)
+    if (!existing || row.effectiveFrom > existing.effectiveFrom)
+      currentPriceByDenomination.set(row.denomination, row)
+  }
+  const priceForFeature = (featureId: string): CreditPriceDto | undefined => {
+    const denomination = denominations.data?.[featureId]
+    return denomination ? currentPriceByDenomination.get(denomination) : undefined
+  }
 
   const currentByPair = new Map<string, CreditFeatureWeightDto>()
   for (const row of effective) {
@@ -216,14 +237,19 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
 
   if ((features.data ?? []).length === 0) {
     return (
-      <Empty>
-        <EmptyHeader>
-          <EmptyTitle>No features to weight</EmptyTitle>
-          <EmptyDescription>
-            Every usage unit burns 1 credit until you set weights. Create features to customize.
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
+      <div className="flex flex-col gap-4">
+        <TwoDialsExplainer dial="weights" />
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>No features to weight</EmptyTitle>
+            <EmptyDescription>
+              Every usage unit burns 1 credit until you set weights. Create features to customize
+              — e.g. make one heavy feature burn 5 credits per call while everything else stays
+              at 1.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      </div>
     )
   }
 
@@ -233,6 +259,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
 
   return (
     <div className="flex flex-col gap-4">
+      <TwoDialsExplainer dial="weights" />
       {scheduledBatches.length > 0 && (
         <div className="flex flex-col gap-3 rounded-lg border bg-muted/50 p-4">
           <div className="flex items-center gap-2">
@@ -273,6 +300,7 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
               <TableHead>Feature</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Credits / unit</TableHead>
+              <TableHead>≈ Customer pays / unit</TableHead>
               <TableHead>Avg cost / unit</TableHead>
               <TableHead>Effective since</TableHead>
               <TableHead />
@@ -287,6 +315,14 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
               const edited = changes.some(
                 (c) => c.featureId === row.featureId && c.model === row.model,
               )
+              // Live money preview: the weight in the input (when valid) × the
+              // current book price for this feature's denomination.
+              const price = priceForFeature(row.featureId)
+              const parsedValue = creditWeightValueSchema.safeParse(value)
+              const customerPays =
+                price && parsedValue.success
+                  ? formatMoney(parsedValue.data * price.pricePerCredit, price.currency)
+                  : null
               return (
                 <TableRow key={key}>
                   <TableCell className="font-mono text-xs">{row.featureKey}</TableCell>
@@ -329,6 +365,18 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
                       <p className="mt-1 text-xs text-destructive">
                         Positive, up to 6 decimals, max 1,000,000.
                       </p>
+                    )}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums">
+                    {customerPays ? (
+                      <span className={edited ? "text-primary" : undefined}>{customerPays}</span>
+                    ) : (
+                      <span
+                        className="text-muted-foreground"
+                        title="Publish a price for this feature's denomination on the Pricing tab to see money here."
+                      >
+                        —
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="font-mono text-xs tabular-nums">

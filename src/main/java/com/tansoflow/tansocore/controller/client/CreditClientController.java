@@ -20,10 +20,12 @@ package com.tansoflow.tansocore.controller.client;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.client.ClientCreditGrantDto;
 import com.tansoflow.tansocore.model.client.ClientCreditPoolDto;
+import com.tansoflow.tansocore.model.credit.CreditPriceDto;
 import com.tansoflow.tansocore.model.credit.CreditTransactionDto;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.PaginatedResponse;
 import com.tansoflow.tansocore.service.client.ClientCreditService;
+import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -51,6 +53,19 @@ import java.util.List;
 @Tag(name = "Client Credit", description = "Credit pool operations for client applications")
 public class CreditClientController {
     private final ClientCreditService clientCreditService;
+    private final CreditPriceService creditPriceService;
+
+    @GetMapping("/prices")
+    @Operation(summary = "Current credit prices", description = "The price of one credit for each priced denomination, "
+            + "from the account's price book. Use this to show end users what credits cost and to total up top-up "
+            + "purchases. Denominations with no published price are omitted.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<CreditPriceDto>>> getCurrentPrices(
+            @Parameter(description = "Authenticated user context") @AuthenticationPrincipal UserContext userContext) {
+        List<CreditPriceDto> prices = creditPriceService.getCurrentPrices(userContext.getAccountId());
+        return ResponseEntity.ok(ApiResponse.<List<CreditPriceDto>>builder()
+                .data(prices).success(true).build());
+    }
 
     @GetMapping("/{customerReferenceId}/pools")
     @Operation(summary = "List credit pools for a customer", description = "Retrieves all credit pools for a customer identified by their reference ID", security = @SecurityRequirement(name = "Bearer"))

@@ -53,4 +53,11 @@ public interface CreditWeightService {
 
     /** Observed average cost per usage unit from the event ledger, keyed "featureId|model" (model empty for null). */
     Map<String, BigDecimal> getObservedUnitCosts(String accountId, Instant since);
+
+    /**
+     * Which credit denomination each feature burns, from its plan rules.
+     * Features burning multiple denominations are omitted (ambiguous — the
+     * same reason a weight row is rejected for them).
+     */
+    Map<String, String> getFeatureDenominations(String accountId);
 }

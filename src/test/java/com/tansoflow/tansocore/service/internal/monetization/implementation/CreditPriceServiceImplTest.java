@@ -131,6 +131,42 @@ class CreditPriceServiceImplTest {
         assertTrue(creditPriceService.resolvePrice(accountId, "tokens", at).isEmpty());
     }
 
+    // ── getCurrentPrices ─────────────────────────────────────────────────
+
+    @Test
+    void getCurrentPrices_picksLatestEffectivePerDenomination_skipsScheduled() {
+        CreditPrice newTokens = new CreditPrice();
+        newTokens.setId(UUID.randomUUID());
+        newTokens.setDenomination("tokens");
+        newTokens.setCurrency("USD");
+        newTokens.setPricePerCredit(new BigDecimal("0.12"));
+        newTokens.setEffectiveFrom(Instant.now().minus(1, ChronoUnit.DAYS));
+
+        CreditPrice oldTokens = new CreditPrice();
+        oldTokens.setId(UUID.randomUUID());
+        oldTokens.setDenomination("tokens");
+        oldTokens.setCurrency("USD");
+        oldTokens.setPricePerCredit(new BigDecimal("0.10"));
+        oldTokens.setEffectiveFrom(Instant.now().minus(30, ChronoUnit.DAYS));
+
+        CreditPrice scheduledCredits = new CreditPrice();
+        scheduledCredits.setId(UUID.randomUUID());
+        scheduledCredits.setDenomination("api_credits");
+        scheduledCredits.setCurrency("USD");
+        scheduledCredits.setPricePerCredit(new BigDecimal("1"));
+        scheduledCredits.setEffectiveFrom(Instant.now().plus(1, ChronoUnit.DAYS));
+
+        // Repository order: denomination ASC, effectiveFrom DESC
+        when(creditPriceRepository.findByAccountIdOrderByDenominationAscEffectiveFromDesc(accountId))
+                .thenReturn(List.of(scheduledCredits, newTokens, oldTokens));
+
+        List<CreditPriceDto> result = creditPriceService.getCurrentPrices(accountId.toString());
+
+        assertEquals(1, result.size());
+        assertEquals("tokens", result.get(0).getDenomination());
+        assertEquals(new BigDecimal("0.12"), result.get(0).getPricePerCredit());
+    }
+
     // ── publishPrices ────────────────────────────────────────────────────
 
     private PublishCreditPricesRequest.Entry entry(String denomination, String currency, String price) {
