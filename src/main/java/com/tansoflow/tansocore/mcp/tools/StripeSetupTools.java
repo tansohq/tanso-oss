@@ -90,7 +90,7 @@ public class StripeSetupTools {
 
             return objectMapper.writeValueAsString(status);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize integration status\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize integration status\"}}";
         }
     }
 
@@ -102,10 +102,10 @@ public class StripeSetupTools {
             @ToolParam(description = "The Stripe secret API key (starts with sk_test_ or sk_live_)") String stripeApiKey,
             @ToolParam(description = "Must be true to execute this action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}}";
         }
         if (stripeApiKey == null || (!stripeApiKey.startsWith("sk_test_") && !stripeApiKey.startsWith("sk_live_"))) {
-            return "{\"error\": \"invalid_request\", \"message\": \"Stripe API key must start with 'sk_test_' or 'sk_live_'\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"Stripe API key must start with 'sk_test_' or 'sk_live_'\"}}";
         }
         try {
             String accountId = getAccountId();
@@ -120,7 +120,7 @@ public class StripeSetupTools {
             stripeService.registerStripeApiKey(stripeApiKey, account);
             return "{\"success\": true, \"message\": \"Stripe API key registered successfully\"}";
         } catch (Exception e) {
-            return "{\"error\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -133,7 +133,7 @@ public class StripeSetupTools {
     public String setupStripeIntegration(
             @ToolParam(description = "Must be true to execute this action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}}";
         }
         try {
             String accountId = getAccountId();
@@ -141,7 +141,7 @@ public class StripeSetupTools {
             StripeApiKeysResponse keys = stripeService.getStripeKeys(account);
 
             if (keys.getStripeApiKey() == null || keys.getStripeApiKey().isBlank()) {
-                return "{\"error\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}}";
             }
 
             boolean webhookCreated = false;
@@ -178,9 +178,9 @@ public class StripeSetupTools {
             result.put("stripeMode", StripeMode.STRIPE_DRIVEN.name());
             return objectMapper.writeValueAsString(result);
         } catch (StripeException e) {
-            return "{\"error\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize response\"}}";
         }
     }
 
@@ -197,7 +197,7 @@ public class StripeSetupTools {
             StripeApiKeysResponse keys = stripeService.getStripeKeys(account);
 
             if (keys.getStripeApiKey() == null || keys.getStripeApiKey().isBlank()) {
-                return "{\"error\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}}";
             }
 
             StripeDiscoverRequest request = new StripeDiscoverRequest();
@@ -209,9 +209,9 @@ public class StripeSetupTools {
                     UUID.fromString(accountId), request);
             return objectMapper.writeValueAsString(response);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize discovery response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize discovery response\"}}";
         } catch (RuntimeException e) {
-            return "{\"error\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -223,7 +223,7 @@ public class StripeSetupTools {
     public String importStripeData(
             @ToolParam(description = "Must be true to execute this action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}}";
         }
         try {
             String accountId = getAccountId();
@@ -231,7 +231,7 @@ public class StripeSetupTools {
             StripeApiKeysResponse keys = stripeService.getStripeKeys(account);
 
             if (keys.getStripeApiKey() == null || keys.getStripeApiKey().isBlank()) {
-                return "{\"error\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"precondition_failed\", \"message\": \"No Stripe API key registered. Call registerStripeApiKey first.\"}}";
             }
 
             // Warn if not in STRIPE_DRIVEN mode
@@ -255,9 +255,9 @@ public class StripeSetupTools {
             }
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize import response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize import response\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"stripe_api_error\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -269,7 +269,7 @@ public class StripeSetupTools {
         try {
             jobUuid = UUID.fromString(jobId);
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"Invalid job ID format. Must be a valid UUID.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"Invalid job ID format. Must be a valid UUID.\"}}";
         }
         try {
             String accountId = getAccountId();
@@ -277,9 +277,9 @@ public class StripeSetupTools {
                     UUID.fromString(accountId), jobUuid);
             return objectMapper.writeValueAsString(response);
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize import status\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize import status\"}}";
         }
     }
 

@@ -50,9 +50,9 @@ public class AdminPlanFeatureRuleTools {
             var result = planFeatureRuleService.getPlanFeatureRule(getAccountId(), featureId, planId);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize rule\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize rule\"}}";
         }
     }
 
@@ -95,11 +95,11 @@ public class AdminPlanFeatureRuleTools {
             var result = planFeatureRuleService.createPlanFeatureRule(getAccountId(), request);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to process rule: " + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to process rule: " + e.getMessage() + "\"}}";
         }
     }
 
@@ -126,11 +126,11 @@ public class AdminPlanFeatureRuleTools {
             var result = planFeatureRuleService.updatePlanFeatureRule(getAccountId(), request);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to process rule: " + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to process rule: " + e.getMessage() + "\"}}";
         }
     }
 
@@ -142,15 +142,15 @@ public class AdminPlanFeatureRuleTools {
             @ToolParam(description = "The feature ID (UUID)") String featureId,
             @ToolParam(description = "Must be true to execute this destructive action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this destructive action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this destructive action\"}}";
         }
         try {
             planFeatureRuleService.deletePlanFeatureRule(getAccountId(), featureId, planId);
             return "{\"success\": true, \"message\": \"Feature " + featureId + " unlinked from plan " + planId + "\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

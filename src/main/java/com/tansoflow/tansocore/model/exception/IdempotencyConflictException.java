@@ -15,17 +15,10 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.billing.request;
+package com.tansoflow.tansocore.model.exception;
 
-import lombok.Data;
-
-@Data
-public class CheckoutRequest {
-    private Payment payment;
-
-    @Data
-    public static class Payment {
-        private String status;
+public class IdempotencyConflictException extends RuntimeException {
+    public IdempotencyConflictException(String message) {
+        super(message);
     }
-
 }

@@ -1,0 +1,63 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260806-1"
+      author: tanso
+      comment: >
+        Transport-level idempotency for agent callers: replay store keyed by
+        (account, endpoint, Idempotency-Key). Same key + same request hash
+        within the retention window replays the stored response; same key +
+        different hash is a conflict. Rows are purged after 24 hours by
+        IdempotencyPurgeJob.
+      changes:
+        - createTable:
+            tableName: idempotency_records
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: endpoint
+                  type: VARCHAR(255)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: request_hash
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_status
+                  type: INT
+              - column:
+                  name: response_body
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: idempotency_records
+            columnNames: account_id, endpoint, idempotency_key
+            constraintName: uq_idempotency_records_key
+        - createIndex:
+            tableName: idempotency_records
+            indexName: idx_idempotency_records_created_at
+            columns:
+              - column:
+                  name: created_at

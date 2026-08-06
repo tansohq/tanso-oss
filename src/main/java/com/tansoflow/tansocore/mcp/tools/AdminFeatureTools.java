@@ -47,7 +47,7 @@ public class AdminFeatureTools {
             var features = featureService.getFeatures(getAccountId());
             return objectMapper.writeValueAsString(features);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize features\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize features\"}}";
         }
     }
 
@@ -67,9 +67,9 @@ public class AdminFeatureTools {
             var result = featureService.createFeature(getAccountId(), request);
             return objectMapper.writeValueAsString(result);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}}";
         }
     }
 
@@ -93,11 +93,11 @@ public class AdminFeatureTools {
             var result = featureService.updateFeature(getAccountId(), UUID.fromString(featureId), request);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}}";
         }
     }
 

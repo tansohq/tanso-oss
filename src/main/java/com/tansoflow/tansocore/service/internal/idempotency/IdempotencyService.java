@@ -15,17 +15,24 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.billing.request;
+package com.tansoflow.tansocore.service.internal.idempotency;
 
-import lombok.Data;
+import java.util.Optional;
+import java.util.UUID;
 
-@Data
-public class CheckoutRequest {
-    private Payment payment;
+public interface IdempotencyService {
 
-    @Data
-    public static class Payment {
-        private String status;
+    record StoredResponse(int status, String body) {
     }
 
+    /**
+     * Returns the stored response for a replay of the same request, empty when
+     * this key has not been seen. Throws IdempotencyConflictException when the
+     * key exists with a different request hash.
+     */
+    Optional<StoredResponse> findReplay(UUID accountId, String endpoint, String idempotencyKey, String requestHash);
+
+    void store(UUID accountId, String endpoint, String idempotencyKey, String requestHash, int status, String body);
+
+    String hash(byte[] requestBody);
 }

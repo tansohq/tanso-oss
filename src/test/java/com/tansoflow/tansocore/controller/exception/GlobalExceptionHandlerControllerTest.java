@@ -42,6 +42,20 @@ class GlobalExceptionHandlerControllerTest {
     }
 
     @Test
+    void errorCodesArePresentAndStable() {
+        assertEquals("insufficient_credits", handler.handleCreditLimitExceededException(
+                new CreditLimitExceededException("depleted")).getBody().getError().getCode());
+        assertEquals("not_found", handler.handleResourceNotFoundException(
+                new com.tansoflow.tansocore.model.exception.ResourceNotFoundException("missing")).getBody().getError().getCode());
+        assertEquals("validation_failed", handler.handleIllegalArgumentException(
+                new IllegalArgumentException("bad")).getBody().getError().getCode());
+        assertEquals("internal_error", handler.handleException(
+                new RuntimeException("boom")).getBody().getError().getCode());
+        assertEquals("idempotency_conflict", handler.handleIdempotencyConflictException(
+                new com.tansoflow.tansocore.model.exception.IdempotencyConflictException("reused")).getBody().getError().getCode());
+    }
+
+    @Test
     void creditLimitExceeded_ReturnsConflict() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleCreditLimitExceededException(
                 new CreditLimitExceededException("Credit pool depleted - hard limit active"));

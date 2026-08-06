@@ -17,9 +17,11 @@
  */
 package com.tansoflow.tansocore.filter;
 
+import com.tansoflow.tansocore.auth.SecurityErrorWriter;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.auth.UserContextAuthentication;
 import com.tansoflow.tansocore.entity.Account;
+import com.tansoflow.tansocore.model.response.ErrorCode;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -125,8 +127,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     private static void writeUnauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"error\":\"" + "invalid_api_key" + "\"}");
+        SecurityErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED,
+                ErrorCode.UNAUTHORIZED, "Invalid API key");
     }
 }

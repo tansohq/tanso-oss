@@ -45,9 +45,9 @@ public class CreditTools {
             var pools = clientCreditService.getCreditPools(customerReferenceId, getAccountId());
             return objectMapper.writeValueAsString(pools);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}}";
         }
     }
 
@@ -60,9 +60,9 @@ public class CreditTools {
             var pool = clientCreditService.getCreditPool(customerReferenceId, poolId, getAccountId());
             return objectMapper.writeValueAsString(pool);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}}";
         }
     }
 
@@ -75,9 +75,9 @@ public class CreditTools {
             var transactions = clientCreditService.getPoolTransactions(customerReferenceId, poolId, getAccountId());
             return objectMapper.writeValueAsString(transactions);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize transactions\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize transactions\"}}";
         }
     }
 
@@ -90,9 +90,9 @@ public class CreditTools {
             var grants = clientCreditService.getPoolGrants(customerReferenceId, poolId, getAccountId());
             return objectMapper.writeValueAsString(grants);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize grants\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize grants\"}}";
         }
     }
 

@@ -44,7 +44,7 @@ public class AiInsightTools {
             var insights = aiInsightService.listInsights(getAccountId());
             return objectMapper.writeValueAsString(insights);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize insights\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize insights\"}}";
         }
     }
 
@@ -55,16 +55,16 @@ public class AiInsightTools {
             @ToolParam(description = "Set to true to confirm this action. Required because it costs money (AI tokens) "
                     + "and replaces existing insights.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to generate insights. "
-                    + "This calls an external AI model and incurs token costs.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to generate insights. "
+                    + "This calls an external AI model and incurs token costs.\"}}";
         }
         try {
             var insights = aiInsightService.generateInsights(getAccountId());
             return objectMapper.writeValueAsString(insights);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize insights\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize insights\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"generation_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"generation_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -73,13 +73,13 @@ public class AiInsightTools {
     public String clearInsights(
             @ToolParam(description = "Set to true to confirm deletion of all insights.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to delete all insights.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to delete all insights.\"}}";
         }
         try {
             aiInsightService.clearInsights(getAccountId());
             return "{\"success\": true, \"message\": \"All insights cleared\"}";
         } catch (Exception e) {
-            return "{\"error\": \"clear_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"clear_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

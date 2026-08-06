@@ -17,36 +17,29 @@
  */
 package com.tansoflow.tansocore.model.response;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Getter;
-import lombok.Setter;
+/**
+ * Stable machine-readable error codes. Agents branch on these; messages are
+ * for humans and may change. Add codes, never rename them.
+ */
+public enum ErrorCode {
+    UNAUTHORIZED("unauthorized"),
+    FORBIDDEN("forbidden"),
+    NOT_FOUND("not_found"),
+    VALIDATION_FAILED("validation_failed"),
+    PAYMENT_REQUIRED("payment_required"),
+    IDEMPOTENCY_CONFLICT("idempotency_conflict"),
+    INSUFFICIENT_CREDITS("insufficient_credits"),
+    CONFLICT("conflict"),
+    RATE_LIMITED("rate_limited"),
+    INTERNAL_ERROR("internal_error");
 
-@Getter
-@Setter
-@Schema
-public class Error {
-    @Schema(description = "Stable machine-readable code; branch on this, not on message")
-    private String code;
-    private String message;
-    private String detail;
+    private final String code;
 
-    public Error(String message, String detail) {
-        this.message = message;
-        this.detail = detail;
+    ErrorCode(String code) {
+        this.code = code;
     }
 
-    public Error(String message) {
-        this.message = message;
-    }
-
-    public Error(ErrorCode code, String message) {
-        this.code = code.code();
-        this.message = message;
-    }
-
-    public Error(ErrorCode code, String message, String detail) {
-        this.code = code.code();
-        this.message = message;
-        this.detail = detail;
+    public String code() {
+        return code;
     }
 }
