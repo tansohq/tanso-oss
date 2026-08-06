@@ -153,6 +153,8 @@ erDiagram
     *   `CLIENT_TRACKED`: Standard usage event (e.g., "AI Message Sent").
     *   `ENTITLEMENT_CHECKED`: Metadata event recorded for billing audit trails.
 4.  **Invoice**: Generated at cycle end. Orchestrates payment via Stripe. Statuses: `PENDING`, `DUE`, `PAID`, `VOID`.
+5.  **CreditFeatureWeight** (pricing dial 1 — burn rate): Append-only, effective-dated tariff mapping usage units to credits, resolved `(feature, model)` → `(feature, NULL)` → identity 1.0. Managed by `CreditWeightService` (batch publish, one shared future `effectiveFrom`, advisory-locked; future-only delete). Entitlement evaluate returns a `creditQuote`; ingestion applies the same resolution at the event's clamped `occurredAt`. Console editor: Credits → Weights.
+6.  **CreditPrice** (pricing dial 2 — price book): Append-only, effective-dated price of one credit per denomination (`pricePerCredit` + ISO currency). Managed by `CreditPriceService` with the same mechanics as weights, under a separately namespaced advisory lock; no default — an unpriced denomination resolves to empty. `PURCHASED` grants without an explicit `unitPrice` are stamped with the book price at grant time; an explicit `unitPrice` (bounded like book prices: positive, ≤1,000,000, ≤6 decimals) always wins, and a currency without a `unitPrice` is rejected. The `creditQuote` carries `pricePerCredit`/`currency`/`estimatedCost` when priced; `GET /api/v1/client/credits/prices` exposes current prices to client apps. Console editor: Credits → Pricing.
 
 ---
 
@@ -246,4 +248,4 @@ The `EventService` is designed for high throughput:
 *   **Console: "Attach feature" / "New subscription" panel — Base UI Select fields**: clicking a `Select` trigger and immediately typing inserts characters into the trigger's placeholder text without registering a selection, so the form submits with an empty value. Click the trigger, wait for the popover, then click an option from the list.
 
 ---
-*Last Updated: 2026-08-05*
+*Last Updated: 2026-08-06*
