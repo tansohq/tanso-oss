@@ -87,6 +87,13 @@ public class CreditGrant {
     @Column(name = "remaining", nullable = false, precision = 18, scale = 4)
     private BigDecimal remaining;
 
+    @Column(name = "unit_price", precision = 18, scale = 6)
+    private BigDecimal unitPrice;
+
+    @Size(max = 3)
+    @Column(name = "currency", length = 3)
+    private String currency;
+
     @Column(name = "expires_at")
     private Instant expiresAt;
 

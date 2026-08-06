@@ -226,6 +226,24 @@ public class CreditWeightServiceImpl implements CreditWeightService {
         return result;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, String> getFeatureDenominations(String accountId) {
+        Map<String, String> result = new HashMap<>();
+        Set<String> ambiguous = new HashSet<>();
+        for (Object[] row : planFeatureRuleRepository.findFeatureDenominationsByAccountId(UUID.fromString(accountId))) {
+            String featureId = row[0].toString();
+            String denomination = (String) row[1];
+            if (ambiguous.contains(featureId)) continue;
+            String existing = result.putIfAbsent(featureId, denomination);
+            if (existing != null && !existing.equals(denomination)) {
+                result.remove(featureId);
+                ambiguous.add(featureId);
+            }
+        }
+        return result;
+    }
+
     /**
      * Burn is per-denomination but the weight table has no denomination column,
      * so a feature whose plan rules burn more than one denomination would share

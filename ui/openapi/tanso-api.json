@@ -797,7 +797,7 @@
         "tags": [
           "Credits"
         ],
-        "summary": "Publish a tariff batch \u2014 one transaction, one shared effective time",
+        "summary": "Publish a tariff batch — one transaction, one shared effective time",
         "operationId": "publishWeights",
         "requestBody": {
           "content": {
@@ -860,6 +860,42 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseCreditTransactionDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/monetization/credits/prices/publish": {
+      "post": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "Publish a price batch — one transaction, one shared effective time",
+        "operationId": "publishPrices",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublishCreditPricesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListCreditPriceDto"
                 }
               }
             }
@@ -1270,6 +1306,49 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/monetization/billing/invoices/{invoiceId}/checkout-link": {
+      "post": {
+        "tags": [
+          "Billing"
+        ],
+        "summary": "Create a Stripe checkout link for an invoice",
+        "description": "Returns the hosted Stripe payment URL for a DUE invoice, creating the Stripe invoice first if needed. The operator can send this link to the customer.",
+        "operationId": "createInvoiceCheckoutLink",
+        "parameters": [
+          {
+            "name": "invoiceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Checkout link created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseStripeCheckoutSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Stripe not enabled or invoice not DUE"
+          },
+          "404": {
+            "description": "Invoice not found"
           }
         },
         "security": [
@@ -2238,7 +2317,8 @@
         "tags": [
           "Billing"
         ],
-        "summary": "Update an invoice",
+        "summary": "Mark an invoice as paid",
+        "description": "Records an out-of-band payment and activates the associated subscription. Not available for Stripe-integrated accounts, where invoices are paid through Stripe.",
         "operationId": "patchInvoice",
         "parameters": [
           {
@@ -2251,8 +2331,8 @@
           }
         ],
         "responses": {
-          "501": {
-            "description": "Not yet implemented",
+          "200": {
+            "description": "Invoice marked as paid",
             "content": {
               "*/*": {
                 "schema": {
@@ -2261,8 +2341,11 @@
               }
             }
           },
+          "400": {
+            "description": "Stripe-integrated account"
+          },
           "404": {
-            "description": "Invalid id supplied"
+            "description": "Invoice not found"
           }
         },
         "security": [
@@ -2330,6 +2413,16 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "customerId",
+            "in": "query",
+            "description": "Internal customer ID filter",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
             }
           },
           {
@@ -3001,6 +3094,94 @@
         ]
       }
     },
+    "/api/v1/monetization/credits/weights/denominations": {
+      "get": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "Credit denomination each feature burns, keyed by featureId (ambiguous features omitted)",
+        "operationId": "getFeatureDenominations",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMapStringString"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/monetization/credits/prices": {
+      "get": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "List current and scheduled credit prices",
+        "operationId": "getPrices",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListCreditPriceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/monetization/credits/prices/history": {
+      "get": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "Price history for a denomination",
+        "operationId": "getPriceHistory",
+        "parameters": [
+          {
+            "name": "denomination",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListCreditPriceDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/monetization/credits/pools/{poolId}": {
       "get": {
         "tags": [
@@ -3643,6 +3824,42 @@
         "parameters": [
           {
             "name": "weightId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseVoid"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/monetization/credits/prices/{priceId}": {
+      "delete": {
+        "tags": [
+          "Credits"
+        ],
+        "summary": "Delete a scheduled (not-yet-effective) price row",
+        "operationId": "deleteScheduledPrice",
+        "parameters": [
+          {
+            "name": "priceId",
             "in": "path",
             "required": true,
             "schema": {
@@ -4600,6 +4817,88 @@
           }
         }
       },
+      "PublishCreditPricesRequest": {
+        "type": "object",
+        "description": "Batch price publish: all entries share one effectiveFrom and commit in one transaction. Denominations omitted from the batch keep their current price; a denomination with no rows at all is unpriced.",
+        "properties": {
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Instant the prices take effect. Must not be in the past. All entries share it."
+          },
+          "entries": {
+            "type": "array",
+            "description": "Price entries to publish",
+            "items": {
+              "$ref": "#/components/schemas/Entry"
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "effectiveFrom",
+          "entries"
+        ]
+      },
+      "ApiResponseListCreditPriceDto": {
+        "type": "object",
+        "description": "Generic API response wrapper",
+        "properties": {
+          "data": {
+            "type": "array",
+            "description": "Response data",
+            "items": {
+              "$ref": "#/components/schemas/CreditPriceDto"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "meta": {
+            "type": "array",
+            "items": {}
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CreditPriceDto": {
+        "type": "object",
+        "description": "One row of the credit price book: what one credit of a denomination costs the buyer",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier of the price row"
+          },
+          "denomination": {
+            "type": "string",
+            "description": "Credit denomination this price applies to (matches a credit model's denomination)"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency code the price is stated in"
+          },
+          "pricePerCredit": {
+            "type": "number",
+            "description": "Price of one credit"
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Instant this row takes effect. Rows never change once effective; publish a new row to reprice."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "Admin user who published this row"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Timestamp when the row was created"
+          }
+        }
+      },
       "CreateCreditPoolRequest": {
         "type": "object",
         "description": "Request to create a new credit pool",
@@ -4889,6 +5188,14 @@
             "type": "string",
             "description": "Invoice linked to purchased credits"
           },
+          "unitPrice": {
+            "type": "number",
+            "description": "Price paid per credit (e.g. a negotiated top-up price). For PURCHASED grants left null, the current price book entry for the pool's denomination is stamped instead."
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency for unitPrice. Defaults to the pool's currency, then USD."
+          },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
@@ -4966,6 +5273,14 @@
             "type": "number",
             "description": "Remaining credits from this grant"
           },
+          "unitPrice": {
+            "type": "number",
+            "description": "Price paid per credit, if this grant was sold"
+          },
+          "currency": {
+            "type": "string",
+            "description": "ISO 4217 currency for unitPrice"
+          },
           "expiresAt": {
             "type": "string",
             "format": "date-time",
@@ -5037,6 +5352,37 @@
           "amount",
           "creditPoolId"
         ]
+      },
+      "ApiResponseStripeCheckoutSessionsResponse": {
+        "type": "object",
+        "description": "Generic API response wrapper",
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/StripeCheckoutSessionsResponse",
+            "description": "Response data"
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "meta": {
+            "type": "array",
+            "items": {}
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "StripeCheckoutSessionsResponse": {
+        "type": "object",
+        "description": "Response containing the Stripe Checkout session URL",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "The URL for the Stripe Checkout session",
+            "example": "https://checkout.stripe.com/pay/cs_test_..."
+          }
+        }
       },
       "CustomerMapping": {
         "type": "object",
@@ -5753,7 +6099,7 @@
           },
           "featureKey": {
             "type": "string",
-            "description": "The key of the feature this event tracks usage for. Transient \u2014 not persisted."
+            "description": "The key of the feature this event tracks usage for. Transient — not persisted."
           },
           "featureId": {
             "type": "string",
@@ -6453,6 +6799,29 @@
             "type": "object",
             "additionalProperties": {
               "type": "number"
+            },
+            "description": "Response data"
+          },
+          "error": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "meta": {
+            "type": "array",
+            "items": {}
+          },
+          "success": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ApiResponseMapStringString": {
+        "type": "object",
+        "description": "Generic API response wrapper",
+        "properties": {
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
             },
             "description": "Response data"
           },

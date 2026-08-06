@@ -33,3 +33,15 @@ export function formatUnitCost(value: number | undefined): string {
   if (value === undefined) return "—"
   return costFormat.format(value)
 }
+
+export function formatMoney(value: number, currency: string): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 6,
+    }).format(value)
+  } catch {
+    return `${value} ${currency}`
+  }
+}

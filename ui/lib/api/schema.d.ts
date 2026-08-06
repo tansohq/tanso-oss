@@ -284,6 +284,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/monetization/credits/prices/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a price batch — one transaction, one shared effective time */
+        post: operations["publishPrices"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/credits/pools": {
         parameters: {
             query?: never;
@@ -384,6 +401,26 @@ export interface paths {
         put?: never;
         /** Deduct credits from a pool */
         post: operations["deductCredits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/billing/invoices/{invoiceId}/checkout-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a Stripe checkout link for an invoice
+         * @description Returns the hosted Stripe payment URL for a DUE invoice, creating the Stripe invoice first if needed. The operator can send this link to the customer.
+         */
+        post: operations["createInvoiceCheckoutLink"];
         delete?: never;
         options?: never;
         head?: never;
@@ -763,7 +800,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update an invoice */
+        /**
+         * Mark an invoice as paid
+         * @description Records an out-of-band payment and activates the associated subscription. Not available for Stripe-integrated accounts, where invoices are paid through Stripe.
+         */
         patch: operations["patchInvoice"];
         trace?: never;
     };
@@ -994,6 +1034,57 @@ export interface paths {
         };
         /** Tariff history for a (feature, model) pair */
         get: operations["getWeightHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/weights/denominations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Credit denomination each feature burns, keyed by featureId (ambiguous features omitted) */
+        get: operations["getFeatureDenominations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List current and scheduled credit prices */
+        get: operations["getPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/prices/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Price history for a denomination */
+        get: operations["getPriceHistory"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1318,6 +1409,23 @@ export interface paths {
         post?: never;
         /** Delete a scheduled (not-yet-effective) weight row */
         delete: operations["deleteScheduledWeight"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/monetization/credits/prices/{priceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a scheduled (not-yet-effective) price row */
+        delete: operations["deleteScheduledPrice"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1879,6 +1987,47 @@ export interface components {
              */
             createdAt?: string;
         };
+        /** @description Batch price publish: all entries share one effectiveFrom and commit in one transaction. Denominations omitted from the batch keep their current price; a denomination with no rows at all is unpriced. */
+        PublishCreditPricesRequest: {
+            /**
+             * Format: date-time
+             * @description Instant the prices take effect. Must not be in the past. All entries share it.
+             */
+            effectiveFrom: string;
+            /** @description Price entries to publish */
+            entries: components["schemas"]["Entry"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListCreditPriceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CreditPriceDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description One row of the credit price book: what one credit of a denomination costs the buyer */
+        CreditPriceDto: {
+            /** @description Unique identifier of the price row */
+            id?: string;
+            /** @description Credit denomination this price applies to (matches a credit model's denomination) */
+            denomination?: string;
+            /** @description ISO 4217 currency code the price is stated in */
+            currency?: string;
+            /** @description Price of one credit */
+            pricePerCredit?: number;
+            /**
+             * Format: date-time
+             * @description Instant this row takes effect. Rows never change once effective; publish a new row to reprice.
+             */
+            effectiveFrom?: string;
+            /** @description Admin user who published this row */
+            createdBy?: string;
+            /**
+             * Format: date-time
+             * @description Timestamp when the row was created
+             */
+            createdAt?: string;
+        };
         /** @description Request to create a new credit pool */
         CreateCreditPoolRequest: {
             /**
@@ -2049,6 +2198,10 @@ export interface components {
             subscriptionId?: string;
             /** @description Invoice linked to purchased credits */
             invoiceId?: string;
+            /** @description Price paid per credit (e.g. a negotiated top-up price). For PURCHASED grants left null, the current price book entry for the pool's denomination is stamped instead. */
+            unitPrice?: number;
+            /** @description ISO 4217 currency for unitPrice. Defaults to the pool's currency, then USD. */
+            currency?: string;
             /**
              * Format: date-time
              * @description When credits expire (null = never)
@@ -2087,6 +2240,10 @@ export interface components {
             amount?: number;
             /** @description Remaining credits from this grant */
             remaining?: number;
+            /** @description Price paid per credit, if this grant was sold */
+            unitPrice?: number;
+            /** @description ISO 4217 currency for unitPrice */
+            currency?: string;
             /**
              * Format: date-time
              * @description When this grant expires
@@ -2135,6 +2292,22 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             };
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseStripeCheckoutSessionsResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["StripeCheckoutSessionsResponse"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Response containing the Stripe Checkout session URL */
+        StripeCheckoutSessionsResponse: {
+            /**
+             * @description The URL for the Stripe Checkout session
+             * @example https://checkout.stripe.com/pay/cs_test_...
+             */
+            url?: string;
         };
         CustomerMapping: {
             stripeCustomerId?: string;
@@ -2809,6 +2982,16 @@ export interface components {
             /** @description Response data */
             data?: {
                 [key: string]: number;
+            };
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseMapStringString: {
+            /** @description Response data */
+            data?: {
+                [key: string]: string;
             };
             error?: components["schemas"]["Error"];
             meta?: unknown[];
@@ -3852,6 +4035,30 @@ export interface operations {
             };
         };
     };
+    publishPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishCreditPricesRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditPriceDto"];
+                };
+            };
+        };
+    };
     listPools: {
         parameters: {
             query?: never;
@@ -4084,6 +4291,42 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseCreditTransactionDto"];
                 };
+            };
+        };
+    };
+    createInvoiceCheckoutLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkout link created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStripeCheckoutSessionsResponse"];
+                };
+            };
+            /** @description Stripe not enabled or invoice not DUE */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invoice not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4844,21 +5087,28 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Invalid id supplied */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Not yet implemented */
-            501: {
+            /** @description Invoice marked as paid */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
                 };
+            };
+            /** @description Stripe-integrated account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invoice not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4891,6 +5141,8 @@ export interface operations {
                 end?: string;
                 /** @description Customer reference ID filter */
                 customerReferenceId?: string;
+                /** @description Internal customer ID filter */
+                customerId?: string;
                 /** @description Plan identifier filter */
                 planId?: string;
                 /** @description Feature identifier filter */
@@ -5246,6 +5498,68 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseListCreditFeatureWeightDto"];
+                };
+            };
+        };
+    };
+    getFeatureDenominations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseMapStringString"];
+                };
+            };
+        };
+    };
+    getPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditPriceDto"];
+                };
+            };
+        };
+    };
+    getPriceHistory: {
+        parameters: {
+            query: {
+                denomination: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditPriceDto"];
                 };
             };
         };
@@ -5686,6 +6000,28 @@ export interface operations {
             header?: never;
             path: {
                 weightId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    deleteScheduledPrice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                priceId: string;
             };
             cookie?: never;
         };
