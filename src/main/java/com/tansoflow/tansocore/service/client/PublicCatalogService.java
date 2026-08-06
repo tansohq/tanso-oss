@@ -15,15 +15,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.service.client;
 
-import com.tansoflow.tansocore.entity.Account;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import java.util.Map;
 
-import java.util.UUID;
+public interface PublicCatalogService {
 
-@Repository
-public interface AccountRepository extends JpaRepository<Account, UUID> {
-    java.util.Optional<Account> findBySlug(String slug);
+    /**
+     * The account's machine-readable pricing catalog, conforming to the
+     * agent-serve pricing.json schema. Throws ResourceNotFoundException when
+     * the slug is unknown OR the catalog is disabled — the two cases are
+     * indistinguishable on purpose.
+     */
+    Map<String, Object> buildCatalog(String slug, String baseUrl);
 }

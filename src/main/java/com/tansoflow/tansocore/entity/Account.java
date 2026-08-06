@@ -50,6 +50,10 @@ public class Account {
     @Column(name = "name")
     private String name;
 
+    // URL name for the public catalog (/public/v1/catalog/{slug}); null = no public surface
+    @Column(name = "slug", length = 63, unique = true)
+    private String slug;
+
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

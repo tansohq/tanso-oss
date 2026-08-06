@@ -380,3 +380,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/2026.08.06.2.yaml
       id: "20260806-2"
+  - include:
+      file: db/changelog/2026.08.06.3.yaml
+      id: "20260806-3"

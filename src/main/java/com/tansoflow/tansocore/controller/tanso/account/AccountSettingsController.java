@@ -53,6 +53,10 @@ import java.util.UUID;
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Account Settings", description = "Account settings management")
 public class AccountSettingsController {
+    private static final java.util.regex.Pattern SLUG_PATTERN = java.util.regex.Pattern.compile("[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?");
+
+    private final com.tansoflow.tansocore.repository.AccountRepository accountRepository;
+    private final com.tansoflow.tansocore.repository.PlanRepository planRepository;
     private final AccountSettingRepository accountSettingRepository;
     private final AuditHelper auditHelper;
     private final ApplicationEventPublisher eventPublisher;
@@ -107,6 +111,57 @@ public class AccountSettingsController {
         if (request.getStripeCheckoutCancelUrl() != null) {
             setting.setStripeCheckoutCancelUrl(request.getStripeCheckoutCancelUrl());
         }
+        if (request.getSlug() != null) {
+            String slug = request.getSlug().trim().toLowerCase();
+            if (!SLUG_PATTERN.matcher(slug).matches()) {
+                throw new IllegalArgumentException(
+                        "Slug must be 2-63 lowercase letters, digits, or hyphens, starting and ending alphanumeric");
+            }
+            com.tansoflow.tansocore.entity.Account account = setting.getAccounts();
+            account.setSlug(slug);
+            accountRepository.save(account);
+        }
+        if (request.getPublicCatalogEnabled() != null) {
+            if (request.getPublicCatalogEnabled() && setting.getAccounts().getSlug() == null && request.getSlug() == null) {
+                throw new IllegalArgumentException("Set a slug before enabling the public catalog");
+            }
+            setting.setPublicCatalogEnabled(request.getPublicCatalogEnabled());
+        }
+        if (request.getAgentSignupDefaultPlanId() != null) {
+            java.util.UUID planId = request.getAgentSignupDefaultPlanId();
+            com.tansoflow.tansocore.entity.Plan plan = planRepository.findById(planId)
+                    .filter(candidate -> candidate.getAccount().getId().toString().equals(userContext.getAccountId()))
+                    .orElseThrow(() -> new IllegalArgumentException("Plan not found on this account: " + planId));
+            if (!"ACTIVE".equals(plan.getStatus())) {
+                throw new IllegalArgumentException("Agent signup default plan must be ACTIVE");
+            }
+            if (plan.getPriceAmount() != null && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+                throw new IllegalArgumentException(
+                        "Agent signup default plan must be free — paid conversion happens after signup, authenticated");
+            }
+            setting.setAgentSignupDefaultPlanId(planId);
+        }
+        if (request.getAgentSignupEnabled() != null) {
+            if (request.getAgentSignupEnabled() && setting.getAgentSignupDefaultPlanId() == null
+                    && request.getAgentSignupDefaultPlanId() == null) {
+                throw new IllegalArgumentException("Set a free default plan before enabling agent signup");
+            }
+            setting.setAgentSignupEnabled(request.getAgentSignupEnabled());
+        }
+        if (request.getAgentSignupHourlyCap() != null) {
+            if (request.getAgentSignupHourlyCap() < 1) {
+                throw new IllegalArgumentException("agentSignupHourlyCap must be at least 1");
+            }
+            setting.setAgentSignupHourlyCap(request.getAgentSignupHourlyCap());
+        }
+        if (request.getAgentMaxTopupAmount() != null) {
+            if (request.getAgentMaxTopupAmount().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("agentMaxTopupAmount must not be negative");
+            }
+            // Zero clears the cap
+            setting.setAgentMaxTopupAmount(
+                    request.getAgentMaxTopupAmount().signum() == 0 ? null : request.getAgentMaxTopupAmount());
+        }
         if (request.getDefaultCostConfig() != null) {
             DefaultCostConfigDto dcc = request.getDefaultCostConfig();
             if (dcc.getModelCosts() != null) {
@@ -144,6 +199,12 @@ public class AccountSettingsController {
         dto.setStripeCheckoutSuccessUrl(setting.getStripeCheckoutSuccessUrl());
         dto.setStripeCheckoutCancelUrl(setting.getStripeCheckoutCancelUrl());
         dto.setCurrency(setting.getCurrency());
+        dto.setSlug(setting.getAccounts() != null ? setting.getAccounts().getSlug() : null);
+        dto.setPublicCatalogEnabled(setting.isPublicCatalogEnabled());
+        dto.setAgentSignupEnabled(setting.isAgentSignupEnabled());
+        dto.setAgentSignupDefaultPlanId(setting.getAgentSignupDefaultPlanId());
+        dto.setAgentSignupHourlyCap(setting.getAgentSignupHourlyCap());
+        dto.setAgentMaxTopupAmount(setting.getAgentMaxTopupAmount());
         if (setting.getDefaultCostConfig() != null) {
             dto.setDefaultCostConfig(objectMapper.convertValue(
                     setting.getDefaultCostConfig(), DefaultCostConfigDto.class));
@@ -159,6 +220,12 @@ public class AccountSettingsController {
         private String stripeCheckoutCancelUrl;
         private String currency;
         private DefaultCostConfigDto defaultCostConfig;
+        private String slug;
+        private boolean publicCatalogEnabled;
+        private boolean agentSignupEnabled;
+        private java.util.UUID agentSignupDefaultPlanId;
+        private Integer agentSignupHourlyCap;
+        private BigDecimal agentMaxTopupAmount;
     }
 
     @Data
@@ -168,6 +235,12 @@ public class AccountSettingsController {
         private String stripeCheckoutSuccessUrl;
         private String stripeCheckoutCancelUrl;
         private DefaultCostConfigDto defaultCostConfig;
+        private String slug;
+        private Boolean publicCatalogEnabled;
+        private Boolean agentSignupEnabled;
+        private java.util.UUID agentSignupDefaultPlanId;
+        private Integer agentSignupHourlyCap;
+        private BigDecimal agentMaxTopupAmount;
     }
 
     @Data
