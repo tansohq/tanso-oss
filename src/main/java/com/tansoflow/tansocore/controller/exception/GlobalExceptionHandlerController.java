@@ -20,6 +20,7 @@ package com.tansoflow.tansocore.controller.exception;
 import com.tansoflow.tansocore.model.exception.AuthenticationException;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.IdempotencyConflictException;
+import com.tansoflow.tansocore.model.exception.RateLimitExceededException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.exception.TariffConflictException;
@@ -91,6 +92,16 @@ public class GlobalExceptionHandlerController {
         log.info("Idempotency conflict [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.IDEMPOTENCY_CONFLICT));
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimitExceededException(RateLimitExceededException exception) {
+        String errorId = assignErrorId();
+        log.info("Rate limit exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(exception.getRetryAfterSeconds()))
+                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.RATE_LIMITED));
     }
 
     @ExceptionHandler(TariffConflictException.class)
