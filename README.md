@@ -306,7 +306,8 @@ console — no deploy, no plan migration:
 `usage × weight = credits burned · credits × price = what customers pay.`
 Both tabs open with an explainer and a worked example, and the Weights table
 shows the money implication of each weight live against your observed cost
-per unit.
+per unit. The full guide, including when to turn which dial, is in
+[PRICING.md](PRICING.md).
 
 ### Dial 1 — weights (tariff)
 
