@@ -38,4 +38,8 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
 
     @Query("SELECT COUNT(c) > 0 FROM Customer c WHERE c.id = :id AND c.account.id = :accountId")
     boolean existsByIdAndAccountId(UUID id, UUID accountId);
+
+    @Query("SELECT COUNT(c) FROM Customer c WHERE c.account.id = :accountId "
+            + "AND c.externalClientCustomerId LIKE 'agent_%' AND c.createdAt >= :since")
+    long countAgentSignupsSince(UUID accountId, java.time.Instant since);
 }

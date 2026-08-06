@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.mapper.event.EventMapper;
 import com.tansoflow.tansocore.model.event.events.EventDto;
@@ -52,15 +53,25 @@ import java.util.UUID;
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Event", description = "Event ingestion for client applications")
 public class EventClientController {
+    private final CustomerAccessGuard customerAccessGuard;
     private final EventService eventService;
     private final EventMapper eventMapper;
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Ingest an event", description = "Ingests a single event with idempotency check", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<EventIngestionResponse>> createEvent(
             @AuthenticationPrincipal UserContext userContext,
             @Valid @RequestBody EventRequest eventRequest,
             @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKeyHeader) {
+
+        if (userContext.isCustomerScoped()) {
+            // A customer key may only meter itself, and only by its own reference
+            eventRequest.setCustomerReferenceId(
+                    customerAccessGuard.resolveCustomerRef(userContext, eventRequest.getCustomerReferenceId()));
+            eventRequest.setCustomerId(null);
+            eventRequest.setStripeCustomerId(null);
+        }
 
         log.info("Ingesting event for account: {}", userContext.getAccountId());
 

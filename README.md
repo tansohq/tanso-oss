@@ -265,11 +265,37 @@ supply them via environment variables. The common ones:
 
 ## Agents & MCP
 
-Tanso Core ships an [MCP](https://modelcontextprotocol.io) server so AI agents
-can operate the platform directly — check credit balances, inspect
-entitlements, manage subscriptions, generate billing insights — using the same
-authenticated, account-scoped access as any other client. There's no separate,
-weaker path for agents.
+Tanso makes the product you build on it **agent-ready out of the box** — not
+just your team's agents, but your customers' buying agents:
+
+- **Discover**: `GET /public/v1/catalog/{slug}/pricing.json` publishes your
+  plans, features, credit weight table, and governance flags as a
+  machine-readable catalog (agent-serve pricing.json schema). Opt-in per
+  account: set a slug and enable it in settings.
+- **Sign up**: `POST /public/v1/catalog/{slug}/signup` creates a customer,
+  subscribes your designated free plan, and returns a customer-scoped API key
+  in one call — no CAPTCHA, no email loop. Opt-in, rate-capped per hour.
+- **Scoped credentials**: `ck_live_`/`ck_test_` keys are pinned to one
+  customer with explicit scopes (`read`, `purchase`); tenants issue and
+  rotate them via `/api/v1/client/customers/{ref}/keys`. Every endpoint not
+  deliberately opened to customer keys denies them.
+- **Pay**: SetupIntent pre-authorization saves a payment method (card data
+  never touches Tanso); subscribe and credit top-ups charge off-session with
+  it. No payment method? The API returns **402** with a checkout URL and a
+  checkout session id the agent can poll (`GET /checkout-sessions/{id}`) —
+  no dead-ending at a browser redirect. Agent charges respect the account's
+  spend cap.
+- **Use**: entitlement checks return credit quotes with estimated cost;
+  `GET /customers/{ref}/usage` is the burndown API — per-feature projections
+  and credit depletion dates. Errors carry stable `code` fields, and mutating
+  requests accept an `Idempotency-Key` header with 24h replay.
+
+Tanso Core also ships an [MCP](https://modelcontextprotocol.io) server so
+agents can operate over MCP instead of REST — including a curated
+customer-facing tool set (list plans, credit prices, entitlement pre-flight,
+usage forecast, subscribe, buy credits) that works with customer-scoped keys
+using the same authenticated, account-scoped access as any other client.
+There's no separate, weaker path for agents.
 
 Tools that spend money or make hard-to-reverse changes (generating AI
 insights, creating Stripe resources, billing operations) require the caller to

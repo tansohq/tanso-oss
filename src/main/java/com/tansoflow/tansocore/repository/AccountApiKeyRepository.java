@@ -22,6 +22,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -29,4 +30,10 @@ public interface AccountApiKeyRepository extends JpaRepository<AccountApiKey, UU
     AccountApiKey findAccountApiKeyByKeyValue(String apiKey);
 
     List<AccountApiKey> findByAccountId(UUID accountId);
+
+    List<AccountApiKey> findByAccountIdAndCustomerIsNull(UUID accountId);
+
+    List<AccountApiKey> findByAccountIdAndCustomerId(UUID accountId, UUID customerId);
+
+    Optional<AccountApiKey> findByIdAndAccountId(UUID id, UUID accountId);
 }

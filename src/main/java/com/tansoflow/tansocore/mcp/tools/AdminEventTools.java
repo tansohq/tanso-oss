@@ -68,19 +68,19 @@ public class AdminEventTools {
             Instant parsedStart = parseInstant(start);
             Instant parsedEnd = parseInstant(end);
             if (parsedStart == null && start != null && !start.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"start must be a valid ISO-8601 timestamp\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"start must be a valid ISO-8601 timestamp\"}}";
             }
             if (parsedEnd == null && end != null && !end.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"end must be a valid ISO-8601 timestamp\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"end must be a valid ISO-8601 timestamp\"}}";
             }
 
             UUID parsedPlanId = parseUuid(planId);
             if (parsedPlanId == null && planId != null && !planId.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}}";
             }
             UUID parsedFeatureId = parseUuid(featureId);
             if (parsedFeatureId == null && featureId != null && !featureId.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}}";
             }
 
             EventType parsedEventType = null;
@@ -88,7 +88,7 @@ public class AdminEventTools {
                 try {
                     parsedEventType = EventType.valueOf(eventType.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"Invalid eventType. Valid values: CLIENT_TRACKED, ENTITLEMENT_CHECKED, etc.\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"Invalid eventType. Valid values: CLIENT_TRACKED, ENTITLEMENT_CHECKED, etc.\"}}";
                 }
             }
 
@@ -108,9 +108,9 @@ public class AdminEventTools {
             response.put("size", result.getSize());
             return objectMapper.writeValueAsString(response);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize events\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize events\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"query_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"query_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -133,19 +133,19 @@ public class AdminEventTools {
 
             Instant parsedStart = parseInstant(start);
             if (parsedStart == null && start != null && !start.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"start must be a valid ISO-8601 timestamp\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"start must be a valid ISO-8601 timestamp\"}}";
             }
             Instant parsedEnd = parseInstant(end);
             if (parsedEnd == null && end != null && !end.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"end must be a valid ISO-8601 timestamp\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"end must be a valid ISO-8601 timestamp\"}}";
             }
             UUID parsedPlanId = parseUuid(planId);
             if (parsedPlanId == null && planId != null && !planId.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"planId must be a valid UUID\"}}";
             }
             UUID parsedFeatureId = parseUuid(featureId);
             if (parsedFeatureId == null && featureId != null && !featureId.isBlank()) {
-                return "{\"error\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"featureId must be a valid UUID\"}}";
             }
 
             EventType parsedEventType = null;
@@ -153,7 +153,7 @@ public class AdminEventTools {
                 try {
                     parsedEventType = EventType.valueOf(eventType.toUpperCase());
                 } catch (IllegalArgumentException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"Invalid eventType\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"Invalid eventType\"}}";
                 }
             }
 
@@ -162,9 +162,9 @@ public class AdminEventTools {
                     parsedFeatureId, parsedEventType, model, modelProvider, eventName);
             return objectMapper.writeValueAsString(result);
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize grouped events\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize grouped events\"}}";
         }
     }
 

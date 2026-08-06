@@ -79,6 +79,8 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class StripeWebhookImpl implements StripeWebhook {
+
+    private final com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
     private final StripeSyncServiceImpl stripeSyncService;
     private final ApplicationEventPublisher eventPublisher;
     private final ExternalApiKeyRepository externalApiKeyRepository;
@@ -95,6 +97,7 @@ public class StripeWebhookImpl implements StripeWebhook {
     private final StripeProductPlansRepository stripeProductPlansRepository;
     private final AccountRepository accountRepository;
     private final CustomerService customerService;
+    private final com.tansoflow.tansocore.repository.CustomerRepository customerRepository;
     private final PlanService planService;
     private final SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
 
@@ -216,6 +219,16 @@ public class StripeWebhookImpl implements StripeWebhook {
                     Session session = deserializeEvent(event, Session.class);
                     handleSessionsComplete(session);
                 }
+                case "setup_intent.succeeded" -> {
+                    com.stripe.model.SetupIntent setupIntent =
+                            deserializeEvent(event, com.stripe.model.SetupIntent.class);
+                    handleSetupIntentSucceeded(setupIntent);
+                }
+                case "payment_intent.succeeded" -> {
+                    com.stripe.model.PaymentIntent paymentIntent =
+                            deserializeEvent(event, com.stripe.model.PaymentIntent.class);
+                    handlePaymentIntentSucceeded(paymentIntent);
+                }
                 default -> log.info("Unhandled event type: {}", event.getType());
             }
         } catch (Exception e) {
@@ -277,7 +290,94 @@ public class StripeWebhookImpl implements StripeWebhook {
         } else if ("subscription".equals(session.getMode())) {
             log.info("Checkout session completed in subscription mode (session: {}). " +
                     "Subscription will be handled by customer.subscription.created webhook.", session.getId());
+            completeCheckoutSession(session);
+        } else if ("payment".equals(session.getMode())) {
+            handleCreditTopupSessionComplete(session);
         }
+    }
+
+    /** SetupIntent API path: store the confirmed payment method as the customer's default for off-session charges. */
+    @Transactional
+    protected void handleSetupIntentSucceeded(com.stripe.model.SetupIntent setupIntent) {
+        String accountId = setupIntent.getMetadata().get("tanso_account_id");
+        String tansoCustomerId = setupIntent.getMetadata().get("tanso_customer_id");
+        if (accountId == null || tansoCustomerId == null || setupIntent.getPaymentMethod() == null) {
+            return;
+        }
+        Customer customer = customerService.validateAndRetrieveCustomer(tansoCustomerId, accountId);
+        customer.setStripeDefaultPaymentMethodId(setupIntent.getPaymentMethod());
+        customerRepository.save(customer);
+        log.info("Stored default payment method for customer {} from setup_intent {}", tansoCustomerId, setupIntent.getId());
+    }
+
+    /** Reconciles off-session credit top-ups: grants are idempotent by payment intent id, so a webhook replay after the synchronous grant is a no-op. */
+    @Transactional
+    protected void handlePaymentIntentSucceeded(com.stripe.model.PaymentIntent paymentIntent) {
+        if (!"credit_topup".equals(paymentIntent.getMetadata().get("tanso_purpose"))) {
+            return;
+        }
+        String accountId = paymentIntent.getMetadata().get("tanso_account_id");
+        String poolId = paymentIntent.getMetadata().get("tanso_credit_pool_id");
+        String credits = paymentIntent.getMetadata().get("tanso_credits");
+        if (accountId == null || poolId == null || credits == null) {
+            return;
+        }
+        com.tansoflow.tansocore.model.credit.request.CreditGrantRequest grant =
+                new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        grant.setCreditPoolId(poolId);
+        grant.setAmount(new java.math.BigDecimal(credits));
+        grant.setGrantType("PURCHASED");
+        grant.setDescription("Agent credit top-up");
+        grant.setIdempotencyKey("pi_" + paymentIntent.getId());
+        try {
+            creditService.grantCredits(grant, accountId);
+            log.info("Reconciled credit top-up grant from payment_intent {} — the synchronous path had not granted yet", paymentIntent.getId());
+        } catch (IllegalArgumentException e) {
+            log.info("Credit top-up for payment_intent {} already granted synchronously", paymentIntent.getId());
+        }
+    }
+
+    /** Marks the Tanso checkout_sessions row completed and links the created subscription when the bridge already exists. */
+    private void completeCheckoutSession(Session session) {
+        checkoutSessionRepository.findByStripeSessionId(session.getId()).ifPresent(record -> {
+            record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
+            record.setCompletedAt(java.time.Instant.now());
+            if (session.getSubscription() != null) {
+                StripeSubscription bridge = stripeSubscriptionRepository
+                        .findStripeSubscriptionByStripeSubscriptionExternalId(session.getSubscription());
+                if (bridge != null) {
+                    record.setSubscriptionId(bridge.getSubscription().getId());
+                }
+            }
+            checkoutSessionRepository.save(record);
+        });
+    }
+
+    /** Hosted-checkout fallback for credit top-ups: grant the credits on completion, idempotent by session id. */
+    private void handleCreditTopupSessionComplete(Session session) {
+        checkoutSessionRepository.findByStripeSessionId(session.getId()).ifPresent(record -> {
+            if (!com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_CREDIT_TOPUP.equals(record.getPurpose())
+                    || com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED.equals(record.getStatus())) {
+                return;
+            }
+            com.tansoflow.tansocore.model.credit.request.CreditGrantRequest grant =
+                    new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+            grant.setCreditPoolId(record.getCreditPoolId().toString());
+            grant.setAmount(record.getCredits());
+            grant.setGrantType("PURCHASED");
+            grant.setDescription("Agent credit top-up via hosted checkout");
+            grant.setIdempotencyKey("checkout_" + session.getId());
+            try {
+                creditService.grantCredits(grant, record.getAccountId().toString());
+            } catch (IllegalArgumentException e) {
+                // Webhook replay after the grant landed — the completion mark below is all that's left to do
+                log.info("Credit top-up grant for session {} already exists: {}", session.getId(), e.getMessage());
+            }
+
+            record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
+            record.setCompletedAt(java.time.Instant.now());
+            checkoutSessionRepository.save(record);
+        });
     }
 
     @Transactional
@@ -812,6 +912,12 @@ public class StripeWebhookImpl implements StripeWebhook {
         }
 
         log.info("STRIPE_DRIVEN: Created Tanso subscription {} from Stripe subscription {}", tansoSub.getId(), stripeSub.getId());
+    }
+
+    @Override
+    @Transactional
+    public void materializeStripeSubscription(com.stripe.model.Subscription stripeSubscription, String accountId) {
+        handleStripeIntegrationSubscriptionCreated(stripeSubscription, accountId);
     }
 
     /**

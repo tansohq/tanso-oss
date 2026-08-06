@@ -45,7 +45,7 @@ public class AnalyticsTools {
             var result = analyticsService.getPortfolioAnalytics(getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize analytics response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize analytics response\"}}";
         }
     }
 
@@ -60,13 +60,13 @@ public class AnalyticsTools {
                 try {
                     parsedPeriods = Integer.parseInt(periods);
                 } catch (NumberFormatException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"periods must be a valid integer\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"periods must be a valid integer\"}}";
                 }
             }
             var result = analyticsService.getRevenueBridge(getAccountId(), parsedPeriods);
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize revenue bridge response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize revenue bridge response\"}}";
         }
     }
 
@@ -78,7 +78,7 @@ public class AnalyticsTools {
             var result = analyticsService.getModelAnalytics(getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize model analytics response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize model analytics response\"}}";
         }
     }
 

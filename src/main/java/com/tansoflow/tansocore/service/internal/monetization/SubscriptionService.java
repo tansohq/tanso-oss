@@ -40,6 +40,8 @@ public interface SubscriptionService {
     @Transactional
     SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId);
 
+    SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId, String paymentMethodId);
+
     Subscription createSubscription(String customerUuid, String planUuid, String accountId);
 
     // TODO implement as find subscriptions by customer

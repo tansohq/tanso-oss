@@ -51,9 +51,9 @@ public class EntitlementTools {
                     customerReferenceId, getAccountId(), featureKey);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize entitlement response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize entitlement response\"}}";
         }
     }
 
@@ -66,9 +66,9 @@ public class EntitlementTools {
                     customerReferenceId, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize entitlements\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize entitlements\"}}";
         }
     }
 
@@ -93,11 +93,11 @@ public class EntitlementTools {
             var result = clientEntitlementService.evaluateEntitlement(getAccountId(), request);
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (NumberFormatException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"requestedUsage must be a valid number\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"requestedUsage must be a valid number\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize entitlement response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize entitlement response\"}}";
         }
     }
 

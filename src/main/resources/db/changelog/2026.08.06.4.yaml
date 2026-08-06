@@ -1,0 +1,94 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260806-4"
+      author: tanso
+      comment: >
+        Agent purchasing. checkout_sessions gives hosted-checkout flows a
+        Tanso-owned id an agent can poll instead of dead-ending at a browser
+        URL. customers.stripe_default_payment_method_id holds the saved
+        payment method from the SetupIntent path (one default per customer).
+        The unique constraint on the Stripe-subscription bridge makes the
+        synchronous programmatic subscribe and the
+        customer.subscription.created webhook race-safe: whichever runs
+        second hits the constraint instead of double-creating.
+      changes:
+        - createTable:
+            tableName: checkout_sessions
+            columns:
+              - column:
+                  name: checkout_session_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: customer_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: purpose
+                  type: VARCHAR(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: status
+                  type: VARCHAR(20)
+                  defaultValue: PENDING
+                  constraints:
+                    nullable: false
+              - column:
+                  name: stripe_session_id
+                  type: VARCHAR(255)
+              - column:
+                  name: plan_id
+                  type: UUID
+              - column:
+                  name: subscription_id
+                  type: UUID
+              - column:
+                  name: credit_pool_id
+                  type: UUID
+              - column:
+                  name: credits
+                  type: NUMERIC(18,4)
+              - column:
+                  name: checkout_url
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: completed_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - addUniqueConstraint:
+            tableName: checkout_sessions
+            columnNames: stripe_session_id
+            constraintName: uq_checkout_sessions_stripe_session
+        - createIndex:
+            tableName: checkout_sessions
+            indexName: idx_checkout_sessions_account_customer
+            columns:
+              - column:
+                  name: account_id
+              - column:
+                  name: customer_id
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: stripe_default_payment_method_id
+                  type: VARCHAR(255)
+        - addUniqueConstraint:
+            tableName: stripe_subscriptions
+            columnNames: stripe_subscription_external_id
+            constraintName: uq_stripe_subscriptions_external_id

@@ -22,4 +22,5 @@ import lombok.Data;
 @Data
 public class StripePaymentLinkDto {
     private String paymentLink;
+    private String stripeSessionId;
 }

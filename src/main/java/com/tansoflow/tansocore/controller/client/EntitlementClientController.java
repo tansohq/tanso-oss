@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.entitlement.api.EntitlementEvaluationRequest;
 import com.tansoflow.tansocore.model.entitlement.response.CustomerEntitlementsResponse;
@@ -52,9 +53,11 @@ import java.util.List;
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Entitlement", description = "Entitlement checks for client applications")
 public class EntitlementClientController {
+    private final CustomerAccessGuard customerAccessGuard;
     private final ClientEntitlementService clientEntitlementService;
 
     @GetMapping("/{customerReferenceId}")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "List all customer entitlements", description = "Returns all active entitlements for a customer, grouped by subscription", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved customer entitlements"),
@@ -64,6 +67,7 @@ public class EntitlementClientController {
             @PathVariable("customerReferenceId") String customerId,
             @RequestParam(defaultValue = "50") int limit,
             @RequestParam(defaultValue = "0") int offset) {
+        customerId = customerAccessGuard.resolveCustomerRef(userContext, customerId);
         CustomerEntitlementsResponse response = clientEntitlementService
                 .getCustomerEntitlements(customerId, userContext.getAccountId());
 
@@ -90,6 +94,7 @@ public class EntitlementClientController {
     }
 
     @GetMapping("/{customerReferenceId}/{feature-key}")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Check feature entitlement", description = "Checks if a customer has entitlement for a specific feature by its key", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved entitlement information"),
@@ -99,6 +104,7 @@ public class EntitlementClientController {
             @PathVariable("customerReferenceId") String customerId,
             @PathVariable("feature-key") String parameter,
             @RequestParam(defaultValue = "true") boolean record) {
+        customerId = customerAccessGuard.resolveCustomerRef(userContext, customerId);
         EntitlementResponse entitlementResponse = clientEntitlementService.checkEntitlement(customerId, userContext.getAccountId(), parameter, record);
 
         ApiResponse<EntitlementResponse> apiResponse = ApiResponse.<EntitlementResponse>builder()
@@ -110,9 +116,11 @@ public class EntitlementClientController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Check feature entitlement with usage simulation", description = "Checks if a customer has entitlement for a feature. When usage context is provided, simulates whether the proposed usage would be allowed without recording real usage. The event is recorded with zero usage for audit purposes only. Use POST /api/v1/client/events to record actual usage.", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<EntitlementResponse>> evaluateEntitlement(@AuthenticationPrincipal UserContext userContext,
                                          @Valid @RequestBody EntitlementEvaluationRequest request) {
+        request.setCustomerReferenceId(customerAccessGuard.resolveCustomerRef(userContext, request.getCustomerReferenceId()));
         log.info("Evaluating entitlement for customer: {} and feature: {}", request.getCustomerReferenceId(), request.getFeatureKey());
         EntitlementResponse response = clientEntitlementService.evaluateEntitlement(userContext.getAccountId(), request);
         return ResponseEntity.ok(ApiResponse.<EntitlementResponse>builder()

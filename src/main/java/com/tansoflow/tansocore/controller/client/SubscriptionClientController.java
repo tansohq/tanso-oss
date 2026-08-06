@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest;
@@ -56,25 +57,40 @@ import java.util.UUID;
         description = "Manage customer lifecycles. Supports Flat, Usage, and Hybrid models. " +
                 "Hybrid plans combine a base price with usage-based feature rules.")
 public class SubscriptionClientController {
+    private final CustomerAccessGuard customerAccessGuard;
     private final SubscriptionService subscriptionService;
 
     // TODO: Needs to return hosted invoice url in meta data
     @PostMapping()
-    @Operation(summary = "Create subscription", description = "Adds a new subscription to a customer with a specific plan", security = @SecurityRequirement(name = "Bearer"))
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
+    @Operation(summary = "Create subscription", description = "Adds a new subscription to a customer with a specific plan. "
+            + "For paid plans with a supplied or saved payment method the subscription is created synchronously; "
+            + "without one, customer-key callers get 402 with a checkout URL and a pollable checkout session.", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a subscription"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid plan or customer ID", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubscribedCustomerResponse>> createSubscription(@AuthenticationPrincipal UserContext userContext,
                                                           @Valid @RequestBody ClientSubscriptionRequest subscriptionRequest) {
+        subscriptionRequest.setCustomerReferenceId(
+                customerAccessGuard.resolveCustomerRef(userContext, subscriptionRequest.getCustomerReferenceId()));
+        customerAccessGuard.requirePurchaseScope(userContext);
         SubscribedCustomerResponse subscribedCustomerResponse =
                 subscriptionService.clientSubscribeCustomer(subscriptionRequest, userContext.getAccountId());
 
+        // Agent-facing 402: a checkout-URL-only outcome means "payment required, hand
+        // this to your principal". Tenant (sk_) callers keep the legacy 201 shape.
+        boolean checkoutOnly = subscribedCustomerResponse.getSubscription() == null
+                && subscribedCustomerResponse.getCheckoutUrl() != null;
+        HttpStatus status = checkoutOnly && userContext.isCustomerScoped()
+                ? HttpStatus.PAYMENT_REQUIRED
+                : HttpStatus.CREATED;
+
         ApiResponse<SubscribedCustomerResponse> apiResponse = ApiResponse.<SubscribedCustomerResponse>builder()
                 .data(subscribedCustomerResponse)
-                .success(true)
+                .success(!checkoutOnly || !userContext.isCustomerScoped())
                 .build();
-        return ResponseEntity.status(HttpStatus.CREATED).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
+        return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
     }
 
     @PostMapping("/cancellation/{subscriptionId}")

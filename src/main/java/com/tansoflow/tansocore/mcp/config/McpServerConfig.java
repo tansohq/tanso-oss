@@ -31,6 +31,7 @@ import com.tansoflow.tansocore.mcp.tools.EntitlementTools;
 import com.tansoflow.tansocore.mcp.tools.EventTools;
 import com.tansoflow.tansocore.mcp.tools.PlanTools;
 import com.tansoflow.tansocore.mcp.tools.StripeSetupTools;
+import com.tansoflow.tansocore.mcp.tools.customer.AgentCustomerTools;
 import com.tansoflow.tansocore.mcp.tools.SubscriptionTools;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
@@ -59,6 +60,7 @@ public class McpServerConfig {
             EventTools eventTools,
             AnalyticsTools analyticsTools,
             AiInsightTools aiInsightTools,
+            AgentCustomerTools agentCustomerTools,
             ObjectProvider<AdminFeatureTools> adminFeatureTools,
             ObjectProvider<AdminPlanTools> adminPlanTools,
             ObjectProvider<AdminPlanFeatureRuleTools> adminPlanFeatureRuleTools,
@@ -68,7 +70,7 @@ public class McpServerConfig {
         List<Object> tools = new ArrayList<>(List.of(
                 planTools, entitlementTools, customerTools,
                 billingTools, creditTools, subscriptionTools, eventTools,
-                analyticsTools, aiInsightTools));
+                analyticsTools, aiInsightTools, agentCustomerTools));
         adminFeatureTools.ifAvailable(tools::add);
         adminPlanTools.ifAvailable(tools::add);
         adminPlanFeatureRuleTools.ifAvailable(tools::add);

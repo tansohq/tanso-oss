@@ -1,0 +1,56 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260806-3"
+      author: tanso
+      comment: >
+        Agent-serve discovery and signup settings. accounts.slug names the
+        account in public URLs (/public/v1/catalog/{slug}/...). All toggles
+        default off: the public catalog and agent signup are opt-in per
+        account, and the signup default plan must be a free ACTIVE plan
+        (validated at settings-save). agent_max_topup_amount is the spend
+        cap enforced before any agent-initiated payment.
+      changes:
+        - addColumn:
+            tableName: accounts
+            columns:
+              - column:
+                  name: slug
+                  type: VARCHAR(63)
+        - addUniqueConstraint:
+            tableName: accounts
+            columnNames: slug
+            constraintName: uq_accounts_slug
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: public_catalog_enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agent_signup_enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agent_signup_default_plan_id
+                  type: UUID
+              - column:
+                  name: agent_signup_hourly_cap
+                  type: INT
+                  defaultValueNumeric: 10
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agent_max_topup_amount
+                  type: NUMERIC(18,2)
+        - addForeignKeyConstraint:
+            baseTableName: account_settings
+            baseColumnNames: agent_signup_default_plan_id
+            constraintName: fk_account_settings_signup_plan
+            referencedTableName: plans
+            referencedColumnNames: plan_id
+            onDelete: SET NULL

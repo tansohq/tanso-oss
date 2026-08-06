@@ -25,6 +25,8 @@ import lombok.Setter;
 @Setter
 @Schema
 public class Error {
+    @Schema(description = "Stable machine-readable code; branch on this, not on message")
+    private String code;
     private String message;
     private String detail;
 
@@ -35,5 +37,16 @@ public class Error {
 
     public Error(String message) {
         this.message = message;
+    }
+
+    public Error(ErrorCode code, String message) {
+        this.code = code.code();
+        this.message = message;
+    }
+
+    public Error(ErrorCode code, String message, String detail) {
+        this.code = code.code();
+        this.message = message;
+        this.detail = detail;
     }
 }

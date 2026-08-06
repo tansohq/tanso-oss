@@ -71,6 +71,25 @@ public class AccountSetting {
     @Column(name = "currency", nullable = false, length = 3)
     private String currency = "USD";
 
+    @ColumnDefault("false")
+    @Column(name = "public_catalog_enabled", nullable = false)
+    private boolean publicCatalogEnabled = false;
+
+    @ColumnDefault("false")
+    @Column(name = "agent_signup_enabled", nullable = false)
+    private boolean agentSignupEnabled = false;
+
+    @Column(name = "agent_signup_default_plan_id")
+    private UUID agentSignupDefaultPlanId;
+
+    @ColumnDefault("10")
+    @Column(name = "agent_signup_hourly_cap", nullable = false)
+    private int agentSignupHourlyCap = 10;
+
+    // Max money one agent-initiated purchase may move; null = uncapped
+    @Column(name = "agent_max_topup_amount", precision = 18, scale = 2)
+    private java.math.BigDecimal agentMaxTopupAmount;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "default_cost_config")
     private Map<String, Object> defaultCostConfig;

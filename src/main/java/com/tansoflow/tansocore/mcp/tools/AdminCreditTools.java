@@ -53,7 +53,7 @@ public class AdminCreditTools {
             var models = creditService.getCreditModelsByAccount(getAccountId());
             return objectMapper.writeValueAsString(models);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit models\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit models\"}}";
         }
     }
 
@@ -64,9 +64,9 @@ public class AdminCreditTools {
             var model = creditService.getCreditModel(creditModelId, getAccountId());
             return objectMapper.writeValueAsString(model);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit model\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit model\"}}";
         }
     }
 
@@ -94,9 +94,9 @@ public class AdminCreditTools {
             var result = creditService.createCreditModel(request, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit model\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit model\"}}";
         }
     }
 
@@ -106,13 +106,13 @@ public class AdminCreditTools {
             @ToolParam(description = "The credit model ID to delete") String creditModelId,
             @ToolParam(description = "Set to true to confirm deletion.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to delete this credit model.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to delete this credit model.\"}}";
         }
         try {
             creditService.deleteCreditModel(creditModelId, getAccountId());
             return "{\"success\": true, \"message\": \"Credit model deleted\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -137,11 +137,11 @@ public class AdminCreditTools {
             creditService.addCreditAllocationToPlan(planId, creditModelId, parsedAmount, parsedExpiry, hardLimit, getAccountId());
             return "{\"success\": true, \"message\": \"Credit allocation added to plan\"}";
         } catch (NumberFormatException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"creditAmount and grantExpiresMonths must be valid numbers\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"creditAmount and grantExpiresMonths must be valid numbers\"}}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -153,9 +153,9 @@ public class AdminCreditTools {
             var allocations = creditService.getCreditAllocationsForPlan(planId, getAccountId());
             return objectMapper.writeValueAsString(allocations);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize allocations\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize allocations\"}}";
         }
     }
 
@@ -167,13 +167,13 @@ public class AdminCreditTools {
             @ToolParam(description = "The plan ID to unlink from") String planId,
             @ToolParam(description = "Set to true to confirm removal.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to remove this allocation.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to remove this allocation.\"}}";
         }
         try {
             creditService.removeCreditAllocationFromPlan(planId, creditModelId, getAccountId());
             return "{\"success\": true, \"message\": \"Credit allocation removed from plan\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -185,7 +185,7 @@ public class AdminCreditTools {
             var pools = creditService.getCreditPoolsByAccount(getAccountId());
             return objectMapper.writeValueAsString(pools);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}}";
         }
     }
 
@@ -197,9 +197,9 @@ public class AdminCreditTools {
             var pool = creditService.getCreditPool(poolId, getAccountId());
             return objectMapper.writeValueAsString(pool);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}}";
         }
     }
 
@@ -210,9 +210,9 @@ public class AdminCreditTools {
             var pools = creditService.getCreditPoolsByCustomer(customerId, getAccountId());
             return objectMapper.writeValueAsString(pools);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pools\"}}";
         }
     }
 
@@ -241,9 +241,9 @@ public class AdminCreditTools {
             var result = creditService.createCreditPool(request, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize credit pool\"}}";
         }
     }
 
@@ -275,13 +275,13 @@ public class AdminCreditTools {
             var result = creditService.grantCredits(request, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (NumberFormatException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"amount must be a valid number\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"amount must be a valid number\"}}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize grant\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize grant\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"grant_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"grant_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -292,9 +292,9 @@ public class AdminCreditTools {
             var grants = creditService.getGrantsByPool(poolId, getAccountId());
             return objectMapper.writeValueAsString(grants);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize grants\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize grants\"}}";
         }
     }
 
@@ -307,7 +307,7 @@ public class AdminCreditTools {
             @ToolParam(description = "Idempotency key to prevent duplicate deductions", required = false) String idempotencyKey,
             @ToolParam(description = "Set to true to confirm this deduction.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to deduct credits.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to deduct credits.\"}}";
         }
         try {
             var request = new CreditDeductionRequest();
@@ -319,13 +319,13 @@ public class AdminCreditTools {
             var result = creditService.deductCredits(request, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (NumberFormatException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"amount must be a valid number\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"amount must be a valid number\"}}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize deduction\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize deduction\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"deduction_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"deduction_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -339,9 +339,9 @@ public class AdminCreditTools {
             var transactions = creditService.getTransactionsByPool(poolId, getAccountId());
             return objectMapper.writeValueAsString(transactions);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize transactions\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize transactions\"}}";
         }
     }
 
@@ -353,17 +353,17 @@ public class AdminCreditTools {
             @ToolParam(description = "Reason for the reversal", required = false) String description,
             @ToolParam(description = "Set to true to confirm this reversal.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to reverse this transaction.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to reverse this transaction.\"}}";
         }
         try {
             var result = creditService.reverseTransaction(transactionId, description, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize reversal\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize reversal\"}}";
         }
     }
 
@@ -389,11 +389,11 @@ public class AdminCreditTools {
             creditService.linkPoolToSubscription(poolId, subscriptionId, getAccountId(), priority, limit);
             return "{\"success\": true, \"message\": \"Pool linked to subscription\"}";
         } catch (NumberFormatException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"drawPriority must be an integer, drawLimit must be a number\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"drawPriority must be an integer, drawLimit must be a number\"}}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"link_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"link_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -404,13 +404,13 @@ public class AdminCreditTools {
             @ToolParam(description = "The subscription ID to unlink from") String subscriptionId,
             @ToolParam(description = "Set to true to confirm unlinking.") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to unlink this pool.\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to unlink this pool.\"}}";
         }
         try {
             creditService.unlinkPoolFromSubscription(poolId, subscriptionId, getAccountId());
             return "{\"success\": true, \"message\": \"Pool unlinked from subscription\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

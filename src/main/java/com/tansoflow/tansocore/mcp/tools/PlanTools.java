@@ -46,7 +46,7 @@ public class PlanTools {
             var plans = clientPlanService.retrieveActivePlansWithPricing(getAccountId());
             return objectMapper.writeValueAsString(plans);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize plans\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize plans\"}}";
         }
     }
 
@@ -57,7 +57,7 @@ public class PlanTools {
             var features = featureService.getFeatures(getAccountId());
             return objectMapper.writeValueAsString(features);
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize features\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize features\"}}";
         }
     }
 
@@ -69,9 +69,9 @@ public class PlanTools {
             var feature = featureService.getFeatureByKey(getAccountId(), featureKey);
             return objectMapper.writeValueAsString(feature);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize feature\"}}";
         }
     }
 

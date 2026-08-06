@@ -1,0 +1,377 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/katrinalaszlo/agent-serve/main/schema/pricing.schema.json",
+  "title": "pricing.json",
+  "description": "Machine-readable B2B SaaS pricing for agent discovery and comparison. Publish at your domain root: https://example.com/pricing.json",
+  "type": "object",
+  "required": ["$schema", "product", "revenue_model", "plans"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "const": "https://raw.githubusercontent.com/katrinalaszlo/agent-serve/main/schema/pricing.schema.json"
+    },
+    "product": {
+      "type": "object",
+      "required": ["name", "vendor", "category"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Product name"
+        },
+        "vendor": {
+          "type": "string",
+          "description": "Company or organization name"
+        },
+        "category": {
+          "type": "string",
+          "description": "Product category (e.g. 'observability', 'auth', 'database', 'payments', 'hosting')"
+        },
+        "stack_layer": {
+          "type": "string",
+          "enum": [
+            "infrastructure",
+            "platform",
+            "application",
+            "data",
+            "security",
+            "observability",
+            "developer-tools"
+          ],
+          "description": "Where this product sits in a tech stack"
+        },
+        "description": {
+          "type": "string",
+          "description": "One-line product description"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Product homepage"
+        }
+      }
+    },
+    "revenue_model": {
+      "type": "object",
+      "required": ["type", "billing_frequency"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "flat",
+            "seat",
+            "usage",
+            "transactional",
+            "hybrid",
+            "credit",
+            "freemium"
+          ],
+          "description": "Primary pricing model"
+        },
+        "billing_frequency": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["monthly", "annual", "usage", "one-time"]
+          },
+          "description": "Available billing cycles"
+        },
+        "agent_onboarding": {
+          "type": "boolean",
+          "description": "Whether agents can sign up and start using the product without human intervention"
+        }
+      }
+    },
+    "value_metric": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string",
+          "description": "What you charge for (e.g. 'API call', 'GB stored', 'seat', 'record enriched', 'message sent')"
+        },
+        "null_results_billable": {
+          "type": "boolean",
+          "description": "Whether failed/empty results count against usage"
+        },
+        "metering": {
+          "type": "string",
+          "enum": [
+            "per-request",
+            "time-window",
+            "peak",
+            "average",
+            "cumulative"
+          ],
+          "description": "How usage is counted"
+        }
+      }
+    },
+    "plans": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "price"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Machine-readable plan identifier (e.g. Stripe price ID)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable plan name"
+          },
+          "price": {
+            "type": "object",
+            "required": ["amount", "currency"],
+            "properties": {
+              "amount": {
+                "type": "number",
+                "description": "Price per billing period (0 for free tier)"
+              },
+              "currency": {
+                "type": "string",
+                "description": "ISO 4217 currency code"
+              },
+              "per": {
+                "type": "string",
+                "enum": ["month", "year", "unit", "request"],
+                "description": "What the price covers"
+              }
+            }
+          },
+          "included_usage": {
+            "type": "object",
+            "description": "What's included before overage kicks in",
+            "additionalProperties": {
+              "type": ["number", "string"],
+              "description": "Quantity included (number or 'unlimited')"
+            }
+          },
+          "overage_rate": {
+            "type": "object",
+            "description": "Cost per unit above included usage",
+            "properties": {
+              "amount": { "type": "number" },
+              "currency": { "type": "string" },
+              "per": { "type": "string" }
+            }
+          },
+          "volume_tiers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "up_to": { "type": ["number", "string"] },
+                "unit_price": { "type": "number" }
+              }
+            }
+          },
+          "rate_limits": {
+            "type": "object",
+            "description": "Rate limits for this plan",
+            "properties": {
+              "requests_per_second": { "type": "number" },
+              "requests_per_minute": { "type": "number" },
+              "requests_per_day": { "type": "number" }
+            }
+          },
+          "features": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Features included in this plan"
+          },
+          "trial": {
+            "type": "object",
+            "properties": {
+              "days": {
+                "type": "integer",
+                "description": "Trial duration in days"
+              },
+              "requires_payment_method": {
+                "type": "boolean"
+              },
+              "api_provisioning_url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Endpoint to programmatically start a trial"
+              }
+            }
+          }
+        }
+      }
+    },
+    "credits": {
+      "type": "object",
+      "description": "Credit-based pricing details (if applicable)",
+      "properties": {
+        "currency_name": {
+          "type": "string",
+          "description": "What credits are called (e.g. 'tokens', 'credits', 'units')"
+        },
+        "weight_table": {
+          "type": "object",
+          "description": "How many credits different operations cost",
+          "additionalProperties": { "type": "number" }
+        },
+        "cross_product": {
+          "type": "boolean",
+          "description": "Whether credits work across multiple products"
+        },
+        "rollover": {
+          "type": "string",
+          "enum": ["none", "monthly", "annual", "unlimited"],
+          "description": "Whether unused credits carry over"
+        }
+      }
+    },
+    "overages": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "enum": ["hard-stop", "throttle", "flex", "payg", "none"],
+          "description": "What happens when usage exceeds plan limits"
+        },
+        "grace_period_days": {
+          "type": "integer",
+          "description": "Days before overage enforcement begins"
+        },
+        "notification": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["email", "webhook", "api", "dashboard"]
+          },
+          "description": "How overage is communicated"
+        }
+      }
+    },
+    "governance": {
+      "type": "object",
+      "description": "Controls for agent spending and access",
+      "properties": {
+        "per_key_limits": {
+          "type": "boolean",
+          "description": "Whether individual API keys can have spending/usage limits"
+        },
+        "budget_controls": {
+          "type": "boolean",
+          "description": "Whether humans can set spending caps agents must respect"
+        },
+        "spend_alerts": {
+          "type": "boolean",
+          "description": "Whether threshold-based spending alerts are available"
+        },
+        "burndown_api": {
+          "type": "boolean",
+          "description": "Whether real-time budget burndown data is available via API"
+        }
+      }
+    },
+    "compliance": {
+      "type": "object",
+      "properties": {
+        "certifications": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "soc2-type1",
+              "soc2-type2",
+              "gdpr",
+              "hipaa",
+              "iso27001",
+              "pci-dss",
+              "ccpa",
+              "fedramp"
+            ]
+          }
+        },
+        "data_residency": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Available data residency regions or country codes (for example, 'US', 'EU', or ISO 3166-1 country codes)"
+        },
+        "dpa_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Data Processing Agreement URL"
+        }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "properties": {
+        "api_docs_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "openapi_spec_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "mcp_server": {
+          "type": "boolean",
+          "description": "Whether an MCP server is available for agent interaction"
+        },
+        "sdk_languages": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Available SDK languages"
+        },
+        "auth_methods": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "api-key",
+              "oauth-client-credentials",
+              "oauth-authorization-code",
+              "service-account",
+              "bearer-token"
+            ]
+          }
+        }
+      }
+    },
+    "support": {
+      "type": "object",
+      "properties": {
+        "sla_uptime": {
+          "type": "string",
+          "description": "Uptime SLA (e.g. '99.9%')"
+        },
+        "response_time": {
+          "type": "object",
+          "description": "Support response time by severity",
+          "additionalProperties": { "type": "string" }
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["email", "chat", "phone", "slack", "api", "community"]
+          }
+        }
+      }
+    },
+    "contact": {
+      "type": "object",
+      "properties": {
+        "sales_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "pricing_page_url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "quote_api_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Endpoint for programmatic custom quotes"
+        }
+      }
+    }
+  }
+}

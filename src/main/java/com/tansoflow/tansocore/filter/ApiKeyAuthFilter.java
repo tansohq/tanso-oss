@@ -17,9 +17,13 @@
  */
 package com.tansoflow.tansocore.filter;
 
+import com.tansoflow.tansocore.auth.SecurityErrorWriter;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.auth.UserContextAuthentication;
 import com.tansoflow.tansocore.entity.Account;
+import com.tansoflow.tansocore.entity.AccountApiKey;
+import com.tansoflow.tansocore.model.response.ErrorCode;
+import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -41,10 +45,12 @@ import java.util.List;
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final AccountService accountService;
+    private final CustomerApiKeyService customerApiKeyService;
     private static final AntPathMatcher PM = new AntPathMatcher();
 
-    public ApiKeyAuthFilter(AccountService accountService) {
+    public ApiKeyAuthFilter(AccountService accountService, CustomerApiKeyService customerApiKeyService) {
         this.accountService = accountService;
+        this.customerApiKeyService = customerApiKeyService;
     }
 
     @Override
@@ -111,6 +117,37 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             SecurityContextHolder.getContext().setAuthentication(auth);
 
             MDC.put("accountId", account.getId().toString());
+        } else if (apiKey.startsWith("ck_live_") || apiKey.startsWith("ck_test_")) {
+
+            AccountApiKey customerKey = customerApiKeyService.findByKey(apiKey);
+
+            if (customerKey == null) {
+                String keyPrefix = apiKey.substring(0, Math.min(12, apiKey.length())) + "...";
+                log.warn("Customer API key authentication failed: keyPrefix={}, path={}", keyPrefix, request.getRequestURI());
+                writeUnauthorized(response);
+                return;
+            }
+
+            List<String> scopes = customerKey.getScopes() != null
+                    ? List.of(customerKey.getScopes().split(","))
+                    : List.of();
+            UserContext principal = new UserContext(
+                    customerKey.getAccount().getId().toString(),
+                    customerKey.getCustomer().getId().toString(),
+                    customerKey.getCustomer().getExternalClientCustomerId(),
+                    scopes,
+                    null);
+
+            List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+            authorities.add(new SimpleGrantedAuthority("ROLE_CUSTOMER"));
+            scopes.forEach(scope -> authorities.add(new SimpleGrantedAuthority("SCOPE_" + scope)));
+
+            UserContextAuthentication auth = new UserContextAuthentication(principal, authorities);
+            auth.setAuthenticated(true);
+            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(auth);
+
+            MDC.put("accountId", customerKey.getAccount().getId().toString());
         }
 
         chain.doFilter(request, response);
@@ -125,8 +162,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     }
 
     private static void writeUnauthorized(HttpServletResponse response) throws IOException {
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        response.setContentType("application/json");
-        response.getWriter().write("{\"error\":\"" + "invalid_api_key" + "\"}");
+        SecurityErrorWriter.write(response, HttpServletResponse.SC_UNAUTHORIZED,
+                ErrorCode.UNAUTHORIZED, "Invalid API key");
     }
 }

@@ -48,9 +48,9 @@ public class BillingTools {
                     customerReferenceId, getAccountId());
             return objectMapper.writeValueAsString(invoices);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize invoices\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize invoices\"}}";
         }
     }
 
@@ -61,15 +61,15 @@ public class BillingTools {
             @ToolParam(description = "The invoice ID to mark as paid") String invoiceId,
             @ToolParam(description = "Must be true to execute this action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}}";
         }
         try {
             subscriptionService.subscriptionInvoicePaid(invoiceId, getAccountId());
             return "{\"success\": true, \"message\": \"Invoice " + invoiceId + " marked as paid\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

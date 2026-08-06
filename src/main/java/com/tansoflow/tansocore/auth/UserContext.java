@@ -17,6 +17,8 @@
  */
 package com.tansoflow.tansocore.auth;
 
+import java.util.List;
+
 import lombok.Data;
 
 @Data
@@ -25,10 +27,26 @@ public class UserContext {
     private String accountId;
     private String email;
     private String apiKey;
+    // Set only for customer-scoped (ck_) API keys
+    private String customerId;
+    private String customerReferenceId;
+    private List<String> scopes;
 
     public UserContext(String accountId, String apiKey) {
         this.accountId = accountId;
         this.apiKey = apiKey;
+    }
+
+    public UserContext(String accountId, String customerId, String customerReferenceId, List<String> scopes, String apiKey) {
+        this.accountId = accountId;
+        this.customerId = customerId;
+        this.customerReferenceId = customerReferenceId;
+        this.scopes = scopes;
+        this.apiKey = apiKey;
+    }
+
+    public boolean isCustomerScoped() {
+        return customerId != null;
     }
 
     public UserContext(String userId, String accountId, String email, String apiKey) {

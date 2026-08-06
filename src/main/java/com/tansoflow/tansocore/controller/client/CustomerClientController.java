@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.mapper.account.CustomerMapper;
@@ -59,12 +60,14 @@ import java.util.List;
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Customer", description = "Customer management for client applications")
 public class CustomerClientController {
+    private final CustomerAccessGuard customerAccessGuard;
     private final CustomerService customerService;
     private final CustomerMapper customerMapper;
     private final SubscriptionService subscriptionService;
     private final CreditService creditService;
 
     @GetMapping("/{externalClientCustomerId}")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Retrieve a customer", description = "Retrieves customer details and subscriptions by external client customer ID", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully retrieved customer details"),
@@ -73,6 +76,7 @@ public class CustomerClientController {
     })
     public ResponseEntity<ApiResponse<CustomerClientResponse>> getCustomer(@AuthenticationPrincipal UserContext userContext,
                                                    @PathVariable("externalClientCustomerId") String externalClientCustomerId) {
+        externalClientCustomerId = customerAccessGuard.resolveCustomerRef(userContext, externalClientCustomerId);
         Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(externalClientCustomerId, userContext.getAccountId());
         CustomerDto customerDto = customerMapper.customerEntityToCustomerDto(customer);
         CustomerClientResponse customerClientResponse = customerMapper.customerDtoToCustomerClientResponse(customerDto);

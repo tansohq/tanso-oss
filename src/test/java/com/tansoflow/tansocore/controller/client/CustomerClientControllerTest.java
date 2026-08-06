@@ -70,6 +70,9 @@ class CustomerClientControllerTest {
     @Mock
     private CreditService creditService;
 
+    @org.mockito.Spy
+    private com.tansoflow.tansocore.auth.CustomerAccessGuard customerAccessGuard = new com.tansoflow.tansocore.auth.CustomerAccessGuard();
+
     @InjectMocks
     private CustomerClientController customerClientController;
 

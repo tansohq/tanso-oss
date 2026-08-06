@@ -103,6 +103,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final InvoiceMapper invoiceMapper;
     private final CreditService creditService;
     private final PlanCreditAllocationRepository planCreditAllocationRepository;
+    private final com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
+    private final com.tansoflow.tansocore.repository.StripeSubscriptionRepository stripeSubscriptionRepository;
+    // ObjectProvider: StripeWebhookImpl itself depends on SubscriptionService
+    private final org.springframework.beans.factory.ObjectProvider<com.tansoflow.tansocore.integration.stripe.StripeWebhook> stripeWebhookProvider;
 
     @Transactional
     @Override
@@ -110,7 +114,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(request.getCustomerReferenceId(), accountId);
         Plan plan = planService.retrievePlan(customer.getAccount(), UUID.fromString(request.getPlanId()));
 
-        return subscribe(customer, plan, accountId);
+        return subscribe(customer, plan, accountId, request.getPaymentMethodId());
     }
 
     @Transactional
@@ -125,6 +129,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     @Override
     public SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId) {
+        return subscribe(customer, plan, accountId, null);
+    }
+
+    @Transactional
+    @Override
+    public SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId, String paymentMethodId) {
         if (!PlanStatus.ACTIVE.name().equals(plan.getStatus())) {
             throw new IllegalArgumentException("Cannot subscribe to plan: status is " + plan.getStatus() + ", only ACTIVE plans accept subscriptions");
         }
@@ -150,10 +160,44 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         if (isStripeIntegration
                 && plan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())
                 && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+            // Programmatic path: a supplied or saved payment method charges off-session,
+            // creating the Stripe subscription directly — no browser.
+            String effectivePaymentMethod = paymentMethodId != null
+                    ? paymentMethodId
+                    : customer.getStripeDefaultPaymentMethodId();
+            if (effectivePaymentMethod != null) {
+                try {
+                    com.stripe.model.Subscription stripeSub = stripeSyncService.createDirectSubscription(
+                            UUID.fromString(accountId), customer.getId(), plan.getId(), effectivePaymentMethod);
+                    stripeWebhookProvider.getObject().materializeStripeSubscription(stripeSub, accountId);
+                    var bridge = stripeSubscriptionRepository
+                            .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
+                    if (bridge != null) {
+                        response.setSubscription(subscriptionMapper
+                                .subscriptionEntityToSubscriptionDto(bridge.getSubscription()));
+                    }
+                    return response;
+                } catch (Exception e) {
+                    log.error("Direct Stripe subscription failed for customer {} plan {}: {}",
+                            customer.getId(), plan.getId(), e.getMessage(), e);
+                    throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
+                }
+            }
             try {
                 var checkoutDto = stripeSyncService.createSubscriptionCheckoutSession(
                         UUID.fromString(accountId), customer.getId(), plan.getId());
+                com.tansoflow.tansocore.entity.CheckoutSession session =
+                        new com.tansoflow.tansocore.entity.CheckoutSession();
+                session.setAccountId(UUID.fromString(accountId));
+                session.setCustomerId(customer.getId());
+                session.setPurpose(com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_SUBSCRIPTION);
+                session.setPlanId(plan.getId());
+                session.setStripeSessionId(checkoutDto.getStripeSessionId());
+                session.setCheckoutUrl(checkoutDto.getPaymentLink());
+                checkoutSessionRepository.save(session);
+
                 response.setCheckoutUrl(checkoutDto.getPaymentLink());
+                response.setCheckoutSessionId(session.getId().toString());
                 return response;
             } catch (Exception e) {
                 log.error("Failed to create Stripe checkout session for customer {} plan {}: {}",

@@ -70,9 +70,9 @@ public class CustomerTools {
 
             return objectMapper.writeValueAsString(response);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}}";
         }
     }
 
@@ -98,9 +98,9 @@ public class CustomerTools {
 
             return objectMapper.writeValueAsString(response);
         } catch (IllegalArgumentException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}}";
         }
     }
 
@@ -140,9 +140,9 @@ public class CustomerTools {
 
             return objectMapper.writeValueAsString(response);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize customer\"}}";
         }
     }
 

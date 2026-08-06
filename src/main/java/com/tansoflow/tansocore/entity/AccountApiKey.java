@@ -66,6 +66,16 @@ public class AccountApiKey {
     @Column(name = "key_hint", length = 50)
     private String keyHint;
 
+    // Null for tenant (sk_) keys; set when the key is scoped to one customer (ck_)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "customer_id", updatable = false)
+    private Customer customer;
+
+    // Comma-separated: "read", "purchase". Null = legacy tenant key, full tenant scope.
+    @Size(max = 255)
+    @Column(name = "scopes", length = 255)
+    private String scopes;
+
     @ColumnDefault("false")
     @Column(name = "is_active")
     private Boolean isActive;

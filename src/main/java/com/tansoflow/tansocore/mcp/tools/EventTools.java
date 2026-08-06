@@ -63,14 +63,14 @@ public class EventTools {
             UUID accountId = UUID.fromString(getAccountId());
 
             if (eventService.existsByEventIdempotencyKey(accountId, eventIdempotencyKey)) {
-                return "{\"error\": \"duplicate_event\", \"message\": \"An event with this idempotency key already exists\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"duplicate_event\", \"message\": \"An event with this idempotency key already exists\"}}";
             }
 
             Instant parsedOccurredAt;
             try {
                 parsedOccurredAt = Instant.parse(occurredAt);
             } catch (DateTimeParseException e) {
-                return "{\"error\": \"invalid_request\", \"message\": \"occurredAt must be a valid ISO-8601 timestamp, e.g. '2026-03-16T10:30:00Z'\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"occurredAt must be a valid ISO-8601 timestamp, e.g. '2026-03-16T10:30:00Z'\"}}";
             }
 
             BigDecimal parsedUsageUnits = BigDecimal.ONE;
@@ -78,7 +78,7 @@ public class EventTools {
                 try {
                     parsedUsageUnits = new BigDecimal(usageUnits);
                 } catch (NumberFormatException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"usageUnits must be a valid number\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"usageUnits must be a valid number\"}}";
                 }
             }
 
@@ -102,21 +102,21 @@ public class EventTools {
                 try {
                     eventDto.setCostUnits(new BigDecimal(costUnits));
                 } catch (NumberFormatException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"costUnits must be a valid number\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"costUnits must be a valid number\"}}";
                 }
             }
             if (costAmount != null && !costAmount.isBlank()) {
                 try {
                     eventDto.setCostAmount(new BigDecimal(costAmount));
                 } catch (NumberFormatException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"costAmount must be a valid number\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"costAmount must be a valid number\"}}";
                 }
             }
             if (revenueAmount != null && !revenueAmount.isBlank()) {
                 try {
                     eventDto.setRevenueAmount(new BigDecimal(revenueAmount));
                 } catch (NumberFormatException e) {
-                    return "{\"error\": \"invalid_request\", \"message\": \"revenueAmount must be a valid number\"}";
+                    return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"revenueAmount must be a valid number\"}}";
                 }
             }
 
@@ -128,9 +128,9 @@ public class EventTools {
 
             return "{\"success\": true}";
         } catch (CreditLimitExceededException e) {
-            return "{\"error\": \"credit_limit_exceeded\", \"message\": \"Credit pool depleted - hard limit active\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"credit_limit_exceeded\", \"message\": \"Credit pool depleted - hard limit active\"}}";
         } catch (Exception e) {
-            return "{\"error\": \"ingestion_failed\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"ingestion_failed\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

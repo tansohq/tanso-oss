@@ -54,11 +54,11 @@ public class SubscriptionTools {
             var result = subscriptionService.clientSubscribeCustomer(request, getAccountId());
             return objectMapper.writeValueAsString(result);
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (JsonProcessingException e) {
-            return "{\"error\": \"serialization_error\", \"message\": \"Failed to serialize subscription response\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"serialization_error\", \"message\": \"Failed to serialize subscription response\"}}";
         }
     }
 
@@ -71,16 +71,16 @@ public class SubscriptionTools {
             @ToolParam(description = "Cancel mode: 'END_OF_PERIOD' (graceful) or 'IMMEDIATE'", required = false) String cancelMode,
             @ToolParam(description = "Must be true to execute this destructive action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this destructive action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this destructive action\"}}";
         }
         try {
             String mode = (cancelMode == null || cancelMode.isBlank()) ? "END_OF_PERIOD" : cancelMode;
             subscriptionService.cancelSubscription(subscriptionId, mode, getAccountId());
             return "{\"success\": true, \"message\": \"Subscription " + subscriptionId + " cancelled with mode " + mode + "\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 
@@ -94,7 +94,7 @@ public class SubscriptionTools {
             @ToolParam(description = "Change type: 'UPGRADE' (immediate) or 'DOWNGRADE' (end of period)") String changeType,
             @ToolParam(description = "Must be true to execute this action") boolean confirmAction) {
         if (!confirmAction) {
-            return "{\"error\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"confirmation_required\", \"message\": \"Set confirmAction to true to execute this action\"}}";
         }
         try {
             if ("UPGRADE".equalsIgnoreCase(changeType)) {
@@ -102,13 +102,13 @@ public class SubscriptionTools {
             } else if ("DOWNGRADE".equalsIgnoreCase(changeType)) {
                 subscriptionService.scheduleDowngradeSubscription(subscriptionId, getAccountId(), newPlanId);
             } else {
-                return "{\"error\": \"invalid_request\", \"message\": \"changeType must be 'UPGRADE' or 'DOWNGRADE'\"}";
+                return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"changeType must be 'UPGRADE' or 'DOWNGRADE'\"}}";
             }
             return "{\"success\": true, \"message\": \"Subscription " + subscriptionId + " " + changeType.toLowerCase() + " to plan " + newPlanId + " initiated\"}";
         } catch (ResourceNotFoundException e) {
-            return "{\"error\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"not_found\", \"message\": \"" + e.getMessage() + "\"}}";
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return "{\"error\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}";
+            return "{\"success\": false, \"error\": {\"code\": \"invalid_request\", \"message\": \"" + e.getMessage() + "\"}}";
         }
     }
 

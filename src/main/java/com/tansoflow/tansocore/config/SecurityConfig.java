@@ -18,7 +18,12 @@
 package com.tansoflow.tansocore.config;
 
 import com.tansoflow.tansocore.auth.JwtService;
+import com.tansoflow.tansocore.auth.SecurityErrorWriter;
+import com.tansoflow.tansocore.model.response.ErrorCode;
 import com.tansoflow.tansocore.filter.ApiKeyAuthFilter;
+import com.tansoflow.tansocore.filter.IdempotencyFilter;
+import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
+import com.tansoflow.tansocore.service.internal.idempotency.IdempotencyService;
 import com.tansoflow.tansocore.filter.EntitlementAuthFilter;
 import com.tansoflow.tansocore.filter.JwtAuthFilter;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
@@ -62,12 +67,14 @@ public class SecurityConfig {
     private final JwtService jwtService;
     private final com.tansoflow.tansocore.service.client.ClientEntitlementService clientEntitlementService;
     private final com.tansoflow.tansocore.property.AppProperty appProperty;
+    private final IdempotencyService idempotencyService;
+    private final CustomerApiKeyService customerApiKeyService;
 
     @Bean
     @Order(0)
     @ConditionalOnProperty(name = "app.mcp.enabled", havingValue = "true")
     public SecurityFilterChain mcpFilterChain(HttpSecurity http) throws Exception {
-        ApiKeyAuthFilter apiKeyFilter = new ApiKeyAuthFilter(accountService);
+        ApiKeyAuthFilter apiKeyFilter = new ApiKeyAuthFilter(accountService, customerApiKeyService);
         http
                 .securityMatcher("/mcp/**")
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -82,9 +89,8 @@ public class SecurityConfig {
                 )
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            res.setContentType("application/json");
-                            res.getWriter().write("{\"error\":\"unauthorized\"}");
+                            SecurityErrorWriter.write(res, HttpServletResponse.SC_UNAUTHORIZED,
+                                    ErrorCode.UNAUTHORIZED, "Authentication required");
                         })
                 )
                 .addFilterBefore(apiKeyFilter, AnonymousAuthenticationFilter.class);
@@ -94,8 +100,9 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     public SecurityFilterChain filterChainClient(HttpSecurity http) throws Exception {
-        ApiKeyAuthFilter apiKeyFilter = new ApiKeyAuthFilter(accountService);
+        ApiKeyAuthFilter apiKeyFilter = new ApiKeyAuthFilter(accountService, customerApiKeyService);
         EntitlementAuthFilter entitlementAuthFilter = new EntitlementAuthFilter(clientEntitlementService, appProperty);
+        IdempotencyFilter idempotencyFilter = new IdempotencyFilter(idempotencyService);
 
         http
                 // API only: no sessions, no login pages, no httpBasic
@@ -119,20 +126,19 @@ public class SecurityConfig {
                 // JSON 401/403
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            res.setContentType("application/json");
-                            res.getWriter().write("{\"error\":\"unauthorized\"}");
+                            SecurityErrorWriter.write(res, HttpServletResponse.SC_UNAUTHORIZED,
+                                    ErrorCode.UNAUTHORIZED, "Authentication required");
                         })
                         .accessDeniedHandler((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            res.setContentType("application/json");
-                            res.getWriter().write("{\"error\":\"forbidden\"}");
+                            SecurityErrorWriter.write(res, HttpServletResponse.SC_FORBIDDEN,
+                                    ErrorCode.FORBIDDEN, "Access denied");
                         })
                 )
 
                 // Place your API key filter early (before Anonymous)
                 .addFilterBefore(apiKeyFilter, AnonymousAuthenticationFilter.class)
-                .addFilterAfter(entitlementAuthFilter, ApiKeyAuthFilter.class);
+                .addFilterAfter(entitlementAuthFilter, ApiKeyAuthFilter.class)
+                .addFilterAfter(idempotencyFilter, EntitlementAuthFilter.class);
 
         return http.build();
     }
@@ -165,14 +171,12 @@ public class SecurityConfig {
                 // JSON 401/403
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            res.setContentType("application/json");
-                            res.getWriter().write("{\"error\":\"unauthorized\"}");
+                            SecurityErrorWriter.write(res, HttpServletResponse.SC_UNAUTHORIZED,
+                                    ErrorCode.UNAUTHORIZED, "Authentication required");
                         })
                         .accessDeniedHandler((req, res, e) -> {
-                            res.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                            res.setContentType("application/json");
-                            res.getWriter().write("{\"error\":\"forbidden\"}");
+                            SecurityErrorWriter.write(res, HttpServletResponse.SC_FORBIDDEN,
+                                    ErrorCode.FORBIDDEN, "Access denied");
                         })
                 )
 
@@ -205,8 +209,8 @@ public class SecurityConfig {
         CorsConfiguration cfg = new CorsConfiguration();
         cfg.setAllowedOrigins(appProperty.getCorsAllowedOrigins());
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Requested-With"));
-        cfg.setExposedHeaders(List.of());
+        cfg.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-API-Key", "X-Requested-With", "Idempotency-Key"));
+        cfg.setExposedHeaders(List.of("Idempotency-Key", "X-Request-ID", "Retry-After"));
         boolean hasWildcard = appProperty.getCorsAllowedOrigins().contains("*");
         cfg.setAllowCredentials(!hasWildcard);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
