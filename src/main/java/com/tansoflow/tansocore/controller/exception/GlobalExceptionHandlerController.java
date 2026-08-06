@@ -109,6 +109,14 @@ public class GlobalExceptionHandlerController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.NOT_FOUND));
     }
 
+    @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException exception) {
+        String errorId = assignErrorId();
+        log.warn("Access denied [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.FORBIDDEN));
+    }
+
     @ExceptionHandler(AuthorizationDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAuthorizationDeniedException(AuthorizationDeniedException exception) {
         String errorId = assignErrorId();

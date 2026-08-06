@@ -15,25 +15,27 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.model.apikey;
 
-import com.tansoflow.tansocore.entity.AccountApiKey;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
+import lombok.Getter;
 
+import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
-@Repository
-public interface AccountApiKeyRepository extends JpaRepository<AccountApiKey, UUID> {
-    AccountApiKey findAccountApiKeyByKeyValue(String apiKey);
-
-    List<AccountApiKey> findByAccountId(UUID accountId);
-
-    List<AccountApiKey> findByAccountIdAndCustomerIsNull(UUID accountId);
-
-    List<AccountApiKey> findByAccountIdAndCustomerId(UUID accountId, UUID customerId);
-
-    Optional<AccountApiKey> findByIdAndAccountId(UUID id, UUID accountId);
+@Getter
+@Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
+public class CustomerApiKeyDto {
+    private String id;
+    private String customerReferenceId;
+    @Schema(description = "Plaintext key. Returned exactly once, at creation or rotation; never retrievable again.")
+    private String apiKey;
+    private String keyHint;
+    private List<String> scopes;
+    private Boolean active;
+    private Instant expiresAt;
+    private Instant createdAt;
 }

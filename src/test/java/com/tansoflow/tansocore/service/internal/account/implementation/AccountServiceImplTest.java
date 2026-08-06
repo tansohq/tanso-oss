@@ -145,7 +145,7 @@ class AccountServiceImplTest {
     @Test
     void retrieveFirstApiKey_NoUsableKey_RequiresRotation() {
         AccountApiKey expiredKey = apiKey(true, Instant.now().minusSeconds(1), null);
-        when(accountApiKeyRepository.findByAccountId(account.getId())).thenReturn(List.of(expiredKey));
+        when(accountApiKeyRepository.findByAccountIdAndCustomerIsNull(account.getId())).thenReturn(List.of(expiredKey));
 
         assertThrows(ResourceNotFoundException.class,
                 () -> accountService.retrieveFirstApiKey(account.getId().toString()));
@@ -155,7 +155,7 @@ class AccountServiceImplTest {
     void rotateApiKey_InvalidatesExistingKeysAndRetainsAuditRecord() {
         AccountApiKey existingKey = apiKey(true, Instant.now().plusSeconds(60), null);
         when(accountRepository.findById(account.getId())).thenReturn(java.util.Optional.of(account));
-        when(accountApiKeyRepository.findByAccountId(account.getId())).thenReturn(List.of(existingKey));
+        when(accountApiKeyRepository.findByAccountIdAndCustomerIsNull(account.getId())).thenReturn(List.of(existingKey));
         when(appProperty.getApiKeyPrefix()).thenReturn("sk_test_");
         when(accountApiKeyRepository.save(any(AccountApiKey.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

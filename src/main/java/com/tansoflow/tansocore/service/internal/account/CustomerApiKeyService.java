@@ -15,25 +15,25 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.service.internal.account;
 
 import com.tansoflow.tansocore.entity.AccountApiKey;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
-@Repository
-public interface AccountApiKeyRepository extends JpaRepository<AccountApiKey, UUID> {
-    AccountApiKey findAccountApiKeyByKeyValue(String apiKey);
+public interface CustomerApiKeyService {
 
-    List<AccountApiKey> findByAccountId(UUID accountId);
+    /** Resolves an active ck_ key to its row, or null. Never matches tenant keys. */
+    AccountApiKey findByKey(String rawKey);
 
-    List<AccountApiKey> findByAccountIdAndCustomerIsNull(UUID accountId);
+    /** Creates a key for the customer; plaintext is present in the returned DTO exactly once. */
+    CustomerApiKeyDto createKey(String accountId, String customerReferenceId, List<String> scopes);
 
-    List<AccountApiKey> findByAccountIdAndCustomerId(UUID accountId, UUID customerId);
+    List<CustomerApiKeyDto> listKeys(String accountId, String customerReferenceId);
 
-    Optional<AccountApiKey> findByIdAndAccountId(UUID id, UUID accountId);
+    /** Rotates ONE key: deactivates it and issues a replacement with the same customer and scopes. */
+    CustomerApiKeyDto rotateKey(String accountId, String customerReferenceId, String keyId);
+
+    void revokeKey(String accountId, String customerReferenceId, String keyId);
 }

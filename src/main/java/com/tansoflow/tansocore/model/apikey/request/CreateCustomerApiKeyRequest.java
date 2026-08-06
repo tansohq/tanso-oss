@@ -15,25 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.model.apikey.request;
 
-import com.tansoflow.tansocore.entity.AccountApiKey;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Data;
 
 import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
 
-@Repository
-public interface AccountApiKeyRepository extends JpaRepository<AccountApiKey, UUID> {
-    AccountApiKey findAccountApiKeyByKeyValue(String apiKey);
-
-    List<AccountApiKey> findByAccountId(UUID accountId);
-
-    List<AccountApiKey> findByAccountIdAndCustomerIsNull(UUID accountId);
-
-    List<AccountApiKey> findByAccountIdAndCustomerId(UUID accountId, UUID customerId);
-
-    Optional<AccountApiKey> findByIdAndAccountId(UUID id, UUID accountId);
+@Data
+public class CreateCustomerApiKeyRequest {
+    @Schema(description = "Key scopes: 'read' and/or 'purchase'. Defaults to ['read'].")
+    private List<String> scopes;
 }

@@ -127,7 +127,7 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     public AccountApiKey retrieveFirstApiKey(String accountId) {
-        List<AccountApiKey> keys = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));
+        List<AccountApiKey> keys = accountApiKeyRepository.findByAccountIdAndCustomerIsNull(UUID.fromString(accountId));
         Instant now = Instant.now();
 
         return keys.stream()
@@ -160,7 +160,8 @@ public class AccountServiceImpl implements AccountService {
     public IssuedApiKey rotateApiKey(String accountId) {
         Account account = retrieveAccount(accountId);
 
-        List<AccountApiKey> existing = accountApiKeyRepository.findByAccountId(UUID.fromString(accountId));
+        // Tenant rotation must not revoke customer-scoped (ck_) keys sharing this table
+        List<AccountApiKey> existing = accountApiKeyRepository.findByAccountIdAndCustomerIsNull(UUID.fromString(accountId));
         Instant rotatedAt = Instant.now();
         existing.forEach(apiKey -> {
             apiKey.setIsActive(false);
