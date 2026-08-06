@@ -26,4 +26,6 @@ public class ClientSubscriptionRequest {
     private String customerReferenceId;
 
     private Integer gracePeriod;
+
+    private String paymentMethodId;
 }

@@ -63,6 +63,8 @@ public interface StripeSyncService {
 
     StripePaymentLinkDto createSubscriptionCheckoutSession(UUID accountId, UUID customerId, UUID planId) throws StripeException;
 
+    com.stripe.model.Subscription createDirectSubscription(UUID accountId, UUID customerId, UUID planId, String paymentMethodId) throws StripeException;
+
     // STRIPE_INTEGRATION methods
     void createStripeProductWithPrices(UUID planId, UUID accountId) throws StripeException;
 

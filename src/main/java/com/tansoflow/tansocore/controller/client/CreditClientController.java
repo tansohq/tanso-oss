@@ -54,6 +54,7 @@ import java.util.List;
 @Tag(name = "Client Credit", description = "Credit pool operations for client applications")
 public class CreditClientController {
     private final CustomerAccessGuard customerAccessGuard;
+    private final com.tansoflow.tansocore.service.client.CreditPurchaseService creditPurchaseService;
     private final ClientCreditService clientCreditService;
     private final CreditPriceService creditPriceService;
 
@@ -191,4 +192,30 @@ public class CreditClientController {
         return ResponseEntity.ok(ApiResponse.<PaginatedResponse<ClientCreditGrantDto>>builder()
                 .data(paginatedResponse).success(true).build());
     }
+    @org.springframework.web.bind.annotation.PostMapping("/purchases")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
+    @Operation(summary = "Buy credits at the current price book rate",
+            description = "Off-session charge with the supplied or saved payment method; 402 with a hosted "
+                    + "checkout URL and pollable checkout session when there is none or the charge is declined. "
+                    + "Requires the 'purchase' scope on customer keys.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public org.springframework.http.ResponseEntity<ApiResponse<com.tansoflow.tansocore.model.credit.CreditPurchaseResult>> purchaseCredits(
+            @org.springframework.security.core.annotation.AuthenticationPrincipal com.tansoflow.tansocore.auth.UserContext userContext,
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest request) {
+        String customerReferenceId = customerAccessGuard.resolveCustomerRef(userContext, request.getCustomerReferenceId());
+        customerAccessGuard.requirePurchaseScope(userContext);
+        if (customerReferenceId == null) {
+            throw new IllegalArgumentException("customerReferenceId is required for tenant API keys");
+        }
+
+        com.tansoflow.tansocore.model.credit.CreditPurchaseResult result =
+                creditPurchaseService.purchase(request, customerReferenceId, userContext.getAccountId());
+        org.springframework.http.HttpStatus status = result.isCompleted()
+                ? org.springframework.http.HttpStatus.CREATED
+                : org.springframework.http.HttpStatus.PAYMENT_REQUIRED;
+        return org.springframework.http.ResponseEntity.status(status).body(
+                ApiResponse.<com.tansoflow.tansocore.model.credit.CreditPurchaseResult>builder()
+                        .data(result).success(result.isCompleted()).build());
+    }
+
 }

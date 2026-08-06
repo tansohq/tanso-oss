@@ -15,12 +15,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.data.stripe;
+package com.tansoflow.tansocore.service.client;
 
-import lombok.Data;
+import com.tansoflow.tansocore.model.credit.CreditPurchaseResult;
+import com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest;
 
-@Data
-public class StripePaymentLinkDto {
-    private String paymentLink;
-    private String stripeSessionId;
+public interface CreditPurchaseService {
+
+    /**
+     * Buys credits at the current price book rate. With a payment method
+     * (supplied or on file): off-session charge, grant on success. Without
+     * one, or when the charge is declined: hosted-checkout fallback — the
+     * result carries checkoutUrl + checkoutSessionId and completed=false.
+     */
+    CreditPurchaseResult purchase(CreditPurchaseRequest request, String customerReferenceId, String accountId);
 }

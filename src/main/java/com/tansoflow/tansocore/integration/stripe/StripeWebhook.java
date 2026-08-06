@@ -22,4 +22,11 @@ import org.springframework.http.HttpHeaders;
 public interface StripeWebhook {
     // TODO: Clean this up a bit
     void ingestWebhookRequest(String body, HttpHeaders headers, String accountId) throws Exception;
+
+    /**
+     * Creates the Tanso subscription + bridge for a Stripe subscription right
+     * now (synchronous programmatic subscribe). Same dedupe as the
+     * customer.subscription.created webhook — safe to race it.
+     */
+    void materializeStripeSubscription(com.stripe.model.Subscription stripeSubscription, String accountId);
 }

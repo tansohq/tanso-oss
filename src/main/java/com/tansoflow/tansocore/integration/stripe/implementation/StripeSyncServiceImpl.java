@@ -640,7 +640,62 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         StripePaymentLinkDto dto = new StripePaymentLinkDto();
         dto.setPaymentLink(session.getUrl());
+        dto.setStripeSessionId(session.getId());
         return dto;
+    }
+
+    /**
+     * Programmatic path: creates the Stripe subscription directly with a saved
+     * payment method — no browser, no Checkout Session. ERROR_IF_INCOMPLETE so
+     * a declined or SCA-challenged charge throws instead of leaving a dangling
+     * incomplete subscription; the caller maps that to 402.
+     */
+    @Override
+    public com.stripe.model.Subscription createDirectSubscription(
+            UUID accountId, UUID customerId, UUID planId, String paymentMethodId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+
+        Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
+        StripeCustomer stripeCustomer = stripeCustomerRepository.findByCustomer(customer);
+        if (stripeCustomer == null) {
+            stripeCustomer = createStripeCustomer(accountId, customerId);
+        }
+
+        Plan plan = planService.retrievePlan(UUID.fromString(accountId.toString()), planId);
+        List<StripePrice> stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+        if (stripePrices.isEmpty()) {
+            log.info("No StripePrice for plan {}, creating lazily for direct subscription", plan.getId());
+            createStripeProductWithPrices(planId, accountId);
+            stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+            if (stripePrices.isEmpty()) {
+                throw new IllegalStateException("Failed to create StripePrice for plan " + planId);
+            }
+        }
+
+        com.stripe.param.SubscriptionCreateParams.Builder builder =
+                com.stripe.param.SubscriptionCreateParams.builder()
+                        .setCustomer(stripeCustomer.getStripeCustomerExternalId())
+                        .setDefaultPaymentMethod(paymentMethodId)
+                        .setPaymentBehavior(com.stripe.param.SubscriptionCreateParams.PaymentBehavior.ERROR_IF_INCOMPLETE)
+                        .setOffSession(true)
+                        .putMetadata("tanso_account_id", accountId.toString())
+                        .putMetadata("tanso_customer_id", customerId.toString())
+                        .putMetadata("tanso_plan_id", planId.toString());
+
+        for (StripePrice mapped : stripePrices) {
+            Price price = stripeClient.v1().prices().retrieve(mapped.getStripePriceExternalId());
+            boolean metered = price.getRecurring() != null
+                    && "metered".equals(price.getRecurring().getUsageType());
+            com.stripe.param.SubscriptionCreateParams.Item.Builder item =
+                    com.stripe.param.SubscriptionCreateParams.Item.builder()
+                            .setPrice(mapped.getStripePriceExternalId());
+            if (!metered) {
+                item.setQuantity(1L);
+            }
+            builder.addItem(item.build());
+        }
+
+        return stripeClient.v1().subscriptions().create(builder.build());
     }
 
     // ── STRIPE_INTEGRATION Methods ─────────────────────────────────────────────

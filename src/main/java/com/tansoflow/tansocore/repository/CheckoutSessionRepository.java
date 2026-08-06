@@ -15,12 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.data.stripe;
+package com.tansoflow.tansocore.repository;
 
-import lombok.Data;
+import com.tansoflow.tansocore.entity.CheckoutSession;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-@Data
-public class StripePaymentLinkDto {
-    private String paymentLink;
-    private String stripeSessionId;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession, UUID> {
+
+    Optional<CheckoutSession> findByIdAndAccountId(UUID id, UUID accountId);
+
+    Optional<CheckoutSession> findByStripeSessionId(String stripeSessionId);
 }

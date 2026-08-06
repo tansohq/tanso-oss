@@ -74,6 +74,10 @@ public class Customer {
     private String lastName;
 
     @Size(max = 255)
+    // Saved via the SetupIntent path; used for off-session programmatic charges
+    @Column(name = "stripe_default_payment_method_id")
+    private String stripeDefaultPaymentMethodId;
+
     @Column(name = "email")
     private String email;
 

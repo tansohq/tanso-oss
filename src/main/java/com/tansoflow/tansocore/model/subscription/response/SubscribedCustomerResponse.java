@@ -38,4 +38,7 @@ public class SubscribedCustomerResponse {
 
     @Schema(description = "Stripe Checkout URL for payment (IN_ADVANCE plans in STRIPE_INTEGRATION mode)")
     private String checkoutUrl;
+
+    @Schema(description = "Tanso checkout session id — poll GET /api/v1/client/checkout-sessions/{id} for the outcome")
+    private String checkoutSessionId;
 }
