@@ -72,6 +72,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class CreditServiceImpl implements CreditService {
     private static final int MAX_RETRY_ATTEMPTS = 3;
+    // Same bounds the price book enforces — a price is a price, wherever it enters
+    private static final BigDecimal MAX_UNIT_PRICE = new BigDecimal("1000000");
 
     private final CreditPoolRepository creditPoolRepository;
     private final CreditPoolSubscriptionRepository creditPoolSubscriptionRepository;
@@ -322,9 +324,19 @@ public class CreditServiceImpl implements CreditService {
      * the price it happened at even after the book moves.
      */
     private void applyGrantPricing(CreditGrant grant, CreditGrantRequest request, CreditPool pool) {
+        if (request.getUnitPrice() == null
+                && request.getCurrency() != null && !request.getCurrency().isBlank()) {
+            throw new IllegalArgumentException("currency requires unitPrice — omit both to use the price book");
+        }
         if (request.getUnitPrice() != null) {
             if (request.getUnitPrice().compareTo(BigDecimal.ZERO) <= 0) {
                 throw new IllegalArgumentException("unitPrice must be positive");
+            }
+            if (request.getUnitPrice().compareTo(MAX_UNIT_PRICE) > 0) {
+                throw new IllegalArgumentException("unitPrice exceeds maximum " + MAX_UNIT_PRICE);
+            }
+            if (request.getUnitPrice().stripTrailingZeros().scale() > 6) {
+                throw new IllegalArgumentException("unitPrice allows at most 6 decimals");
             }
             grant.setUnitPrice(request.getUnitPrice());
             String currency = request.getCurrency() != null && !request.getCurrency().isBlank()

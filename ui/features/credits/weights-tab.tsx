@@ -373,7 +373,11 @@ export function WeightsTab({ onDirtyChange }: WeightsTabProps) {
                     ) : (
                       <span
                         className="text-muted-foreground"
-                        title="Publish a price for this feature's denomination on the Pricing tab to see money here."
+                        title={
+                          price
+                            ? undefined // weight input invalid — the error under it explains
+                            : "Publish a price for this feature's denomination on the Pricing tab to see money here."
+                        }
                       >
                         —
                       </span>

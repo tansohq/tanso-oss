@@ -1029,6 +1029,66 @@ class CreditServiceImplTest {
     }
 
     @Test
+    void grantCredits_unitPriceTooManyDecimals_rejected() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setDenomination("api_credits");
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+        request.setUnitPrice(new BigDecimal("0.12345678"));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                creditService.grantCredits(request, account.getId().toString()));
+        verify(creditGrantRepository, never()).saveAndFlush(any(CreditGrant.class));
+    }
+
+    @Test
+    void grantCredits_unitPriceOverMax_rejected() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setDenomination("api_credits");
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+        request.setUnitPrice(new BigDecimal("1000001"));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                creditService.grantCredits(request, account.getId().toString()));
+        verify(creditGrantRepository, never()).saveAndFlush(any(CreditGrant.class));
+    }
+
+    @Test
+    void grantCredits_currencyWithoutUnitPrice_rejected() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setDenomination("api_credits");
+        when(creditPoolRepository.findByIdAndAccountId(pool.getId(), account.getId()))
+                .thenReturn(Optional.of(pool));
+
+        var request = new com.tansoflow.tansocore.model.credit.request.CreditGrantRequest();
+        request.setCreditPoolId(pool.getId().toString());
+        request.setAmount(new BigDecimal("500"));
+        request.setGrantType("PURCHASED");
+        request.setCurrency("EUR");
+
+        assertThrows(IllegalArgumentException.class, () ->
+                creditService.grantCredits(request, account.getId().toString()));
+        verify(creditGrantRepository, never()).saveAndFlush(any(CreditGrant.class));
+    }
+
+    @Test
     void grantCredits_zeroUnitPrice_rejected() {
         CreditPool pool = new CreditPool();
         pool.setId(UUID.randomUUID());
