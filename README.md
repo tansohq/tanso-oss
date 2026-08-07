@@ -257,9 +257,36 @@ supply them via environment variables. The common ones:
 | `APP_WEBHOOK_ENDPOINT` | Public Stripe webhook URL |
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
+| `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.
+
+### Telemetry
+
+Tanso sends **one anonymous ping per day** so we know how many self-hosted
+instances exist and roughly how they're used. No customer PII, no financial
+data, no keys — ever. The entire telemetry surface is one class,
+[`TelemetryPingJob`](src/main/java/com/tansoflow/tansocore/jobs/scheduler/telemetry/TelemetryPingJob.java),
+so you can audit it in under a minute. The exact payload:
+
+```json
+{
+  "instance_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
+  "version": "0.8.8",
+  "accounts": 2,
+  "customers": 10,
+  "plans": 3,
+  "subscriptions": 8,
+  "events_last_24h": "101-1k",
+  "mcp_enabled": true,
+  "dogfooding_enabled": false
+}
+```
+
+`instance_id` is a random UUID generated at first boot — it identifies the
+installation, not you. Event volume is reported as a coarse bucket, never an
+exact count. Opt out any time with `TANSO_TELEMETRY_ENABLED=false`.
 
 ---
 

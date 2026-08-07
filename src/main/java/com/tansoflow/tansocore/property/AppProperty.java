@@ -39,5 +39,11 @@ public class AppProperty {
     private List<String> corsAllowedOrigins = List.of("*");
     private String apiKeyPrefix;
     private String defaultFreePlanId;
+    private Telemetry telemetry = new Telemetry();
 
+    @Data
+    public static class Telemetry {
+        private boolean enabled = true;
+        private String endpoint = "https://telemetry.tansohq.com/ping";
+    }
 }

@@ -1,0 +1,27 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260807-1"
+      author: tanso
+      comment: >
+        Anonymous instance telemetry. instance_telemetry holds a single row
+        with a random UUID generated at first boot — the only identifier the
+        daily telemetry ping ever sends. No PII, no financial data. Opt out
+        with TANSO_TELEMETRY_ENABLED=false; see the Telemetry section of the
+        README for the exact payload.
+      changes:
+        - createTable:
+            tableName: instance_telemetry
+            columns:
+              - column:
+                  name: instance_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: now()
+                  constraints:
+                    nullable: false

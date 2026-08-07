@@ -36,6 +36,8 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
 
     boolean existsByAccountIdAndEventIdempotencyKey(UUID accountId, String eventIdempotencyKey);
 
+    long countByOccurredAtAfter(Instant since);
+
     @Query("SELECT e FROM Event e WHERE e.customerId = :customerId AND e.eventType IN :eventTypes AND e.occurredAt >= :start AND e.occurredAt < :end")
     List<Event> findEventsForBilling(
             @Param("customerId") UUID customerId,

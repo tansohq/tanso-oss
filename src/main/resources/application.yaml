@@ -6,6 +6,9 @@ app:
   dogfooding-enabled: false
   master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
   api-key-prefix: sk_test_
+  telemetry:
+    enabled: ${TANSO_TELEMETRY_ENABLED:true}
+    endpoint: https://telemetry.tansohq.com/ping
   mcp:
     enabled: false
     admin-tools:
