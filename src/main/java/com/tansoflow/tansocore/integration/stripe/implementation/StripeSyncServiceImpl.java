@@ -387,8 +387,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId);
 
 
-        String successUrl = accountSetting != null ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
+                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
+        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
+                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";
@@ -508,8 +510,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId);
 
-        String successUrl = accountSetting != null ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
+                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
+        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
+                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";
@@ -574,8 +578,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId.toString());
 
-        String successUrl = accountSetting != null ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
+                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
+        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
+                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";

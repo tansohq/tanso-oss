@@ -67,6 +67,9 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         SetupIntent setupIntent = stripeClient.v1().setupIntents().create(
                 SetupIntentCreateParams.builder()
                         .setCustomer(stripeCustomer.getStripeCustomerExternalId())
+                        // Card only: redirect-based methods would demand a return_url,
+                        // which a headless agent flow cannot provide
+                        .addPaymentMethodType("card")
                         .setUsage(SetupIntentCreateParams.Usage.OFF_SESSION)
                         .putMetadata("tanso_account_id", accountId.toString())
                         .putMetadata("tanso_customer_id", customerId.toString())
