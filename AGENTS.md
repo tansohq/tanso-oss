@@ -73,6 +73,10 @@ Powers the bundled admin console (`ui/`, Next.js + shadcn/ui) for managing the p
 | Property | Default | Description |
 | :--- | :--- | :--- |
 | `app.dogfooding-enabled` | `true` | When `false`, skips Tanso Platform entitlement checks and usage tracking. Useful for local dev. |
+| `app.telemetry.enabled` | `true` | Anonymous daily instance ping (`TANSO_TELEMETRY_ENABLED=false` to opt out). Entire surface is one class, `TelemetryPingJob`; payload is documented verbatim in the README (random `instance_id` UUID, version, entity counts, coarse event-volume bucket — no PII, no financial data, no keys). |
+| `app.telemetry.endpoint` | `https://telemetry.tansohq.com/ping` | Where the ping posts. |
+
+The full OpenAPI spec is committed at `openapi.json` (repo root) — regenerate after API-surface changes with `curl localhost:8080/v3/api-docs | python3 -m json.tool > openapi.json`. Runtime serves it at `/v3/api-docs` (swagger-ui at `/swagger-ui.html`). SDK stance: `@tansohq/sdk` (TypeScript) is the only published client; other languages generate from the spec — don't add hand-written SDKs unasked.
 
 ---
 
@@ -248,4 +252,4 @@ The `EventService` is designed for high throughput:
 *   **Console: "Attach feature" / "New subscription" panel — Base UI Select fields**: clicking a `Select` trigger and immediately typing inserts characters into the trigger's placeholder text without registering a selection, so the form submits with an empty value. Click the trigger, wait for the popover, then click an option from the list.
 
 ---
-*Last Updated: 2026-08-06*
+*Last Updated: 2026-08-07*

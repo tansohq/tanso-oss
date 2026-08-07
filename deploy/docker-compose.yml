@@ -31,6 +31,8 @@ services:
       # Optional MCP server for AI agents — both must be true to expose /mcp
       APP_MCP_ENABLED: ${APP_MCP_ENABLED:-false}
       SPRING_AI_MCP_SERVER_ENABLED: ${SPRING_AI_MCP_SERVER_ENABLED:-false}
+      # Anonymous daily instance ping — set false to opt out (payload documented in README)
+      TANSO_TELEMETRY_ENABLED: ${TANSO_TELEMETRY_ENABLED:-true}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
