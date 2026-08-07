@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { useUpdateAccountSettings } from "@/features/settings/mutations"
+import { AgentServeCard } from "@/features/settings/agent-serve-card"
 import { StripeCard } from "@/features/settings/stripe-card"
 import { useAccountSettings, useApiKey, useStripeKeys } from "@/features/settings/queries"
 import {
@@ -277,6 +278,7 @@ export default function SettingsPage() {
       </div>
       <SettingsForm />
       <StripeCard />
+      <AgentServeCard />
       <ApiKeyCard />
     </>
   )

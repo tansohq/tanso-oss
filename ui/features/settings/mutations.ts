@@ -20,6 +20,33 @@ export function useUpdateAccountSettings() {
   })
 }
 
+export function useUpdateAgentServeSettings() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: {
+      slug: string
+      publicCatalogEnabled: boolean
+      agentSignupEnabled: boolean
+      agentSignupDefaultPlanId: string
+      agentSignupHourlyCap: string
+      agentMaxTopupAmount: string
+    }) =>
+      apiFetch<AccountSettingDto>("/api/v1/tanso/account-settings", {
+        method: "PATCH",
+        body: JSON.stringify({
+          slug: input.slug || undefined,
+          publicCatalogEnabled: input.publicCatalogEnabled,
+          agentSignupEnabled: input.agentSignupEnabled,
+          agentSignupDefaultPlanId: input.agentSignupDefaultPlanId || undefined,
+          agentSignupHourlyCap: Number(input.agentSignupHourlyCap),
+          // 0 clears the cap server-side; empty means "leave unchanged"
+          agentMaxTopupAmount: input.agentMaxTopupAmount === "" ? undefined : Number(input.agentMaxTopupAmount),
+        }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings"] }),
+  })
+}
+
 export function useRegisterStripeKey() {
   const queryClient = useQueryClient()
   return useMutation({

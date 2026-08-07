@@ -60,6 +60,20 @@ public class SubscriptionClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final SubscriptionService subscriptionService;
 
+    /** ck_ callers may only touch subscriptions belonging to their own customer. */
+    private void requireOwnSubscription(UserContext userContext, String subscriptionId) {
+        if (!userContext.isCustomerScoped()) {
+            return;
+        }
+        com.tansoflow.tansocore.entity.Subscription subscription =
+                subscriptionService.getSubscriptionById(subscriptionId, userContext.getAccountId());
+        if (subscription == null
+                || !subscription.getCustomer().getId().toString().equals(userContext.getCustomerId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "This API key is scoped to another customer");
+        }
+    }
+
     // TODO: Needs to return hosted invoice url in meta data
     @PostMapping()
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
@@ -94,6 +108,7 @@ public class SubscriptionClientController {
     }
 
     @PostMapping("/cancellation/{subscriptionId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Cancel subscription", description = "Cancels a customer subscription immediately or at the end of the period", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully cancelled the subscription"),
@@ -102,6 +117,7 @@ public class SubscriptionClientController {
     public ResponseEntity<ApiResponse<Void>> cancelSubscription(@AuthenticationPrincipal UserContext userContext,
                                                           @PathVariable("subscriptionId") String subscriptionId,
                                                           @RequestParam(required = false, defaultValue = "END_OF_PERIOD") String cancelMode) {
+        requireOwnSubscription(userContext, subscriptionId);
         subscriptionService.cancelSubscription(subscriptionId, cancelMode, userContext.getAccountId());
 
         ApiResponse<Void> apiResponse = ApiResponse.<Void>builder().success(true).build();
@@ -110,6 +126,7 @@ public class SubscriptionClientController {
     }
 
     @DeleteMapping("/cancellation/{subscriptionId}/scheduled")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Cancel scheduled cancellation", description = "Cancels a previously scheduled subscription cancellation", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully cancelled the scheduled cancellation"),
@@ -117,12 +134,14 @@ public class SubscriptionClientController {
     })
     public ResponseEntity<ApiResponse<Void>> cancelScheduledSubscriptionCancellation(@AuthenticationPrincipal UserContext userContext,
                                                                                      @PathVariable("subscriptionId") String subscriptionId) {
+        requireOwnSubscription(userContext, subscriptionId);
         subscriptionService.cancelScheduledSubscriptionCancellation(subscriptionId, userContext.getAccountId());
         ApiResponse<Void> apiResponse = ApiResponse.<Void>builder().success(true).build();
         return ResponseEntity.ok(apiResponse);
     }
 
     @PostMapping("/{subscriptionId}/plan-change")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Change plan", description = "Changes a customer subscription to a new plan by upgrading or downgrading", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully changed the plan or scheduled the change"),
@@ -130,6 +149,8 @@ public class SubscriptionClientController {
     })
     public ResponseEntity<ApiResponse<Void>> changeSubscription(@AuthenticationPrincipal UserContext userContext,
                                                                 @Valid @RequestBody ClientChangeSubscriptionRequest request, @PathVariable("subscriptionId") String subscriptionId) {
+        requireOwnSubscription(userContext, subscriptionId);
+        customerAccessGuard.requirePurchaseScope(userContext);
         if (request.getChangeType() == SubscriptionChangeType.UPGRADE) {
             subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
         }
@@ -144,6 +165,7 @@ public class SubscriptionClientController {
     }
 
     @DeleteMapping("/{subscriptionId}/plan-change/scheduled")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Cancel scheduled plan change", description = "Cancels all scheduled changes for a subscription", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully cancelled scheduled changes"),
@@ -151,6 +173,7 @@ public class SubscriptionClientController {
     })
     public ResponseEntity<ApiResponse<Void>> cancelScheduledSubscriptionChanges(@AuthenticationPrincipal UserContext userContext,
                                                                                 @PathVariable("subscriptionId") String subscriptionId) {
+        requireOwnSubscription(userContext, subscriptionId);
         subscriptionService.cancelScheduledChangesForSubscription(UUID.fromString(subscriptionId), UUID.fromString(userContext.getAccountId()));
         ApiResponse<Void> apiResponse = ApiResponse.<Void>builder().success(true).build();
         return ResponseEntity.ok(apiResponse);
