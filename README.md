@@ -8,7 +8,7 @@
 credits or usage and whose inference costs are big enough that margin per
 customer is a real question.
 
-[Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Next.js example](#try-the-five-credit-nextjs-example) · [Features](#features) · [Agents & MCP](#agents--mcp) · [Contributing](CONTRIBUTING.md) · [Docs](https://tanso.mintlify.app/introduction)
+[Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Next.js example](#try-the-five-credit-nextjs-example) · [Features](#features) · [Agents & MCP](#agents--mcp) · [API & SDKs](#api-reference--sdks) · [Contributing](CONTRIBUTING.md) · [Docs](https://tanso.mintlify.app/introduction)
 
 [![CI](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml/badge.svg)](https://github.com/tansohq/tanso-oss/actions/workflows/ci.yml)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
@@ -427,6 +427,24 @@ snapshot into the same neutral input any other host supplies. See
 ```bash
 npm install @tansohq/credit-forecast-core @tansohq/credit-burndown-react
 ```
+
+---
+
+## API reference & SDKs
+
+The full OpenAPI spec is checked in at [`openapi.json`](openapi.json) —
+readable without running anything. A running instance also serves it live
+at `/v3/api-docs`, with interactive docs at `/swagger-ui.html`.
+
+| Language | Package |
+| :--- | :--- |
+| TypeScript / Node.js | [`@tansohq/sdk`](https://www.npmjs.com/package/@tansohq/sdk) |
+
+For other languages, generate a client from the spec (e.g. with
+[openapi-generator](https://openapi-generator.tech/)) or call the REST API
+directly. Agents don't need an SDK at all — see [Agents & MCP](#agents--mcp).
+
+Guides and concepts live in the [docs](https://tanso.mintlify.app/introduction).
 
 ---
 
