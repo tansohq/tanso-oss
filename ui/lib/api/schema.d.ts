@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/public/v1/catalog/{slug}/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Programmatic agent signup
+         * @description One call: creates a customer, subscribes it to the account's free default plan, and returns a customer-scoped API key (once). No CAPTCHA, no email verification. Only served when the operator enabled agent signup; rate-limited per account per hour (429 + Retry-After).
+         */
+        post: operations["signup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/stripe/ingest/webhook/{accountId}": {
         parameters: {
             query?: never;
@@ -807,6 +827,26 @@ export interface paths {
         patch: operations["patchInvoice"];
         trace?: never;
     };
+    "/public/v1/catalog/{slug}/pricing.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Machine-readable pricing catalog
+         * @description The account's plans, features, credit weight table, and governance flags in the agent-serve pricing.json format. Raw JSON, not the ApiResponse envelope, so agents can validate it directly against the schema.
+         */
+        get: operations["getPricingCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tanso/model-pricing": {
         parameters: {
             query?: never;
@@ -1448,6 +1488,8 @@ export interface components {
             success?: boolean;
         };
         Error: {
+            /** @description Stable machine-readable code; branch on this, not on message */
+            code?: string;
             message?: string;
             detail?: string;
         };
@@ -1463,6 +1505,34 @@ export interface components {
              * @example Bearer
              */
             type?: string;
+        };
+        AgentSignupRequest: {
+            /**
+             * Format: email
+             * @description Contact email of the agent's principal — the human or org the agent buys for
+             */
+            email: string;
+            /** @description Optional display name for the customer record */
+            name?: string;
+        };
+        AgentSignupResponse: {
+            customerReferenceId?: string;
+            /** @description Customer-scoped API key. Returned exactly once — store it now. */
+            apiKey?: string;
+            apiKeyScopes?: string[];
+            plan?: string;
+            /** @description Where to go next: base URL, entitlement check, event ingestion, usage */
+            nextSteps?: {
+                [key: string]: string;
+            };
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseAgentSignupResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["AgentSignupResponse"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseVoid: {
@@ -1655,6 +1725,8 @@ export interface components {
             };
             /** @description Stripe Checkout URL for payment (IN_ADVANCE plans in STRIPE_INTEGRATION mode) */
             checkoutUrl?: string;
+            /** @description Tanso checkout session id — poll GET /api/v1/client/checkout-sessions/{id} for the outcome */
+            checkoutSessionId?: string;
         };
         /** @description Data Transfer Object for Subscription information */
         SubscriptionDto: {
@@ -2471,6 +2543,14 @@ export interface components {
             stripeCheckoutSuccessUrl?: string;
             stripeCheckoutCancelUrl?: string;
             defaultCostConfig?: components["schemas"]["DefaultCostConfigDto"];
+            slug?: string;
+            publicCatalogEnabled?: boolean;
+            agentSignupEnabled?: boolean;
+            /** Format: uuid */
+            agentSignupDefaultPlanId?: string;
+            /** Format: int32 */
+            agentSignupHourlyCap?: number;
+            agentMaxTopupAmount?: number;
         };
         AccountSettingDto: {
             /** @enum {string} */
@@ -2480,6 +2560,14 @@ export interface components {
             stripeCheckoutCancelUrl?: string;
             currency?: string;
             defaultCostConfig?: components["schemas"]["DefaultCostConfigDto"];
+            slug?: string;
+            publicCatalogEnabled?: boolean;
+            agentSignupEnabled?: boolean;
+            /** Format: uuid */
+            agentSignupDefaultPlanId?: string;
+            /** Format: int32 */
+            agentSignupHourlyCap?: number;
+            agentMaxTopupAmount?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseAccountSettingDto: {
@@ -3438,6 +3526,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    signup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentSignupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAgentSignupResponse"];
+                };
             };
         };
     };
@@ -5109,6 +5223,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    getPricingCatalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
         };
     };
