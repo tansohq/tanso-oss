@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260807-2"
+      author: tanso
+      comment: >
+        last_ping_at makes the telemetry ping's daily cadence survive
+        restarts — the in-process 24h timer resets on every boot, so a
+        frequently restarted instance would ping far more than the
+        documented once per day.
+      changes:
+        - addColumn:
+            tableName: instance_telemetry
+            columns:
+              - column:
+                  name: last_ping_at
+                  type: TIMESTAMP WITH TIME ZONE

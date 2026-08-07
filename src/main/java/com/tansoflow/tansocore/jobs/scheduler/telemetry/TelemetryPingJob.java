@@ -64,12 +64,19 @@ public class TelemetryPingJob {
     @Value("${app.mcp.enabled:false}")
     private boolean mcpEnabled;
 
-    @Scheduled(initialDelayString = "PT5M", fixedDelayString = "PT24H")
+    @Scheduled(initialDelayString = "PT5M", fixedDelayString = "PT1H")
     public void sendDailyPing() {
         if (!appProperty.getTelemetry().isEnabled()) {
             return;
         }
-        Map<String, Object> payload = buildPayload();
+        InstanceTelemetry instance = instance();
+        // The in-process timer resets on every boot; last_ping_at is what
+        // actually holds the once-per-day promise across restarts.
+        if (instance.getLastPingAt() != null
+                && instance.getLastPingAt().isAfter(Instant.now().minus(Duration.ofHours(24)))) {
+            return;
+        }
+        Map<String, Object> payload = buildPayload(instance);
         try {
             webClient.post()
                     .uri(appProperty.getTelemetry().getEndpoint())
@@ -77,15 +84,17 @@ public class TelemetryPingJob {
                     .retrieve()
                     .toBodilessEntity()
                     .block(Duration.ofSeconds(10));
+            instance.setLastPingAt(Instant.now());
+            instanceTelemetryRepository.save(instance);
         } catch (Exception e) {
             log.debug("Telemetry ping failed (this is harmless): {}", e.getMessage());
         }
     }
 
-    Map<String, Object> buildPayload() {
+    Map<String, Object> buildPayload(InstanceTelemetry instance) {
         BuildProperties build = buildProperties.getIfAvailable();
         Map<String, Object> payload = new LinkedHashMap<>();
-        payload.put("instance_id", instanceId().toString());
+        payload.put("instance_id", instance.getInstanceId().toString());
         payload.put("version", build != null ? build.getVersion() : "dev");
         payload.put("accounts", accountRepository.count());
         payload.put("customers", customerRepository.count());
@@ -97,11 +106,10 @@ public class TelemetryPingJob {
         return payload;
     }
 
-    private java.util.UUID instanceId() {
+    private InstanceTelemetry instance() {
         return instanceTelemetryRepository.findAll().stream()
                 .findFirst()
-                .orElseGet(() -> instanceTelemetryRepository.save(new InstanceTelemetry()))
-                .getInstanceId();
+                .orElseGet(() -> instanceTelemetryRepository.save(new InstanceTelemetry()));
     }
 
     static String bucket(long count) {

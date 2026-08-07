@@ -46,4 +46,7 @@ public class InstanceTelemetry {
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
+
+    @Column(name = "last_ping_at")
+    private Instant lastPingAt;
 }

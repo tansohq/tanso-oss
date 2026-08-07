@@ -33,14 +33,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.info.BuildProperties;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +53,10 @@ class TelemetryPingJobTest {
 
     @Mock private AppProperty appProperty;
     @Mock private WebClient webClient;
+    @Mock private WebClient.RequestBodyUriSpec requestBodyUriSpec;
+    @SuppressWarnings("rawtypes")
+    @Mock private WebClient.RequestHeadersSpec requestHeadersSpec;
+    @Mock private WebClient.ResponseSpec responseSpec;
     @Mock private ObjectProvider<BuildProperties> buildProperties;
     @Mock private InstanceTelemetryRepository instanceTelemetryRepository;
     @Mock private AccountRepository accountRepository;
@@ -73,7 +82,6 @@ class TelemetryPingJobTest {
     void payloadContainsOnlyAnonymousFields() {
         InstanceTelemetry instance = new InstanceTelemetry();
         instance.setInstanceId(UUID.randomUUID());
-        when(instanceTelemetryRepository.findAll()).thenReturn(List.of(instance));
         when(buildProperties.getIfAvailable()).thenReturn(null);
         when(accountRepository.count()).thenReturn(2L);
         when(customerRepository.count()).thenReturn(10L);
@@ -82,7 +90,7 @@ class TelemetryPingJobTest {
         when(eventRepository.countByOccurredAtAfter(any(Instant.class))).thenReturn(250L);
         when(appProperty.isDogfoodingEnabled()).thenReturn(false);
 
-        Map<String, Object> payload = job.buildPayload();
+        Map<String, Object> payload = job.buildPayload(instance);
 
         assertThat(payload.keySet()).containsExactly(
                 "instance_id", "version", "accounts", "customers", "plans",
@@ -93,15 +101,48 @@ class TelemetryPingJobTest {
     }
 
     @Test
-    void createsInstanceIdOnFirstRun() {
+    void skipsWhenPingedWithin24Hours() {
+        AppProperty.Telemetry telemetry = new AppProperty.Telemetry();
+        when(appProperty.getTelemetry()).thenReturn(telemetry);
+        InstanceTelemetry instance = new InstanceTelemetry();
+        instance.setInstanceId(UUID.randomUUID());
+        instance.setLastPingAt(Instant.now().minus(1, ChronoUnit.HOURS));
+        when(instanceTelemetryRepository.findAll()).thenReturn(List.of(instance));
+
+        job.sendDailyPing();
+
+        verifyNoInteractions(webClient);
+    }
+
+    @Test
+    void skipsEntirelyWhenOptedOut() {
+        AppProperty.Telemetry telemetry = new AppProperty.Telemetry();
+        telemetry.setEnabled(false);
+        when(appProperty.getTelemetry()).thenReturn(telemetry);
+
+        job.sendDailyPing();
+
+        verifyNoInteractions(webClient, instanceTelemetryRepository);
+    }
+
+    @Test
+    void firstRunCreatesInstanceSendsAndStampsLastPing() {
+        AppProperty.Telemetry telemetry = new AppProperty.Telemetry();
+        when(appProperty.getTelemetry()).thenReturn(telemetry);
         InstanceTelemetry created = new InstanceTelemetry();
         created.setInstanceId(UUID.randomUUID());
         when(instanceTelemetryRepository.findAll()).thenReturn(List.of());
         when(instanceTelemetryRepository.save(any(InstanceTelemetry.class))).thenReturn(created);
         when(buildProperties.getIfAvailable()).thenReturn(null);
+        when(webClient.post()).thenReturn(requestBodyUriSpec);
+        when(requestBodyUriSpec.uri(telemetry.getEndpoint())).thenReturn(requestBodyUriSpec);
+        when(requestBodyUriSpec.bodyValue(any())).thenReturn(requestHeadersSpec);
+        when(requestHeadersSpec.retrieve()).thenReturn(responseSpec);
+        when(responseSpec.toBodilessEntity()).thenReturn(Mono.empty());
 
-        Map<String, Object> payload = job.buildPayload();
+        job.sendDailyPing();
 
-        assertThat(payload.get("instance_id")).isEqualTo(created.getInstanceId().toString());
+        assertThat(created.getLastPingAt()).isNotNull();
+        verify(instanceTelemetryRepository, times(2)).save(any(InstanceTelemetry.class));
     }
 }
