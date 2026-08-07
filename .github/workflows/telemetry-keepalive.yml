@@ -1,0 +1,19 @@
+# Supabase pauses free-tier projects after ~7 days of inactivity. Until real
+# installs ping daily, this keeps the telemetry receiver awake by inserting a
+# row under a reserved all-f instance_id — filter it out of any adoption query.
+name: Telemetry keepalive
+
+on:
+  schedule:
+    - cron: "0 6 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping telemetry receiver
+        run: |
+          curl -sf -X POST https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping \
+            -H "Content-Type: application/json" \
+            -d '{"instance_id":"ffffffff-ffff-ffff-ffff-ffffffffffff","version":"keepalive"}'
