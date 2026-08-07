@@ -288,6 +288,11 @@ so you can audit it in under a minute. The exact payload:
 installation, not you. Event volume is reported as a coarse bucket, never an
 exact count. Opt out any time with `TANSO_TELEMETRY_ENABLED=false`.
 
+The ping posts to `https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping`
+(`app.telemetry.endpoint`) — a Supabase edge function owned and operated by the
+Tanso team. The random-looking hostname is just Supabase's auto-generated
+project ID, not a third party.
+
 ---
 
 ## Agents & MCP
