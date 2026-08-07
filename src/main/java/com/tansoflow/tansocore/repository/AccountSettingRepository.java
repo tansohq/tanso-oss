@@ -24,6 +24,6 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.UUID;
 
 public interface AccountSettingRepository extends JpaRepository<AccountSetting, UUID> {
-    @Query(value = "SELECT accountSetting FROM AccountSetting accountSetting WHERE accountSetting.accounts.id = :accountId")
+    @Query(value = "SELECT accountSetting FROM AccountSetting accountSetting JOIN FETCH accountSetting.accounts WHERE accountSetting.accounts.id = :accountId")
     AccountSetting findAccountSettingById(UUID accountId);
 }
