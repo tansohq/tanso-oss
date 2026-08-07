@@ -74,7 +74,7 @@ Powers the bundled admin console (`ui/`, Next.js + shadcn/ui) for managing the p
 | :--- | :--- | :--- |
 | `app.dogfooding-enabled` | `true` | When `false`, skips Tanso Platform entitlement checks and usage tracking. Useful for local dev. |
 | `app.telemetry.enabled` | `true` | Anonymous daily instance ping (`TANSO_TELEMETRY_ENABLED=false` to opt out). Entire surface is one class, `TelemetryPingJob`; payload is documented verbatim in the README (random `instance_id` UUID, version, entity counts, coarse event-volume bucket — no PII, no financial data, no keys). |
-| `app.telemetry.endpoint` | `https://telemetry.tansohq.com/ping` | Where the ping posts. |
+| `app.telemetry.endpoint` | `https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping` | Where the ping posts — Supabase edge function `ping` (project `tanso-telemetry`), inserts into `telemetry_pings`. Swap to `telemetry.tansohq.com` if/when DNS is set up. |
 
 The full OpenAPI spec is committed at `openapi.json` (repo root) — regenerate after API-surface changes with `curl localhost:8080/v3/api-docs | python3 -m json.tool > openapi.json`. Runtime serves it at `/v3/api-docs` (swagger-ui at `/swagger-ui.html`). SDK stance: `@tansohq/sdk` (TypeScript) is the only published client; other languages generate from the spec — don't add hand-written SDKs unasked.
 

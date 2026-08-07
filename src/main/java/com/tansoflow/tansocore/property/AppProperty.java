@@ -44,6 +44,6 @@ public class AppProperty {
     @Data
     public static class Telemetry {
         private boolean enabled = true;
-        private String endpoint = "https://telemetry.tansohq.com/ping";
+        private String endpoint = "https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping";
     }
 }

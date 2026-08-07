@@ -8,7 +8,7 @@ app:
   api-key-prefix: sk_test_
   telemetry:
     enabled: ${TANSO_TELEMETRY_ENABLED:true}
-    endpoint: https://telemetry.tansohq.com/ping
+    endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping
   mcp:
     enabled: false
     admin-tools:
