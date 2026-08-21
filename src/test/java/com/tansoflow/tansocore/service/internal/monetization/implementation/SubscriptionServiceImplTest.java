@@ -164,6 +164,52 @@ class SubscriptionServiceImplTest {
         }
     }
 
+    // Regression: the budget gate originally sat inside the STRIPE_INTEGRATION
+    // branch, so an account where Tanso does the billing created the
+    // subscription and its invoice without ever consulting the budget. Caught by
+    // running the crash dummy against a fresh stack, whose seeded account is
+    // stripeMode NONE — every earlier check had run on a Stripe-integration
+    // account and passed.
+    // Found by /qa on 2026-08-21
+    @org.junit.jupiter.api.Test
+    void paidSubscribeRespectsTheBudgetWhenTansoDoesTheBilling() {
+        com.tansoflow.tansocore.entity.Account account = new com.tansoflow.tansocore.entity.Account();
+        UUID accountId = UUID.randomUUID();
+        account.setId(accountId);
+
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan paidPlan = new Plan();
+        paidPlan.setId(UUID.randomUUID());
+        paidPlan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        paidPlan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        paidPlan.setPriceAmount(new java.math.BigDecimal("9.00"));
+
+        // Tanso collects, not Stripe — the mode the fresh seed script produces.
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.NONE);
+        when(accountService.retrieveAccountSettings(accountId.toString())).thenReturn(setting);
+
+        org.mockito.Mockito.doThrow(new com.tansoflow.tansocore.model.exception.BudgetExceededException(
+                        com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                        java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO,
+                        new java.math.BigDecimal("9.00"), java.time.Instant.now()))
+                .when(keyBudgetService).assertWithinBudget(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                        org.mockito.ArgumentMatchers.eq(new java.math.BigDecimal("9.00")));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.subscribe(customer, paidPlan, accountId.toString(), null))
+                .isInstanceOf(com.tansoflow.tansocore.model.exception.BudgetExceededException.class);
+
+        // No subscription, and therefore no invoice, was created.
+        verify(subscriptionRepository, never()).save(org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(invoiceService);
+    }
+
     // Regression: a paid subscription moves money, so the calling key's spend
     // budget has to gate it. Before this, an agent capped at a few dollars of
     // credit top-ups could still commit its customer to an expensive plan.

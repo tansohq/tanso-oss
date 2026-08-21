@@ -154,6 +154,25 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             }
         }
 
+        // A paid subscription commits the customer to money whoever is collecting
+        // it, so the spend guards run before the billing mode is even considered.
+        // They used to sit inside the STRIPE_INTEGRATION branch, which meant an
+        // account where Tanso does the billing (NONE, PAYMENT_PASS_THROUGH)
+        // created the subscription and its invoice without ever consulting the
+        // budget — the same per-path hole this was written to close, one level in.
+        if (plan.getPriceAmount() != null && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+            // Scoped to customer keys, which is what "agent-initiated" means: an
+            // operator subscribing through the console is not capped.
+            if (AuthContext.currentApiKeyId() != null && accountSetting != null
+                    && accountSetting.getAgentMaxTopupAmount() != null
+                    && plan.getPriceAmount().compareTo(accountSetting.getAgentMaxTopupAmount()) > 0) {
+                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
+                        accountSetting.getAgentMaxTopupAmount(), plan.getPriceAmount());
+            }
+            keyBudgetService.assertWithinBudget(
+                    AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
+        }
+
         SubscribedCustomerResponse response = new SubscribedCustomerResponse();
 
         // STRIPE_INTEGRATION + paid IN_ADVANCE: use Stripe Checkout Session instead of creating
@@ -163,25 +182,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         if (isStripeIntegration
                 && plan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())
                 && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
-            // A paid subscription moves money, so the calling key's spend budget
-            // gates it the same way a credit top-up does. Without this an agent
-            // capped at a few dollars of top-ups could still commit its customer
-            // to an arbitrarily expensive recurring plan.
-            // The account-wide cap on a single agent-initiated charge covered
-            // credit top-ups but not subscribe, so an agent capped at $50 of
-            // top-ups could still commit its customer to a $10,000 plan. Scoped
-            // to customer keys, which is what "agent-initiated" means — an
-            // operator subscribing through the console is not capped.
-            if (AuthContext.currentApiKeyId() != null && accountSetting != null
-                    && accountSetting.getAgentMaxTopupAmount() != null
-                    && plan.getPriceAmount().compareTo(accountSetting.getAgentMaxTopupAmount()) > 0) {
-                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
-                        accountSetting.getAgentMaxTopupAmount(), plan.getPriceAmount());
-            }
-
-            keyBudgetService.assertWithinBudget(
-                    AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
-
             // Programmatic path: a supplied or saved payment method charges off-session,
             // creating the Stripe subscription directly — no browser.
             String effectivePaymentMethod = paymentMethodId != null
