@@ -238,9 +238,15 @@ public class CreditServiceImpl implements CreditService {
             pool.setMetadata(request.getMetadata());
         }
 
-        creditPoolRepository.saveAndFlush(pool);
-        log.info("Created credit pool '{}' for account {}", pool.getName(), accountId);
-        return creditMapper.creditPoolToDto(pool);
+        // CreditPool is the one entity carrying a pre-initialised @Version, so
+        // Spring Data reads it as already-persistent and merges rather than
+        // persists. Merge returns the managed copy — the local instance never
+        // learns its own id, and mapping it hands the caller a pool with
+        // "id": null. The auto-create path below already assigns the return
+        // value; this one has to as well.
+        CreditPool saved = creditPoolRepository.saveAndFlush(pool);
+        log.info("Created credit pool '{}' ({}) for account {}", saved.getName(), saved.getId(), accountId);
+        return creditMapper.creditPoolToDto(saved);
     }
 
     @Override
