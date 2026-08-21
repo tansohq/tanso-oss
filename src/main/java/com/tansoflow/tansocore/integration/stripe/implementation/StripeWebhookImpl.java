@@ -281,7 +281,7 @@ public class StripeWebhookImpl implements StripeWebhook {
 
     }
 
-    private void handleSessionsComplete(Session session) throws StripeException {
+    protected void handleSessionsComplete(Session session) throws StripeException {
         if ("setup".equals(session.getMode())) {
             String setupIntentId = session.getSetupIntent();
             if (setupIntentId == null) throw new IllegalStateException("Missing setup_intent on session");
