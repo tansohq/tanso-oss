@@ -50,6 +50,27 @@ public class BudgetExceededException extends RuntimeException {
         this.resetsAt = resetsAt;
     }
 
+    /**
+     * The account-wide per-transaction cap. Same meaning to a caller as a key
+     * budget breach, so it carries the same error code rather than a second one
+     * an agent would have to learn.
+     */
+    public static BudgetExceededException perTransaction(BigDecimal cap, BigDecimal requested) {
+        return new BudgetExceededException(SpendKind.MONEY, cap, BigDecimal.ZERO, requested, null,
+                "This account caps a single agent-initiated charge at " + cap
+                        + "; " + requested + " was requested");
+    }
+
+    private BudgetExceededException(SpendKind kind, BigDecimal limit, BigDecimal spent,
+                                    BigDecimal requested, Instant resetsAt, String message) {
+        super(message);
+        this.kind = kind;
+        this.limit = limit;
+        this.spent = spent;
+        this.requested = requested;
+        this.resetsAt = resetsAt;
+    }
+
     public BigDecimal getRemaining() {
         BigDecimal remaining = limit.subtract(spent);
         return remaining.signum() < 0 ? BigDecimal.ZERO : remaining;

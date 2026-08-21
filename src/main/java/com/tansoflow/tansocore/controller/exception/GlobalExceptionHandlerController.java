@@ -130,6 +130,31 @@ public class GlobalExceptionHandlerController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.NOT_FOUND));
     }
 
+    // An unrouted path is the caller's mistake, not ours. Falling through to the
+    // generic handler returned 500 internal_error, which tells an agent branching
+    // on error.code to retry a URL that will never exist.
+    @ExceptionHandler({
+            org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNoRoute(Exception exception) {
+        String errorId = assignErrorId();
+        log.info("No route [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(processErrorMessage("No endpoint at this path", errorId, ErrorCode.NOT_FOUND));
+    }
+
+    // Wrong verb on a real path is also the caller's mistake. Same reasoning.
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+        String errorId = assignErrorId();
+        log.info("Method not allowed [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.NOT_FOUND));
+    }
+
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDeniedException(org.springframework.security.access.AccessDeniedException exception) {
         String errorId = assignErrorId();

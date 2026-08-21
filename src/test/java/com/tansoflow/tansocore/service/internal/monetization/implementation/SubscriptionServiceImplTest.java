@@ -120,6 +120,50 @@ class SubscriptionServiceImplTest {
     @InjectMocks
     private SubscriptionServiceImpl subscriptionService;
 
+    // Regression: the account-wide cap on a single agent-initiated charge
+    // covered credit top-ups but not subscribe, so an agent capped at a small
+    // top-up could still commit its customer to an expensive recurring plan.
+    // Found by /qa on 2026-08-21
+    @org.junit.jupiter.api.Test
+    void paidSubscribeStopsBeforeStripeWhenTheAccountCapIsExceeded() {
+        com.tansoflow.tansocore.entity.Account account = new com.tansoflow.tansocore.entity.Account();
+        UUID accountId = UUID.randomUUID();
+        account.setId(accountId);
+
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        customer.setStripeDefaultPaymentMethodId("pm_saved");
+
+        Plan paidPlan = new Plan();
+        paidPlan.setId(UUID.randomUUID());
+        paidPlan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        paidPlan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        paidPlan.setPriceAmount(new java.math.BigDecimal("5000.00"));
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
+        setting.setAgentMaxTopupAmount(new java.math.BigDecimal("100.00"));
+        when(accountService.retrieveAccountSettings(accountId.toString())).thenReturn(setting);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(java.util.List.of());
+
+        // The cap applies to agent callers, which is what a ck_ key identifies.
+        com.tansoflow.tansocore.auth.UserContext ctx = new com.tansoflow.tansocore.auth.UserContext(
+                accountId.toString(), customer.getId().toString(), "ref", java.util.List.of("purchase"),
+                null, UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new com.tansoflow.tansocore.auth.UserContextAuthentication(ctx, java.util.List.of()));
+        try {
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                            () -> subscriptionService.subscribe(customer, paidPlan, accountId.toString(), null))
+                    .isInstanceOf(com.tansoflow.tansocore.model.exception.BudgetExceededException.class);
+            verifyNoInteractions(stripeSyncService);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     // Regression: a paid subscription moves money, so the calling key's spend
     // budget has to gate it. Before this, an agent capped at a few dollars of
     // credit top-ups could still commit its customer to an expensive plan.

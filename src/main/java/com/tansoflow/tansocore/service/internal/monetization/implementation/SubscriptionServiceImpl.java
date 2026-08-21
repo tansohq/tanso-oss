@@ -167,6 +167,18 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             // gates it the same way a credit top-up does. Without this an agent
             // capped at a few dollars of top-ups could still commit its customer
             // to an arbitrarily expensive recurring plan.
+            // The account-wide cap on a single agent-initiated charge covered
+            // credit top-ups but not subscribe, so an agent capped at $50 of
+            // top-ups could still commit its customer to a $10,000 plan. Scoped
+            // to customer keys, which is what "agent-initiated" means — an
+            // operator subscribing through the console is not capped.
+            if (AuthContext.currentApiKeyId() != null && accountSetting != null
+                    && accountSetting.getAgentMaxTopupAmount() != null
+                    && plan.getPriceAmount().compareTo(accountSetting.getAgentMaxTopupAmount()) > 0) {
+                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
+                        accountSetting.getAgentMaxTopupAmount(), plan.getPriceAmount());
+            }
+
             keyBudgetService.assertWithinBudget(
                     AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
 

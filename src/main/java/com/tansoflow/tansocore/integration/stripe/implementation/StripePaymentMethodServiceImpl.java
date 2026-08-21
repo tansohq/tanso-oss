@@ -36,6 +36,7 @@ import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.repository.StripeCustomerRepository;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
+import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
 import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
@@ -191,8 +192,10 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
         BigDecimal cap = settings != null ? settings.getAgentMaxTopupAmount() : null;
         if (cap != null && amount.compareTo(cap) > 0) {
-            throw new AccessDeniedException(
-                    "Amount " + amount + " exceeds this account's agent spend cap of " + cap);
+            // Same code as a key-budget breach: to the caller both mean "this
+            // charge is over a ceiling", and two codes for one outcome just
+            // gives an agent a second branch to get wrong.
+            throw BudgetExceededException.perTransaction(cap, amount);
         }
         keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, amount);
     }

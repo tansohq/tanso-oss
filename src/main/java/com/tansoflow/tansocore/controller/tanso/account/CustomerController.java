@@ -64,10 +64,17 @@ public class CustomerController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a new customer"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Access Denied.", content = @Content)
     })
-    public ResponseEntity<ApiResponse<Void>> postCustomer(@AuthenticationPrincipal UserContext userContext, @Valid @RequestBody CustomerRequest customerRequest) {
-        customerService.createCustomer(userContext.getAccountId(), customerRequest);
+    public ResponseEntity<ApiResponse<CustomerDto>> postCustomer(@AuthenticationPrincipal UserContext userContext, @Valid @RequestBody CustomerRequest customerRequest) {
+        // Returns the created customer. It used to return an empty body, and
+        // since there is no lookup-by-reference on this API, the caller had to
+        // list every customer on the account to find the id of the one it had
+        // just made before it could do anything else with it.
+        Customer created = customerService.createCustomer(userContext.getAccountId(), customerRequest);
 
-        ApiResponse<Void> apiResponse = ApiResponse.<Void>builder().success(true).build();
+        ApiResponse<CustomerDto> apiResponse = ApiResponse.<CustomerDto>builder()
+                .success(true)
+                .data(customerMapper.customerEntityToCustomerDto(created))
+                .build();
 
         return ResponseEntity.status(201).body(apiResponse);
     }

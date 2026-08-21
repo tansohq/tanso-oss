@@ -1969,6 +1969,14 @@ export interface components {
             phoneNumber?: string;
             address?: string;
         };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
         /** @description One weight entry in a tariff publish */
         Entry: {
             /** @description Feature the weight applies to */
@@ -3058,14 +3066,6 @@ export interface components {
             createdAt?: string;
         };
         /** @description Generic API response wrapper */
-        ApiResponseCustomerDto: {
-            /** @description Response data */
-            data?: components["schemas"]["CustomerDto"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        /** @description Generic API response wrapper */
         ApiResponseMapStringBigDecimal: {
             /** @description Response data */
             data?: {
@@ -4089,7 +4089,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseCustomerDto"];
                 };
             };
             /** @description Access Denied. */

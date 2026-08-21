@@ -1010,7 +1010,7 @@
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                    "$ref": "#/components/schemas/ApiResponseCustomerDto"
                                 }
                             }
                         }
@@ -6612,6 +6612,26 @@
                     "email"
                 ]
             },
+            "ApiResponseCustomerDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CustomerDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "Entry": {
                 "type": "object",
                 "description": "One weight entry in a tariff publish",
@@ -9520,26 +9540,6 @@
                     "createdAt": {
                         "type": "string",
                         "description": "Timestamp when the customer was created"
-                    }
-                }
-            },
-            "ApiResponseCustomerDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/CustomerDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
                     }
                 }
             },
