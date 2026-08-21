@@ -42,6 +42,7 @@ import {
   useCustomerSubscriptions,
   useCustomerUsageTotals,
 } from "@/features/customers/queries"
+import { CustomerKeysCard } from "@/features/customer-keys/customer-keys-card"
 import { useFeatures } from "@/features/features/queries"
 
 export default function CustomerDetailPage({
@@ -228,6 +229,11 @@ export default function CustomerDetailPage({
           )}
         </CardContent>
       </Card>
+
+      <CustomerKeysCard
+        customerId={customerId}
+        customerReferenceId={customer.data?.customerReferenceId}
+      />
 
       <Card>
         <CardHeader>
