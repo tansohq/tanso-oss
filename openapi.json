@@ -142,6 +142,146 @@
         }
     ],
     "paths": {
+        "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/budget": {
+            "get": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Read one key's spend budget",
+                "description": "Limits, spend so far in the current window, and when the window resets. A customer key may read its own budget so an agent can decide whether to spend before it gets rejected.",
+                "operationId": "getBudget",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Set one key's spend budget",
+                "description": "Bounds what a single agent or team member may consume. Credits and money are capped independently over a rolling window; omit an axis to leave it unlimited. Deliberately NOT opened to ROLE_CUSTOMER \u2014 a key must not raise its own ceiling. Changing the period restarts the window.",
+                "operationId": "setBudget",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateKeyBudgetRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Clear one key's spend budget",
+                "operationId": "clearBudget",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/public/v1/login": {
             "post": {
                 "tags": [
@@ -5544,6 +5684,125 @@
     },
     "components": {
         "schemas": {
+            "UpdateKeyBudgetRequest": {
+                "type": "object",
+                "description": "Set this key's spend budget. Omit an axis to leave it unlimited.",
+                "properties": {
+                    "period": {
+                        "type": "string",
+                        "description": "Window the budget is measured over",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ],
+                        "example": "MONTH"
+                    },
+                    "creditLimit": {
+                        "type": "number",
+                        "description": "Credits this key may consume per window. Omit or null for unlimited.",
+                        "example": 50000
+                    },
+                    "amountLimit": {
+                        "type": "number",
+                        "description": "Money this key may spend on top-ups per window. Omit or null for unlimited.",
+                        "example": 500.0
+                    }
+                },
+                "required": [
+                    "period"
+                ]
+            },
+            "ApiResponseKeyBudgetDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/KeyBudgetDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Stable machine-readable code; branch on this, not on message"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                }
+            },
+            "KeyBudgetDto": {
+                "type": "object",
+                "description": "What this API key may spend, and what it has spent in the current window",
+                "properties": {
+                    "keyId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Rolling window the budget is measured over. Null when no budget is set.",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ]
+                    },
+                    "creditLimit": {
+                        "type": "number",
+                        "description": "Credits this key may consume per window. Null means unlimited."
+                    },
+                    "creditsSpent": {
+                        "type": "number",
+                        "description": "Credits consumed by this key in the current window"
+                    },
+                    "creditsRemaining": {
+                        "type": "number",
+                        "description": "Credits still available to this key. Null when the credit budget is unlimited."
+                    },
+                    "amountLimit": {
+                        "type": "number",
+                        "description": "Money this key may spend on top-ups per window. Null means unlimited."
+                    },
+                    "amountSpent": {
+                        "type": "number",
+                        "description": "Money spent by this key in the current window"
+                    },
+                    "amountRemaining": {
+                        "type": "number",
+                        "description": "Money still available to this key. Null when the spend budget is unlimited."
+                    },
+                    "windowStart": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Start of the current window"
+                    },
+                    "resetsAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the current window rolls over. Null for a TOTAL budget, which never resets."
+                    }
+                }
+            },
             "UsernameAndPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -5572,21 +5831,6 @@
                     },
                     "success": {
                         "type": "boolean"
-                    }
-                }
-            },
-            "Error": {
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Stable machine-readable code; branch on this, not on message"
-                    },
-                    "message": {
-                        "type": "string"
-                    },
-                    "detail": {
-                        "type": "string"
                     }
                 }
             },
