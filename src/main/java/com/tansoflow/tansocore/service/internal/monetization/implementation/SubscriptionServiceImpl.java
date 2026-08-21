@@ -17,6 +17,8 @@
  */
 package com.tansoflow.tansocore.service.internal.monetization.implementation;
 
+import com.tansoflow.tansocore.auth.AuthContext;
+import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.entity.Invoice;
@@ -102,6 +104,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final AccountService accountService;
     private final InvoiceMapper invoiceMapper;
     private final CreditService creditService;
+    private final com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
     private final PlanCreditAllocationRepository planCreditAllocationRepository;
     private final com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
     private final com.tansoflow.tansocore.repository.StripeSubscriptionRepository stripeSubscriptionRepository;
@@ -160,6 +163,13 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         if (isStripeIntegration
                 && plan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())
                 && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+            // A paid subscription moves money, so the calling key's spend budget
+            // gates it the same way a credit top-up does. Without this an agent
+            // capped at a few dollars of top-ups could still commit its customer
+            // to an arbitrarily expensive recurring plan.
+            keyBudgetService.assertWithinBudget(
+                    AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
+
             // Programmatic path: a supplied or saved payment method charges off-session,
             // creating the Stripe subscription directly — no browser.
             String effectivePaymentMethod = paymentMethodId != null
@@ -176,6 +186,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                         response.setSubscription(subscriptionMapper
                                 .subscriptionEntityToSubscriptionDto(bridge.getSubscription()));
                     }
+                    keyBudgetService.recordSpend(UUID.fromString(accountId), AuthContext.currentApiKeyId(),
+                            SpendKind.MONEY, plan.getPriceAmount(), stripeSub.getId(),
+                            "stripe_sub:" + stripeSub.getId());
                     return response;
                 } catch (Exception e) {
                     log.error("Direct Stripe subscription failed for customer {} plan {}: {}",
@@ -194,6 +207,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 session.setPlanId(plan.getId());
                 session.setStripeSessionId(checkoutDto.getStripeSessionId());
                 session.setCheckoutUrl(checkoutDto.getPaymentLink());
+                // The completing webhook has no security context, so carry the
+                // calling key and the amount on the session row.
+                session.setApiKeyId(AuthContext.currentApiKeyId());
+                session.setAmount(plan.getPriceAmount());
                 checkoutSessionRepository.save(session);
 
                 response.setCheckoutUrl(checkoutDto.getPaymentLink());

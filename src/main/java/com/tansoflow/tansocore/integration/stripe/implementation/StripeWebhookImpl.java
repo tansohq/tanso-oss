@@ -350,6 +350,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                     record.setSubscriptionId(bridge.getSubscription().getId());
                 }
             }
+            // Money moved through a browser, so charge it to the key that opened
+            // the checkout — it was stamped on the row at creation time.
+            keyBudgetService.recordSpend(record.getAccountId(), record.getApiKeyId(),
+                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, record.getAmount(),
+                    session.getId(), "checkout_" + session.getId());
             checkoutSessionRepository.save(record);
         });
     }
