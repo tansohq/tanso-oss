@@ -69,6 +69,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -113,8 +114,56 @@ class SubscriptionServiceImplTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
+
     @InjectMocks
     private SubscriptionServiceImpl subscriptionService;
+
+    // Regression: a paid subscription moves money, so the calling key's spend
+    // budget has to gate it. Before this, an agent capped at a few dollars of
+    // credit top-ups could still commit its customer to an expensive plan.
+    // Found by /qa on 2026-08-21
+    // Report: .gstack/qa-reports/qa-report-tanso-oss-2026-08-21.md
+    @org.junit.jupiter.api.Test
+    void paidSubscribeStopsBeforeStripeWhenTheKeyBudgetIsExhausted() {
+        com.tansoflow.tansocore.entity.Account account = new com.tansoflow.tansocore.entity.Account();
+        UUID accountId = UUID.randomUUID();
+        account.setId(accountId);
+
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        customer.setStripeDefaultPaymentMethodId("pm_saved");
+
+        Plan paidPlan = new Plan();
+        paidPlan.setId(UUID.randomUUID());
+        paidPlan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        paidPlan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        paidPlan.setPriceAmount(new java.math.BigDecimal("9000.00"));
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
+        when(accountService.retrieveAccountSettings(accountId.toString())).thenReturn(setting);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(java.util.List.of());
+
+        org.mockito.Mockito.doThrow(new com.tansoflow.tansocore.model.exception.BudgetExceededException(
+                        com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                        new java.math.BigDecimal("5.00"), new java.math.BigDecimal("1.00"),
+                        new java.math.BigDecimal("9000.00"), java.time.Instant.now()))
+                .when(keyBudgetService).assertWithinBudget(
+                        org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                        org.mockito.ArgumentMatchers.eq(new java.math.BigDecimal("9000.00")));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.subscribe(customer, paidPlan, accountId.toString(), null))
+                .isInstanceOf(com.tansoflow.tansocore.model.exception.BudgetExceededException.class);
+
+        // The whole point: no Stripe call, no charge, no checkout link handed back.
+        verifyNoInteractions(stripeSyncService);
+    }
 
     private UUID subscriptionId;
     private Subscription subscription;
