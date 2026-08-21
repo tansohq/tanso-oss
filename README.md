@@ -273,7 +273,7 @@ so you can audit it in under a minute. The exact payload:
 ```json
 {
   "instance_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
-  "version": "0.8.8",
+  "version": "0.9.0",
   "accounts": 2,
   "customers": 10,
   "plans": 3,
