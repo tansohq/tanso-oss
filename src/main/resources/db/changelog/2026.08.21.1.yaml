@@ -1,0 +1,106 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260821-1"
+      author: tanso
+      comment: >
+        Per-key spend budgets. An account-wide cap is all-or-nothing: one
+        runaway agent drains the customer's whole pool and the only dial the
+        operator has is revoking the key. A budget on the key itself bounds a
+        single actor — credits consumed and money spent are capped
+        independently over a rolling window, and both fail closed.
+        api_key_spend_records is the ledger both checks sum over; credit spend
+        and money spend live in different tables today, so one ledger keeps
+        enforcement to a single query. checkout_sessions carries the calling
+        key and the charge amount so a hosted-checkout top-up still counts
+        against that key's budget — the completing webhook has no security
+        context to read it from.
+      changes:
+        - addColumn:
+            tableName: account_api_keys
+            columns:
+              - column:
+                  name: budget_credits
+                  type: NUMERIC(18, 4)
+              - column:
+                  name: budget_amount
+                  type: NUMERIC(18, 2)
+              - column:
+                  name: budget_period
+                  type: VARCHAR(16)
+              - column:
+                  name: budget_started_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - createTable:
+            tableName: api_key_spend_records
+            columns:
+              - column:
+                  name: id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: api_key_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: kind
+                  type: VARCHAR(16)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount
+                  type: NUMERIC(18, 6)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: occurred_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reference_id
+                  type: VARCHAR(255)
+              - column:
+                  name: idempotency_key
+                  type: VARCHAR(255)
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - addColumn:
+            tableName: checkout_sessions
+            columns:
+              - column:
+                  name: api_key_id
+                  type: UUID
+              - column:
+                  name: amount
+                  type: NUMERIC(18, 2)
+        - createIndex:
+            tableName: api_key_spend_records
+            indexName: idx_api_key_spend_records_window
+            columns:
+              - column:
+                  name: api_key_id
+              - column:
+                  name: kind
+              - column:
+                  name: occurred_at
+        - sql:
+            comment: Partial unique index — replayed spend must not be double-counted.
+            sql: >
+              CREATE UNIQUE INDEX uq_api_key_spend_records_idem
+              ON api_key_spend_records (account_id, idempotency_key)
+              WHERE idempotency_key IS NOT NULL
+            rollback: DROP INDEX IF EXISTS uq_api_key_spend_records_idem

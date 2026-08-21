@@ -26,6 +26,7 @@ import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentMethodAttachParams;
 import com.stripe.param.SetupIntentCreateParams;
+import com.tansoflow.tansocore.auth.AuthContext;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.entity.StripeCustomer;
@@ -34,7 +35,9 @@ import com.tansoflow.tansocore.integration.stripe.StripePaymentMethodService;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.repository.StripeCustomerRepository;
+import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
+import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -58,6 +61,7 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     private final CustomerRepository customerRepository;
     private final CustomerService customerService;
     private final AccountService accountService;
+    private final KeyBudgetService keyBudgetService;
 
     @Override
     public SetupIntentResult createSetupIntent(UUID accountId, UUID customerId) throws StripeException {
@@ -125,6 +129,9 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         try {
             PaymentIntent intent = stripeClient.v1().paymentIntents().create(params.build());
             boolean succeeded = "succeeded".equals(intent.getStatus());
+            if (succeeded) {
+                recordKeySpend(accountId, amount, intent.getId());
+            }
             return new PaymentResult(succeeded, intent.getId(),
                     succeeded ? null : "Payment status: " + intent.getStatus());
         } catch (CardException e) {
@@ -175,7 +182,11 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         return new HostedCheckout(session.getUrl(), session.getId());
     }
 
-    /** Fail closed before money moves: reject any agent-initiated charge above the account cap. */
+    /**
+     * Fail closed before money moves. Two guards: the account cap bounds any
+     * single agent-initiated charge, and the calling key's own budget bounds
+     * what that one agent may spend cumulatively over its window.
+     */
     private void enforceSpendCap(UUID accountId, BigDecimal amount) {
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
         BigDecimal cap = settings != null ? settings.getAgentMaxTopupAmount() : null;
@@ -183,6 +194,13 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
             throw new AccessDeniedException(
                     "Amount " + amount + " exceeds this account's agent spend cap of " + cap);
         }
+        keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, amount);
+    }
+
+    /** Called once the charge has actually succeeded, so declines don't burn budget. */
+    private void recordKeySpend(UUID accountId, BigDecimal amount, String paymentIntentId) {
+        keyBudgetService.recordSpend(accountId, AuthContext.currentApiKeyId(), SpendKind.MONEY,
+                amount, paymentIntentId, paymentIntentId != null ? "pi:" + paymentIntentId : null);
     }
 
     private StripeCustomer ensureStripeCustomer(UUID accountId, UUID customerId) throws StripeException {

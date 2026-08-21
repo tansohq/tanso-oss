@@ -136,7 +136,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                     customerKey.getCustomer().getId().toString(),
                     customerKey.getCustomer().getExternalClientCustomerId(),
                     scopes,
-                    null);
+                    null,
+                    customerKey.getId());
 
             List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
             authorities.add(new SimpleGrantedAuthority("ROLE_CUSTOMER"));

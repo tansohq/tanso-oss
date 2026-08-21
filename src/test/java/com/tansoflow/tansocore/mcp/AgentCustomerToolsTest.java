@@ -57,6 +57,8 @@ class AgentCustomerToolsTest {
     private SubscriptionService subscriptionService;
     @Mock
     private CreditPurchaseService creditPurchaseService;
+    @Mock
+    private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
 
     private AgentCustomerTools tools;
 
@@ -64,7 +66,7 @@ class AgentCustomerToolsTest {
     void setUp() {
         tools = new AgentCustomerTools(new CustomerAccessGuard(), clientPlanService, creditPriceService,
                 clientEntitlementService, usageForecastService, subscriptionService, creditPurchaseService,
-                new ObjectMapper());
+                keyBudgetService, new ObjectMapper());
     }
 
     @AfterEach

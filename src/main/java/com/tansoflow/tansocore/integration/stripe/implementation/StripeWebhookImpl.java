@@ -81,6 +81,7 @@ import java.util.UUID;
 public class StripeWebhookImpl implements StripeWebhook {
 
     private final com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
+    private final com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
     private final StripeSyncServiceImpl stripeSyncService;
     private final ApplicationEventPublisher eventPublisher;
     private final ExternalApiKeyRepository externalApiKeyRepository;
@@ -373,6 +374,12 @@ public class StripeWebhookImpl implements StripeWebhook {
                 // Webhook replay after the grant landed — the completion mark below is all that's left to do
                 log.info("Credit top-up grant for session {} already exists: {}", session.getId(), e.getMessage());
             }
+
+            // The webhook has no security context, so the key that opened the
+            // checkout was stamped on the session at creation time.
+            keyBudgetService.recordSpend(record.getAccountId(), record.getApiKeyId(),
+                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, record.getAmount(),
+                    session.getId(), "checkout_" + session.getId());
 
             record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
             record.setCompletedAt(java.time.Instant.now());

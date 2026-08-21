@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.service.client.implementation;
 
 import com.stripe.exception.StripeException;
+import com.tansoflow.tansocore.auth.AuthContext;
 import com.tansoflow.tansocore.entity.CheckoutSession;
 import com.tansoflow.tansocore.entity.CreditPool;
 import com.tansoflow.tansocore.entity.Customer;
@@ -131,6 +132,8 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
             session.setCredits(request.getCredits());
             session.setStripeSessionId(hosted.stripeSessionId());
             session.setCheckoutUrl(hosted.url());
+            session.setApiKeyId(AuthContext.currentApiKeyId());
+            session.setAmount(amount);
             checkoutSessionRepository.save(session);
 
             return CreditPurchaseResult.builder()

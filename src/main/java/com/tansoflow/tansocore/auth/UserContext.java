@@ -31,6 +31,9 @@ public class UserContext {
     private String customerId;
     private String customerReferenceId;
     private List<String> scopes;
+    // Row id of the authenticating key. Set only for ck_ keys — it is the actor
+    // identity a per-key budget is enforced against. Null for JWT/UI traffic.
+    private java.util.UUID apiKeyId;
 
     public UserContext(String accountId, String apiKey) {
         this.accountId = accountId;
@@ -38,6 +41,12 @@ public class UserContext {
     }
 
     public UserContext(String accountId, String customerId, String customerReferenceId, List<String> scopes, String apiKey) {
+        this(accountId, customerId, customerReferenceId, scopes, apiKey, null);
+    }
+
+    public UserContext(String accountId, String customerId, String customerReferenceId, List<String> scopes,
+                       String apiKey, java.util.UUID apiKeyId) {
+        this.apiKeyId = apiKeyId;
         this.accountId = accountId;
         this.customerId = customerId;
         this.customerReferenceId = customerReferenceId;

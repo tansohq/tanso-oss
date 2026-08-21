@@ -31,6 +31,7 @@ public enum ErrorCode {
     INSUFFICIENT_CREDITS("insufficient_credits"),
     CONFLICT("conflict"),
     RATE_LIMITED("rate_limited"),
+    BUDGET_EXCEEDED("budget_exceeded"),
     INTERNAL_ERROR("internal_error");
 
     private final String code;

@@ -60,6 +60,7 @@ public class AgentCustomerTools {
     private final UsageForecastService usageForecastService;
     private final SubscriptionService subscriptionService;
     private final CreditPurchaseService creditPurchaseService;
+    private final com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
     private final ObjectMapper objectMapper;
 
     private static final String CONFIRMATION_REQUIRED =
@@ -132,6 +133,26 @@ public class AgentCustomerTools {
             return notFound(e);
         } catch (JsonProcessingException e) {
             return serializationError("usage forecast");
+        }
+    }
+
+    @Tool(description = "This key's own spend budget: credit and money limits, how much has been used in "
+            + "the current window, and when the window resets. Check before a large call or purchase — "
+            + "exceeding the budget is rejected with error code 'budget_exceeded'.")
+    public String getMyBudget() {
+        try {
+            UserContext ctx = context();
+            if (ctx.getApiKeyId() == null) {
+                return "{\"error\":\"budget_unavailable\",\"message\":\"Budgets apply to customer-scoped (ck_) keys only\"}";
+            }
+            return objectMapper.writeValueAsString(keyBudgetService.getBudget(
+                    ctx.getAccountId(), ctx.getCustomerReferenceId(), ctx.getApiKeyId().toString()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return forbidden(e);
+        } catch (ResourceNotFoundException e) {
+            return notFound(e);
+        } catch (JsonProcessingException e) {
+            return serializationError("key budget");
         }
     }
 

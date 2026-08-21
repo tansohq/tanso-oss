@@ -32,7 +32,10 @@ import com.tansoflow.tansocore.model.event.events.EventDto;
 import com.tansoflow.tansocore.model.event.events.EventGroupDto;
 import com.tansoflow.tansocore.model.event.events.EventIngestionResult;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
+import com.tansoflow.tansocore.auth.AuthContext;
+import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
+import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import com.tansoflow.tansocore.model.monetization.cost.CostModel;
 import com.tansoflow.tansocore.model.monetization.cost.DefaultCostConfig;
 import com.tansoflow.tansocore.model.monetization.cost.ModelAwareCostModel;
@@ -95,6 +98,7 @@ public class EventServiceImpl implements EventService {
     private final AccountSettingRepository accountSettingRepository;
     private final StripeSyncService stripeSyncService;
     private final CreditService creditService;
+    private final KeyBudgetService keyBudgetService;
     private final CreditWeightService creditWeightService;
     private final CreditPoolSubscriptionRepository creditPoolSubscriptionRepository;
     private final InvoiceRepository invoiceRepository;
@@ -118,6 +122,7 @@ public class EventServiceImpl implements EventService {
             AccountSettingRepository accountSettingRepository,
             @Lazy StripeSyncService stripeSyncService,
             @Lazy CreditService creditService,
+            KeyBudgetService keyBudgetService,
             CreditWeightService creditWeightService,
             CreditPoolSubscriptionRepository creditPoolSubscriptionRepository,
             InvoiceRepository invoiceRepository,
@@ -140,6 +145,7 @@ public class EventServiceImpl implements EventService {
         this.accountSettingRepository = accountSettingRepository;
         this.stripeSyncService = stripeSyncService;
         this.creditService = creditService;
+        this.keyBudgetService = keyBudgetService;
         this.creditWeightService = creditWeightService;
         this.creditPoolSubscriptionRepository = creditPoolSubscriptionRepository;
         this.invoiceRepository = invoiceRepository;
@@ -335,6 +341,14 @@ public class EventServiceImpl implements EventService {
                 eventDto.getSubscriptionId(), account.getId(), creditDenomination, weightedCredits)) {
             throw new CreditLimitExceededException(
                     "Credit pool depleted - hard limit active for denomination " + creditDenomination);
+        }
+
+        // Per-key budget. The pool guard above bounds the customer as a whole;
+        // this bounds the single agent or team member holding the calling key,
+        // so one of them cannot drain what the others draw from.
+        if (billingEligible && weightedCredits != null) {
+            keyBudgetService.assertWithinBudget(
+                    AuthContext.currentApiKeyId(), SpendKind.CREDITS, weightedCredits);
         }
 
         Event event = eventMapper.eventDtoToEventEntity(eventDto);
@@ -654,6 +668,11 @@ public class EventServiceImpl implements EventService {
                 eventDto.getContext().put("credit_remaining_usage", usageRemaining);
                 event.setContext(eventDto.getContext());
                 eventRepository.save(event); // persist credit context back to DB
+
+                String eventRef = event.getId() != null ? event.getId().toString() : null;
+                keyBudgetService.recordSpend(account.getId(), AuthContext.currentApiKeyId(),
+                        SpendKind.CREDITS, totalDeducted, eventRef,
+                        eventRef != null ? "event:" + eventRef : null);
 
                 resultBuilder.creditsDeducted(totalDeducted)
                         .weightApplied(weight)

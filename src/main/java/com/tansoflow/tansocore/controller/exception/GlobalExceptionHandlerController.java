@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.controller.exception;
 
 import com.tansoflow.tansocore.model.exception.AuthenticationException;
+import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.IdempotencyConflictException;
 import com.tansoflow.tansocore.model.exception.RateLimitExceededException;
@@ -84,6 +85,15 @@ public class GlobalExceptionHandlerController {
         log.info("Credit limit exceeded [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.INSUFFICIENT_CREDITS));
+    }
+
+    @ExceptionHandler(BudgetExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBudgetExceededException(BudgetExceededException exception) {
+        String errorId = assignErrorId();
+        log.info("Key budget exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.BUDGET_EXCEEDED));
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)
