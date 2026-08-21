@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { apiFetch, queryString } from "@/lib/api/client"
+import { newestFirst } from "@/lib/newest-first"
 import type {
   CreditPoolDto,
   CustomerBulkResponse,
@@ -14,6 +15,10 @@ export function useCustomers() {
   return useQuery({
     queryKey: ["customers"],
     queryFn: () => apiFetch<CustomerBulkResponse>("/api/v1/monetization/customers"),
+    select: (data: CustomerBulkResponse) => ({
+      ...data,
+      customers: newestFirst(data.customers ?? []),
+    }),
   })
 }
 

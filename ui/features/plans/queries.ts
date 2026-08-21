@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api/client"
+import { newestFirst } from "@/lib/newest-first"
 import type {
   PlanCreditAllocationDto,
   PlanDto,
@@ -12,6 +13,7 @@ export function usePlans() {
   return useQuery({
     queryKey: ["plans"],
     queryFn: () => apiFetch<PlanDto[]>("/api/v1/monetization/plans"),
+    select: newestFirst,
   })
 }
 
