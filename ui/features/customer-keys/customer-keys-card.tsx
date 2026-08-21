@@ -135,6 +135,7 @@ function BudgetDialog({
   const [period, setPeriod] = useState("MONTH")
   const [creditLimit, setCreditLimit] = useState("")
   const [amountLimit, setAmountLimit] = useState("")
+  const [alertThreshold, setAlertThreshold] = useState("")
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
 
   // Seed the form from whatever budget the key already has, once per key.
@@ -143,6 +144,7 @@ function BudgetDialog({
     setPeriod(budget.data.period ?? "MONTH")
     setCreditLimit(budget.data.creditLimit != null ? String(budget.data.creditLimit) : "")
     setAmountLimit(budget.data.amountLimit != null ? String(budget.data.amountLimit) : "")
+    setAlertThreshold(budget.data.alertThreshold != null ? String(budget.data.alertThreshold) : "")
   }
 
   const current = budget.data
@@ -193,6 +195,12 @@ function BudgetDialog({
                 ? `Window resets ${formatDate(current.resetsAt)}`
                 : "This budget never resets"}
             </div>
+            {current.alerting ? (
+              <div className="col-span-2 text-foreground">
+                Past its {current.alertThreshold}% warning mark since{" "}
+                {formatDate(current.alertingSince ?? "")} — now at {current.percentUsed}%.
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -241,6 +249,21 @@ function BudgetDialog({
           </Field>
         </div>
 
+        <Field>
+          <FieldLabel htmlFor="budget-alert">Warn at</FieldLabel>
+          <Input
+            id="budget-alert"
+            inputMode="numeric"
+            placeholder="80"
+            value={alertThreshold}
+            onChange={(e) => setAlertThreshold(e.target.value)}
+          />
+          <FieldDescription>
+            Percent of the tightest limit at which this key starts reporting itself as near
+            its ceiling, so an agent can slow down instead of hitting a wall. 0 never warns.
+          </FieldDescription>
+        </Field>
+
         <DialogFooter>
           {hasBudget ? (
             <Button
@@ -267,7 +290,7 @@ function BudgetDialog({
             onClick={() =>
               apiKey?.id &&
               setBudget.mutate(
-                { keyId: apiKey.id, period, creditLimit, amountLimit },
+                { keyId: apiKey.id, period, creditLimit, amountLimit, alertThreshold },
                 {
                   onSuccess: () => {
                     toast.add({ title: "Budget saved" })

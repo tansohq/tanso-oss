@@ -327,7 +327,10 @@ just your team's agents, but your customers' buying agents:
   `"code": "budget_exceeded"` and the limit, spend, remainder, and reset time,
   so an agent can back off instead of retrying blindly. Only the tenant may
   set or clear a budget — a customer key can read its own (to pre-flight) but
-  never raise it.
+  never raise it. A budget also carries a warning mark (80% by default, 0 to
+  disable): once a key passes that share of its tightest limit, the budget
+  reports `alerting`, `percentUsed`, and when it crossed, so an agent can slow
+  down rather than discover the ceiling by being refused.
 - **Use**: entitlement checks return credit quotes with estimated cost;
   `GET /customers/{ref}/usage` is the burndown API — per-feature projections
   and credit depletion dates. Errors carry stable `code` fields, and mutating

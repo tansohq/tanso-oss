@@ -1570,6 +1570,12 @@ export interface components {
              * @example 500
              */
             amountLimit?: number;
+            /**
+             * Format: int32
+             * @description Percent of the tightest limit at which this key starts reporting itself near its ceiling. 1-99, or null to never alert. Defaults to 80 when a budget is first set.
+             * @example 80
+             */
+            alertThreshold?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseKeyBudgetDto: {
@@ -1616,6 +1622,23 @@ export interface components {
              * @description When the current window rolls over. Null for a TOTAL budget, which never resets.
              */
             resetsAt?: string;
+            /**
+             * Format: int32
+             * @description How far through the tightest limit this key is, 0-100. Null when nothing is capped.
+             */
+            percentUsed?: number;
+            /**
+             * Format: int32
+             * @description Percent of the tightest limit at which this key reports itself near its ceiling. Null means it never does.
+             */
+            alertThreshold?: number;
+            /** @description True once the threshold has been crossed in the current window */
+            alerting?: boolean;
+            /**
+             * Format: date-time
+             * @description When the threshold was crossed in this window, or null if it has not been
+             */
+            alertingSince?: string;
         };
         UsernameAndPasswordRequest: {
             username?: string;

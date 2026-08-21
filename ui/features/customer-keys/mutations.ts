@@ -45,11 +45,13 @@ export function useSetKeyBudget(customerId: string) {
       period,
       creditLimit,
       amountLimit,
+      alertThreshold,
     }: {
       keyId: string
       period: string
       creditLimit: string
       amountLimit: string
+      alertThreshold: string
     }) =>
       apiFetch<KeyBudgetDto>(`/api/v1/tanso/customers/${customerId}/keys/${keyId}/budget`, {
         method: "PUT",
@@ -59,6 +61,9 @@ export function useSetKeyBudget(customerId: string) {
           // expresses as null rather than zero — zero would cap it at nothing.
           creditLimit: creditLimit === "" ? null : Number(creditLimit),
           amountLimit: amountLimit === "" ? null : Number(amountLimit),
+          // Omitted means "leave the threshold as it is" — the API only changes
+          // it when a value is sent, so an empty field must not send one.
+          alertThreshold: alertThreshold === "" ? undefined : Number(alertThreshold),
         }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keysKey(customerId) }),

@@ -117,4 +117,15 @@ public class AccountApiKey {
     @Column(name = "budget_started_at")
     private Instant budgetStartedAt;
 
+    // Percent of the closest limit at which this key starts reporting itself as
+    // near its ceiling. Null means it never does.
+    @Column(name = "budget_alert_threshold")
+    private Integer budgetAlertThreshold;
+
+    // When the threshold was crossed. Compared against the current window, so a
+    // stamp from a previous window reads as "not alerting" without a job to
+    // clear it.
+    @Column(name = "budget_alert_at")
+    private Instant budgetAlertAt;
+
 }

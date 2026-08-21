@@ -37,4 +37,8 @@ public class UpdateKeyBudgetRequest {
 
     @Schema(description = "Money this key may spend on top-ups per window. Omit or null for unlimited.", example = "500.00")
     private BigDecimal amountLimit;
+
+    @Schema(description = "Percent of the tightest limit at which this key starts reporting itself near its ceiling. "
+            + "1-99, or null to never alert. Defaults to 80 when a budget is first set.", example = "80")
+    private Integer alertThreshold;
 }

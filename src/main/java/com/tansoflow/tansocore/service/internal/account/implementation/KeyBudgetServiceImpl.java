@@ -36,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -91,6 +92,8 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         record.setReferenceId(referenceId);
         record.setIdempotencyKey(idempotencyKey);
         spendRecordRepository.save(record);
+
+        stampAlertIfCrossed(apiKeyId);
     }
 
     @Override
@@ -99,8 +102,17 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         Instant windowStart = windowStart(key, Instant.now());
         BigDecimal creditsSpent = spendRecordRepository.sumSince(key.getId(), SpendKind.CREDITS, windowStart);
         BigDecimal amountSpent = spendRecordRepository.sumSince(key.getId(), SpendKind.MONEY, windowStart);
+        Integer percentUsed = percentOfTightestLimit(key, creditsSpent, amountSpent);
+        boolean alerting = key.getBudgetAlertAt() != null
+                && !key.getBudgetAlertAt().isBefore(windowStart);
+
         return KeyBudgetDto.builder()
                 .keyId(key.getId())
+                .percentUsed(percentUsed)
+                .alertThreshold(key.getBudgetAlertThreshold())
+                .alerting(alerting)
+                // A stamp from a previous window is stale, not current news.
+                .alertingSince(alerting ? key.getBudgetAlertAt() : null)
                 .period(key.getBudgetPeriod())
                 .creditLimit(key.getBudgetCredits())
                 .creditsSpent(creditsSpent)
@@ -123,16 +135,33 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         if (request.getAmountLimit() != null && request.getAmountLimit().signum() < 0) {
             throw new IllegalArgumentException("amountLimit must not be negative");
         }
+        if (request.getAlertThreshold() != null
+                && (request.getAlertThreshold() < 0 || request.getAlertThreshold() > 99)) {
+            throw new IllegalArgumentException("alertThreshold must be between 1 and 99, or 0 to never alert");
+        }
         AccountApiKey key = requireCustomerKey(accountId, customerReferenceId, keyId);
+
+        boolean alreadyBudgeted = key.getBudgetPeriod() != null;
 
         // Changing the window restarts it — otherwise spend measured over the old
         // period would be re-read against a window it was never checked against.
         if (key.getBudgetStartedAt() == null || key.getBudgetPeriod() != request.getPeriod()) {
             key.setBudgetStartedAt(Instant.now());
         }
+        Integer threshold = request.getAlertThreshold();
         key.setBudgetPeriod(request.getPeriod());
         key.setBudgetCredits(request.getCreditLimit());
         key.setBudgetAmount(request.getAmountLimit());
+        // Omitting the threshold means "leave it as it is", not "turn it off" —
+        // otherwise changing a limit would silently stop the warnings. A budget
+        // that has never had one starts at 80, since a budget nobody is warned
+        // about is the problem this solves. Turning alerting off is an explicit 0.
+        if (threshold != null) {
+            key.setBudgetAlertThreshold(threshold == 0 ? null : threshold);
+        } else if (key.getBudgetAlertThreshold() == null && !alreadyBudgeted) {
+            key.setBudgetAlertThreshold(80);
+        }
+        key.setBudgetAlertAt(null);
         accountApiKeyRepository.save(key);
 
         log.info("Budget set on key {}: period={}, credits={}, amount={}",
@@ -154,8 +183,55 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         key.setBudgetCredits(null);
         key.setBudgetAmount(null);
         key.setBudgetStartedAt(null);
+        key.setBudgetAlertThreshold(null);
+        key.setBudgetAlertAt(null);
         accountApiKeyRepository.save(key);
         log.info("Budget cleared on key {}", key.getId());
+    }
+
+    /**
+     * Stamps the first crossing of the threshold in this window. Stamped once:
+     * the point is "when did this key get close", not "it is still close",
+     * which the caller can see from percentUsed.
+     */
+    private void stampAlertIfCrossed(UUID apiKeyId) {
+        AccountApiKey key = accountApiKeyRepository.findById(apiKeyId).orElse(null);
+        if (key == null || key.getBudgetAlertThreshold() == null || key.getBudgetPeriod() == null) {
+            return;
+        }
+        Instant windowStart = windowStart(key, Instant.now());
+        if (key.getBudgetAlertAt() != null && !key.getBudgetAlertAt().isBefore(windowStart)) {
+            return; // already stamped for this window
+        }
+        BigDecimal creditsSpent = spendRecordRepository.sumSince(apiKeyId, SpendKind.CREDITS, windowStart);
+        BigDecimal amountSpent = spendRecordRepository.sumSince(apiKeyId, SpendKind.MONEY, windowStart);
+        Integer percent = percentOfTightestLimit(key, creditsSpent, amountSpent);
+        if (percent != null && percent >= key.getBudgetAlertThreshold()) {
+            key.setBudgetAlertAt(Instant.now());
+            accountApiKeyRepository.save(key);
+            log.info("Key {} crossed {}% of its budget", apiKeyId, key.getBudgetAlertThreshold());
+        }
+    }
+
+    /**
+     * How far through the closest limit this key is. Whichever axis is nearest
+     * its ceiling is the one that will refuse the next call, so that is the
+     * number worth reporting. Null when neither axis is capped.
+     */
+    private Integer percentOfTightestLimit(AccountApiKey key, BigDecimal creditsSpent, BigDecimal amountSpent) {
+        Integer worst = null;
+        for (BigDecimal[] axis : new BigDecimal[][]{
+                {key.getBudgetCredits(), creditsSpent},
+                {key.getBudgetAmount(), amountSpent}}) {
+            BigDecimal limit = axis[0];
+            if (limit == null || limit.signum() <= 0) {
+                continue;
+            }
+            int percent = axis[1].multiply(BigDecimal.valueOf(100))
+                    .divide(limit, 0, RoundingMode.FLOOR).intValue();
+            worst = worst == null ? percent : Math.max(worst, percent);
+        }
+        return worst;
     }
 
     // ─── Window arithmetic ───

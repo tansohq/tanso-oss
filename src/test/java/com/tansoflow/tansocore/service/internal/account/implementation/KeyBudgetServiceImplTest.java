@@ -304,4 +304,135 @@ class KeyBudgetServiceImplTest {
                 .thenReturn(Optional.of(customer));
         when(accountApiKeyRepository.findByIdAndAccountId(keyId, accountId)).thenReturn(Optional.of(key));
     }
+
+    // ─── Spend alerts ───
+
+    @Test
+    void aKeyReportsHowFarThroughItsTightestLimitItIs() {
+        key.setBudgetAlertThreshold(80);
+        // 900/1000 credits is 90%; $10/$200 is 5%. The credit axis is the one
+        // that will refuse the next call, so it is the one reported.
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.CREDITS), any()))
+                .thenReturn(new BigDecimal("900"));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
+                .thenReturn(new BigDecimal("10.00"));
+
+        KeyBudgetDto dto = service.describe(key);
+
+        assertThat(dto.getPercentUsed()).isEqualTo(90);
+        assertThat(dto.getAlertThreshold()).isEqualTo(80);
+    }
+
+    @Test
+    void spendThatCrossesTheThresholdIsStamped() {
+        key.setBudgetAlertThreshold(80);
+        when(accountApiKeyRepository.findById(keyId)).thenReturn(Optional.of(key));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.CREDITS), any()))
+                .thenReturn(new BigDecimal("850"));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
+                .thenReturn(BigDecimal.ZERO);
+
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("50"), "e", "idem-cross");
+
+        assertThat(key.getBudgetAlertAt()).isNotNull();
+    }
+
+    @Test
+    void spendBelowTheThresholdIsNotStamped() {
+        key.setBudgetAlertThreshold(80);
+        when(accountApiKeyRepository.findById(keyId)).thenReturn(Optional.of(key));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.CREDITS), any()))
+                .thenReturn(new BigDecimal("100"));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
+                .thenReturn(BigDecimal.ZERO);
+
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("10"), "e", "idem-under");
+
+        assertThat(key.getBudgetAlertAt()).isNull();
+    }
+
+    @Test
+    void aKeyWithNoThresholdNeverAlerts() {
+        key.setBudgetAlertThreshold(null);
+        when(accountApiKeyRepository.findById(keyId)).thenReturn(Optional.of(key));
+
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("999"), "e", "idem-none");
+
+        assertThat(key.getBudgetAlertAt()).isNull();
+        verify(spendRecordRepository, never()).sumSince(any(), any(), any());
+    }
+
+    @Test
+    void aStampFromAnEarlierWindowIsNotCurrentNews() {
+        key.setBudgetAlertThreshold(80);
+        key.setBudgetStartedAt(Instant.now().minus(Duration.ofDays(2)));
+        key.setBudgetPeriod(BudgetPeriod.DAY);
+        // Crossed yesterday, in a window that has since rolled over.
+        key.setBudgetAlertAt(Instant.now().minus(Duration.ofDays(1).plusHours(2)));
+        when(spendRecordRepository.sumSince(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        KeyBudgetDto dto = service.describe(key);
+
+        assertThat(dto.isAlerting()).isFalse();
+        assertThat(dto.getAlertingSince()).isNull();
+    }
+
+    @Test
+    void changingALimitDoesNotSilentlyTurnAlertingOff() {
+        key.setBudgetAlertThreshold(65);
+        stubKeyLookup();
+        when(spendRecordRepository.sumSince(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        UpdateKeyBudgetRequest request = new UpdateKeyBudgetRequest();
+        request.setPeriod(BudgetPeriod.MONTH);
+        request.setCreditLimit(new BigDecimal("2000"));
+        // No threshold named — the operator is changing a limit, not the alerting.
+
+        service.setBudget(accountId.toString(), "cust_1", keyId.toString(), request);
+
+        assertThat(key.getBudgetAlertThreshold()).isEqualTo(65);
+    }
+
+    @Test
+    void aBudgetSetForTheFirstTimeAlertsAtEighty() {
+        key.setBudgetPeriod(null);
+        key.setBudgetAlertThreshold(null);
+        stubKeyLookup();
+        when(spendRecordRepository.sumSince(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        UpdateKeyBudgetRequest request = new UpdateKeyBudgetRequest();
+        request.setPeriod(BudgetPeriod.MONTH);
+        request.setCreditLimit(new BigDecimal("100"));
+
+        service.setBudget(accountId.toString(), "cust_1", keyId.toString(), request);
+
+        assertThat(key.getBudgetAlertThreshold()).isEqualTo(80);
+    }
+
+    @Test
+    void zeroTurnsAlertingOff() {
+        key.setBudgetAlertThreshold(80);
+        stubKeyLookup();
+        when(spendRecordRepository.sumSince(any(), any(), any())).thenReturn(BigDecimal.ZERO);
+
+        UpdateKeyBudgetRequest request = new UpdateKeyBudgetRequest();
+        request.setPeriod(BudgetPeriod.MONTH);
+        request.setCreditLimit(new BigDecimal("100"));
+        request.setAlertThreshold(0);
+
+        service.setBudget(accountId.toString(), "cust_1", keyId.toString(), request);
+
+        assertThat(key.getBudgetAlertThreshold()).isNull();
+    }
+
+    @Test
+    void anOutOfRangeThresholdIsRejected() {
+        UpdateKeyBudgetRequest request = new UpdateKeyBudgetRequest();
+        request.setPeriod(BudgetPeriod.MONTH);
+        request.setAlertThreshold(140);
+
+        assertThatThrownBy(() -> service.setBudget(accountId.toString(), "cust_1", keyId.toString(), request))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("alertThreshold");
+    }
 }

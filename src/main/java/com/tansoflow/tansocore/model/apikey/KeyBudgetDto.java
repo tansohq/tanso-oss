@@ -59,4 +59,16 @@ public class KeyBudgetDto {
 
     @Schema(description = "When the current window rolls over. Null for a TOTAL budget, which never resets.")
     private Instant resetsAt;
+
+    @Schema(description = "How far through the tightest limit this key is, 0-100. Null when nothing is capped.")
+    private Integer percentUsed;
+
+    @Schema(description = "Percent of the tightest limit at which this key reports itself near its ceiling. Null means it never does.")
+    private Integer alertThreshold;
+
+    @Schema(description = "True once the threshold has been crossed in the current window")
+    private boolean alerting;
+
+    @Schema(description = "When the threshold was crossed in this window, or null if it has not been")
+    private Instant alertingSince;
 }

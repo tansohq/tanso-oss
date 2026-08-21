@@ -6019,6 +6019,12 @@
                         "type": "number",
                         "description": "Money this key may spend on top-ups per window. Omit or null for unlimited.",
                         "example": 500.0
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Percent of the tightest limit at which this key starts reporting itself near its ceiling. 1-99, or null to never alert. Defaults to 80 when a budget is first set.",
+                        "example": 80
                     }
                 },
                 "required": [
@@ -6111,6 +6117,25 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "When the current window rolls over. Null for a TOTAL budget, which never resets."
+                    },
+                    "percentUsed": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "How far through the tightest limit this key is, 0-100. Null when nothing is capped."
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Percent of the tightest limit at which this key reports itself near its ceiling. Null means it never does."
+                    },
+                    "alerting": {
+                        "type": "boolean",
+                        "description": "True once the threshold has been crossed in the current window"
+                    },
+                    "alertingSince": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the threshold was crossed in this window, or null if it has not been"
                     }
                 }
             },

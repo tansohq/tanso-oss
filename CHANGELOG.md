@@ -3,7 +3,7 @@
 Notable changes to Tanso Core. Releases before 0.9.0 are recorded only as git
 tags; this file starts where the changelog does.
 
-## 0.9.0
+## 0.9.0 — 2026-08-21
 
 The release where the customer buying from your product stops having to be a
 person, and where you can put a ceiling on what a non-person spends.
@@ -16,7 +16,10 @@ person, and where you can put a ceiling on what a non-person spends.
   pool, so one agent cannot drain the balance its siblings draw on. Breaching
   returns 403 `budget_exceeded` with the limit, spend, remainder, and reset time.
   Only the tenant may set or clear a budget; a customer key can read its own.
-  Also reachable over MCP as `getMyBudget`.
+  Also reachable over MCP as `getMyBudget`. A budget carries a warning mark
+  (80% by default) and reports `percentUsed`/`alerting`/`alertingSince` once
+  crossed, so an agent can slow down instead of discovering the ceiling by
+  being refused.
 - **Agent-serve surface.** Public machine-readable catalog
   (`/public/v1/catalog/{slug}/pricing.json`), opt-in programmatic signup,
   customer-scoped `ck_` keys with `read`/`purchase` scopes and deny-by-default
