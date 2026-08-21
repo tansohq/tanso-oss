@@ -1942,6 +1942,12 @@ export interface components {
              */
             cancelledAt?: string;
             /**
+             * Format: date-time
+             * @description When the subscription was created
+             * @example 2026-08-21T12:00:00Z
+             */
+            createdAt?: string;
+            /**
              * Format: int32
              * @description Billing anchor day of the month
              * @example 1

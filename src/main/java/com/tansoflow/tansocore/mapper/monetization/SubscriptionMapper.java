@@ -42,6 +42,7 @@ public interface SubscriptionMapper {
     @Mapping(target = "cancelMode", source = "cancelMode")
     @Mapping(target = "cancelEffectiveAt", source = "cancelEffectiveAt")
     @Mapping(target = "cancelledAt", source = "cancelledAt")
+    @Mapping(target = "createdAt", source = "createdAt")
     @Mapping(target = "billingAnchorDay", source = "billingAnchorDay")
     @Mapping(target = "metadata", ignore = true)
     @Mapping(target = "scheduledChange", ignore = true)

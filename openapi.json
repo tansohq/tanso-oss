@@ -6679,6 +6679,12 @@
                         "format": "date-time",
                         "description": "Timestamp when the subscription was cancelled"
                     },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the subscription was created",
+                        "example": "2026-08-21T12:00:00Z"
+                    },
                     "billingAnchorDay": {
                         "type": "integer",
                         "format": "int32",
