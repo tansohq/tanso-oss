@@ -93,6 +93,38 @@ class SpendUnitServiceImplTest {
     }
 
     @Test
+    void reparentingIntoADescendantIsRefused() {
+        SpendUnit platform = new SpendUnit(); platform.setId(UUID.randomUUID()); platform.setAccountId(accountId); platform.setType(SpendUnitType.PROJECT); platform.setName("Platform");
+        SpendUnit backend = new SpendUnit(); backend.setId(UUID.randomUUID()); backend.setAccountId(accountId); backend.setType(SpendUnitType.TEAM); backend.setName("Backend"); backend.setParentId(platform.getId());
+        when(unitRepository.findByIdAndAccountId(platform.getId(), accountId)).thenReturn(Optional.of(platform));
+        when(unitRepository.findByIdAndAccountId(backend.getId(), accountId)).thenReturn(Optional.of(backend));
+        SpendUnitRequest req = new SpendUnitRequest();
+        req.setType(SpendUnitType.PROJECT);
+        req.setName("Platform");
+        req.setParentId(backend.getId().toString());
+        assertThrows(IllegalArgumentException.class, () -> service.updateUnit(accountId.toString(), platform.getId().toString(), req));
+        assertEquals(null, platform.getParentId());
+    }
+
+    @Test
+    void duplicateRulesAreRefused() {
+        SpendUnit team = new SpendUnit(); team.setId(UUID.randomUUID()); team.setAccountId(accountId); team.setType(SpendUnitType.TEAM); team.setName("T");
+        when(unitRepository.findByIdAndAccountId(team.getId(), accountId)).thenReturn(Optional.of(team));
+        com.tansoflow.tansocore.entity.SpendAttributionRule existing = new com.tansoflow.tansocore.entity.SpendAttributionRule();
+        existing.setSpendUnitId(team.getId());
+        existing.setProvider(com.tansoflow.tansocore.model.spend.type.VendorProvider.ANTHROPIC);
+        existing.setMatchKind(com.tansoflow.tansocore.model.spend.type.AttributionMatchKind.WORKSPACE_ID);
+        existing.setMatchValue("wrkspc_1");
+        when(ruleRepository.findAllByAccountIdOrderByPriorityAscCreatedAtAsc(accountId)).thenReturn(List.of(existing));
+        com.tansoflow.tansocore.model.spend.request.SpendAttributionRuleRequest req = new com.tansoflow.tansocore.model.spend.request.SpendAttributionRuleRequest();
+        req.setSpendUnitId(team.getId().toString());
+        req.setProvider(com.tansoflow.tansocore.model.spend.type.VendorProvider.ANTHROPIC);
+        req.setMatchKind(com.tansoflow.tansocore.model.spend.type.AttributionMatchKind.WORKSPACE_ID);
+        req.setMatchValue(" WRKSPC_1 ");
+        assertThrows(IllegalArgumentException.class, () -> service.createRule(accountId.toString(), req));
+    }
+
+    @Test
     void aUnitCannotParentItself() {
         SpendUnit team = new SpendUnit(); team.setId(UUID.randomUUID()); team.setAccountId(accountId); team.setType(SpendUnitType.TEAM); team.setName("T");
         when(unitRepository.findByIdAndAccountId(team.getId(), accountId)).thenReturn(Optional.of(team));

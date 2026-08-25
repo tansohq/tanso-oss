@@ -161,7 +161,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
             if (spentToday.compareTo(SPIKE_FLOOR_CENTS) >= 0 && spentToday.compareTo(weekMean.multiply(SPIKE_FACTOR)) > 0
                     && !alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(budget.getSpendUnitId(), SpendAlertKind.SPIKE, BudgetPeriod.DAY, day.start())) {
                 fired.add(fire(budget, SpendAlertKind.SPIKE, BudgetPeriod.DAY, day.start(), spentToday, null,
-                        name + " has spent " + dollars(spentToday) + " today, against a trailing-week average of " + dollars(weekMean) + " a day."));
+                        name + " has spent " + dollars(spentToday) + " today, against a trailing-week average of " + dollars(weekMean) + " a day.", name));
             }
         }
         return fired;
@@ -178,10 +178,10 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
                     ? " This budget is set to BLOCK; Tanso cannot stop requests itself — revoke the key or enforce it at your gateway."
                     : "";
             fired.add(fire(budget, SpendAlertKind.BREACH, period, windowStart, spent, limit,
-                    name + " is over its " + periodWord + " budget: " + dollars(spent) + " of " + dollars(limit) + " " + window + "." + tail));
+                    name + " is over its " + periodWord + " budget: " + dollars(spent) + " of " + dollars(limit) + " " + window + "." + tail, name));
         } else if (percent >= budget.getAlertThreshold() && percent < 100 && !exists(budget, SpendAlertKind.THRESHOLD, period, windowStart)) {
             fired.add(fire(budget, SpendAlertKind.THRESHOLD, period, windowStart, spent, limit,
-                    name + " is at " + percent + "% of its " + periodWord + " budget: " + dollars(spent) + " of " + dollars(limit) + " " + window + "."));
+                    name + " is at " + percent + "% of its " + periodWord + " budget: " + dollars(spent) + " of " + dollars(limit) + " " + window + ".", name));
         }
         return fired;
     }
@@ -191,7 +191,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     }
 
     private SpendAlertDto fire(SpendBudget budget, SpendAlertKind kind, BudgetPeriod period, Instant windowStart,
-                               BigDecimal spent, BigDecimal limit, String message) {
+                               BigDecimal spent, BigDecimal limit, String message, String unitName) {
         SpendAlert alert = new SpendAlert();
         alert.setAccountId(budget.getAccountId());
         alert.setSpendUnitId(budget.getSpendUnitId());
@@ -201,10 +201,11 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         alert.setSpentCents(spent);
         alert.setLimitCents(limit);
         alert.setMessage(message);
+        alert.setFiredAt(clock.instant());
         alert = alertRepository.save(alert);
         slackNotifier.post(budget.getAccountId(), "[tanso] " + message);
         log.info("Spend alert {} for unit {}: {}", kind, budget.getSpendUnitId(), message);
-        return toDto(alert, null);
+        return toDto(alert, unitName);
     }
 
     @Override
@@ -231,7 +232,8 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
             alert.setAckedBy(actor);
             alertRepository.save(alert);
         }
-        return toDto(alert, null);
+        String unitName = unitRepository.findById(alert.getSpendUnitId()).map(SpendUnit::getName).orElse(null);
+        return toDto(alert, unitName);
     }
 
     private Map<String, BigDecimal> spendByUnit(String accountId, LocalDate from, LocalDate to) {

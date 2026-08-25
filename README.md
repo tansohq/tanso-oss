@@ -270,11 +270,16 @@ It works from the vendor's admin API, not a proxy in your request path:
 4. **Spend → Teams**: units (teams, projects, and — once switched on — people,
    nested however you like) and attribution rules that map a vendor workspace
    or project id, an API key id, or an actor onto a unit. Rules apply at
-   report time, so editing one re-allocates history. Whatever no rule claims
-   shows as **Unattributed**. Each unit can carry a budget: a small **daily**
+   report time, so editing one re-allocates history; when several rules match
+   one row the lowest priority number wins. Whatever no rule claims shows as
+   **Unattributed**. A unit's total is its own spend plus every descendant's
+   (a person's Claude Code estimate is shown on the person only); budgets
+   measure that total. Each unit can carry a budget: a small **daily**
    ceiling that catches a runaway agent and a **monthly** one for the real
    number (UTC calendar windows), with an alert threshold (default 80%).
-5. **Spend → Alerts**: threshold, breach and spike alerts, once per window,
+5. **Spend → Alerts**: threshold and breach alerts on each ceiling, plus a
+   **spike** when a unit has spent at least $5 today and more than twice its
+   trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
    Slack incoming webhook if one is stored under Spend settings. Tanso is not
    in the request path, so a "Block" budget cannot stop a request — its alert
@@ -298,11 +303,12 @@ an estimate when a model is unpriced or has no cache rates. Seat lines on an
 invoice count toward "invoiced" but never appear in the vendor's token cost
 report, so "vendor − invoice" carries the seats.
 API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,allocation}`,
-`/api/v1/spend/invoices`, `/api/v1/spend/units` (+ `/rules`, `/{id}/budget`),
-`/api/v1/spend/alerts`, `/api/v1/spend/settings` (console JWT only).
+`/api/v1/spend/invoices`, `/api/v1/spend/units` and `/api/v1/spend/units/{id}/budget`,
+`/api/v1/spend/rules`, `/api/v1/spend/alerts` (+ `/{id}/ack`),
+`POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at
-a gateway or proxy instead of the vendor. Next: allocation to teams and people
-with daily + monthly budgets, then the join to merged PRs and closed issues.
+a gateway or proxy instead of the vendor. Next: the join to merged PRs and
+closed issues, so spend rolls up to shipped work.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.

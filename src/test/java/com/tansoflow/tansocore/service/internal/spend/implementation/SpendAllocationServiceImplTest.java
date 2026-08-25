@@ -174,6 +174,19 @@ class SpendAllocationServiceImplTest {
     }
 
     @Test
+    void aLoopInTheTreeCountsEachUnitOnce() {
+        project.setParentId(team.getId()); // Platform → Backend → Platform
+        when(settingsService.personLevelEnabled(accountId.toString())).thenReturn(false);
+        when(ruleRepository.findAllByAccountIdOrderByPriorityAscCreatedAtAsc(accountId)).thenReturn(List.of(
+                rule(team, AttributionMatchKind.WORKSPACE_ID, "wrkspc_backend", 100)));
+        when(bucketRepository.findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(eq(accountId), any(), any()))
+                .thenReturn(List.of(bucket(VendorUsageSource.USAGE_API, "wrkspc_backend", null, null, 10_000, null)));
+        SpendAllocationReportDto r = service.allocate(accountId.toString(), LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
+        assertEquals(0, new BigDecimal("100").compareTo(row(r, "Backend").getTotalCents()));
+        assertEquals(0, new BigDecimal("100").compareTo(row(r, "Platform").getTotalCents()));
+    }
+
+    @Test
     void providerMismatchDoesNotMatch() {
         VendorUsageBucket b = bucket(VendorUsageSource.USAGE_API, "proj_1", null, null, 100, null);
         b.setProvider(VendorProvider.OPENAI);

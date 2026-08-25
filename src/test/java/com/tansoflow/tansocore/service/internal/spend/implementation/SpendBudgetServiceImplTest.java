@@ -120,6 +120,8 @@ class SpendBudgetServiceImplTest {
 
         assertEquals(1, fired.size(), fired.stream().map(f -> f.getKind() + "/" + f.getPeriod() + ": " + f.getMessage()).toList().toString());
         assertEquals(SpendAlertKind.THRESHOLD, fired.get(0).getKind());
+        assertEquals("Backend", fired.get(0).getUnitName());
+        assertEquals(now, fired.get(0).getFiredAt());
         assertEquals(BudgetPeriod.DAY, fired.get(0).getPeriod());
         assertEquals(Instant.parse("2026-08-25T00:00:00Z"), fired.get(0).getWindowStart());
         assertTrue(fired.get(0).getMessage().contains("85%"));

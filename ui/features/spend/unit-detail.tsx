@@ -124,59 +124,61 @@ export function UnitDetail({
           Usage on a matching vendor dimension is allocated here. Lower priority
           number wins when several rules match one row.
         </p>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Vendor</TableHead>
-              <TableHead>Matches</TableHead>
-              <TableHead>Value</TableHead>
-              <TableHead className="text-right">Priority</TableHead>
-              <TableHead />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rules.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell>{providerLabel[r.provider]}</TableCell>
-                <TableCell>{kindLabel[r.matchKind]}</TableCell>
-                <TableCell className="font-mono text-xs">
-                  {r.matchValue}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {r.priority}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Remove rule"
-                    onClick={() =>
-                      deleteRule.mutate(r.id, {
-                        onError: (e) =>
-                          toast.add({
-                            title: "Remove failed",
-                            description: e.message,
-                          }),
-                      })
-                    }
-                  >
-                    <Trash2 />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
-            {rules.length === 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="text-center text-muted-foreground"
-                >
-                  No rules yet — nothing is allocated to this unit.
-                </TableCell>
+                <TableHead>Vendor</TableHead>
+                <TableHead>Matches</TableHead>
+                <TableHead>Value</TableHead>
+                <TableHead className="text-right">Priority</TableHead>
+                <TableHead />
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rules.map((r) => (
+                <TableRow key={r.id}>
+                  <TableCell>{providerLabel[r.provider]}</TableCell>
+                  <TableCell>{kindLabel[r.matchKind]}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {r.matchValue}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.priority}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label="Remove rule"
+                      onClick={() =>
+                        deleteRule.mutate(r.id, {
+                          onError: (e) =>
+                            toast.add({
+                              title: "Remove failed",
+                              description: e.message,
+                            }),
+                        })
+                      }
+                    >
+                      <Trash2 />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {rules.length === 0 && (
+                <TableRow>
+                  <TableCell
+                    colSpan={5}
+                    className="text-center text-muted-foreground"
+                  >
+                    No rules yet — nothing is allocated to this unit.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
         <form
           className="mt-3"
           onSubmit={(event) => {

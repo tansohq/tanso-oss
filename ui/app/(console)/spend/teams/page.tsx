@@ -159,7 +159,12 @@ export default function SpendTeamsPage() {
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Own</TableHead>
                 <TableHead className="text-right">Total</TableHead>
-                <TableHead className="text-right">Person est.</TableHead>
+                <TableHead
+                  className="text-right"
+                  title="Claude Code's own per-person estimate; not rolled up into the team"
+                >
+                  Claude Code est.
+                </TableHead>
                 <TableHead className="text-right">Rules</TableHead>
                 <TableHead />
               </TableRow>

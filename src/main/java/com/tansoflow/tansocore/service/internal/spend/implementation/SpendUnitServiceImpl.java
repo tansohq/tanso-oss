@@ -85,7 +85,8 @@ public class SpendUnitServiceImpl implements SpendUnitService {
         SpendUnit unit = requireUnit(account, unitId);
         for (SpendUnit child : unitRepository.findAllByAccountIdOrderByNameAsc(account)) {
             if (unit.getId().equals(child.getParentId())) {
-                child.setParentId(unit.getParentId());
+                UUID lifted = unit.getParentId();
+                child.setParentId(lifted != null && lifted.equals(child.getId()) ? null : lifted);
                 unitRepository.save(child);
             }
         }
@@ -107,12 +108,19 @@ public class SpendUnitServiceImpl implements SpendUnitService {
     public SpendAttributionRuleDto createRule(String accountId, SpendAttributionRuleRequest request) {
         UUID account = UUID.fromString(accountId);
         SpendUnit unit = requireUnit(account, request.getSpendUnitId());
+        String value = request.getMatchValue().trim();
+        for (SpendAttributionRule existing : ruleRepository.findAllByAccountIdOrderByPriorityAscCreatedAtAsc(account)) {
+            if (existing.getSpendUnitId().equals(unit.getId()) && existing.getProvider() == request.getProvider()
+                    && existing.getMatchKind() == request.getMatchKind() && existing.getMatchValue().equalsIgnoreCase(value)) {
+                throw new IllegalArgumentException("That rule already exists on " + unit.getName());
+            }
+        }
         SpendAttributionRule rule = new SpendAttributionRule();
         rule.setAccountId(account);
         rule.setSpendUnitId(unit.getId());
         rule.setProvider(request.getProvider());
         rule.setMatchKind(request.getMatchKind());
-        rule.setMatchValue(request.getMatchValue().trim());
+        rule.setMatchValue(value);
         rule.setPriority(request.getPriority() != null ? request.getPriority() : 100);
         return toDto(ruleRepository.save(rule));
     }
@@ -137,7 +145,19 @@ public class SpendUnitServiceImpl implements SpendUnitService {
         if (request.getParentId() == null || request.getParentId().isBlank()) {
             unit.setParentId(null);
         } else {
-            unit.setParentId(requireUnit(account, request.getParentId()).getId());
+            SpendUnit parent = requireUnit(account, request.getParentId());
+            // Walk up from the proposed parent; meeting this unit would close a loop,
+            // and the roll-up would then count the same cents on every lap.
+            UUID cursor = parent.getId();
+            java.util.Set<UUID> seen = new java.util.HashSet<>();
+            while (cursor != null && seen.add(cursor)) {
+                if (unit.getId() != null && cursor.equals(unit.getId())) {
+                    throw new IllegalArgumentException("That would make " + unit.getName() + " an ancestor of itself");
+                }
+                SpendUnit next = unitRepository.findByIdAndAccountId(cursor, account).orElse(null);
+                cursor = next == null ? null : next.getParentId();
+            }
+            unit.setParentId(parent.getId());
         }
     }
 

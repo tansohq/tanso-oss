@@ -41,6 +41,7 @@ services:
       # convenience, not something to ship with credentials flowing through.
       LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:-INFO}
       LOGGING_LEVEL_ORG_HIBERNATE_SQL: ${LOGGING_LEVEL_ORG_HIBERNATE_SQL:-INFO}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

@@ -108,7 +108,9 @@ export default function SpendAlertsPage() {
                   {a.period ? ` · ${a.period.toLowerCase()}` : ""}
                 </Badge>
               </TableCell>
-              <TableCell className="max-w-md">{a.message}</TableCell>
+              <TableCell className="max-w-md break-words whitespace-normal">
+                {a.message}
+              </TableCell>
               <TableCell className="text-right tabular-nums">
                 {formatCents(a.spentCents)}
                 {a.limitCents != null && (

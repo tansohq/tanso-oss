@@ -116,8 +116,8 @@ public class SpendAllocationServiceImpl implements SpendAllocationService {
         for (SpendUnit u : units) {
             BigDecimal mine = own.getOrDefault(u.getId(), BigDecimal.ZERO);
             UUID cursor = u.getId();
-            int guard = 0;
-            while (cursor != null && guard++ < 64) {
+            java.util.Set<UUID> seen = new java.util.HashSet<>();
+            while (cursor != null && seen.add(cursor)) {   // a loop in the tree counts each unit once, never per lap
                 total.merge(cursor, mine, BigDecimal::add);
                 SpendUnit parent = unitById.get(cursor);
                 cursor = parent == null ? null : parent.getParentId();
