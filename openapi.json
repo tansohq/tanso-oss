@@ -1439,7 +1439,9 @@
                             "type": "string",
                             "enum": [
                                 "ANTHROPIC",
-                                "OPENAI"
+                                "OPENAI",
+                                "CURSOR",
+                                "COPILOT"
                             ]
                         }
                     },
@@ -7822,7 +7824,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "label": {
@@ -7831,6 +7835,10 @@
                     "keyHint": {
                         "type": "string",
                         "description": "Last four characters of the admin key. The key itself is never returned."
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "Provider scope: the GitHub organization for Copilot. Null otherwise."
                     },
                     "status": {
                         "type": "string",
@@ -8116,7 +8124,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "matchKind": {
@@ -8179,7 +8189,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "matchKind": {
@@ -8245,6 +8257,16 @@
                         "type": "string",
                         "format": "date-time",
                         "description": "When it shipped. Default: now."
+                    },
+                    "aiAssisted": {
+                        "type": "boolean",
+                        "description": "An AI assistant was in the work."
+                    },
+                    "aiTool": {
+                        "type": "string",
+                        "description": "Which one, if known: claude-code, copilot, cursor, codex, \u2026",
+                        "maxLength": 64,
+                        "minLength": 0
                     }
                 },
                 "required": [
@@ -8318,6 +8340,12 @@
                     "occurredAt": {
                         "type": "string",
                         "format": "date-time"
+                    },
+                    "aiAssisted": {
+                        "type": "boolean"
+                    },
+                    "aiTool": {
+                        "type": "string"
                     }
                 }
             },
@@ -8550,7 +8578,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "periodStart": {
@@ -8589,7 +8619,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "label": {
@@ -8602,6 +8634,12 @@
                         "type": "string",
                         "description": "Vendor admin key. Stored encrypted; never returned.",
                         "minLength": 1
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "Required for COPILOT: the GitHub organization name. Ignored by other providers.",
+                        "maxLength": 200,
+                        "minLength": 0
                     }
                 },
                 "required": [
@@ -11909,7 +11947,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "actor": {
@@ -11926,10 +11966,46 @@
                     },
                     "vendorCostCents": {
                         "type": "number",
-                        "description": "The vendor's own estimate for this actor (Claude Code); null for OpenAI users."
+                        "description": "The vendor's own estimate for this actor (Claude Code, Cursor charged); null when the vendor gives none."
                     },
                     "meteredCostCents": {
                         "type": "number"
+                    },
+                    "requests": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Per-person signals the vendor reports for the window; null where it reports none."
+                    },
+                    "linesAdded": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "linesRemoved": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "accepted": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "rejected": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "commits": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "pullRequests": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "creditsUsed": {
+                        "type": "number"
+                    },
+                    "tool": {
+                        "type": "string",
+                        "description": "Last tool seen: Claude Code terminal, Cursor model, Copilot surface."
                     }
                 }
             },
@@ -11979,7 +12055,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "model": {
@@ -12124,7 +12202,9 @@
                         "type": "string",
                         "enum": [
                             "ANTHROPIC",
-                            "OPENAI"
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT"
                         ]
                     },
                     "meteredCents": {
@@ -12228,6 +12308,11 @@
                         "type": "integer",
                         "format": "int64"
                     },
+                    "aiAssisted": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Outcomes where an AI assistant was in the work (label, trailer, bot author, or said so when posted)."
+                    },
                     "spendCents": {
                         "type": "number",
                         "description": "Metered spend allocated to the unit and its descendants \u2014 the price-book figure, same basis for every row."
@@ -12260,6 +12345,10 @@
                         }
                     },
                     "totalOutcomes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "aiAssistedOutcomes": {
                         "type": "integer",
                         "format": "int64"
                     },

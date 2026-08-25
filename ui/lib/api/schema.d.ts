@@ -2221,10 +2221,12 @@ export interface components {
         VendorConnectionDto: {
             id?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             label?: string;
             /** @description Last four characters of the admin key. The key itself is never returned. */
             keyHint?: string;
+            /** @description Provider scope: the GitHub organization for Copilot. Null otherwise. */
+            scope?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "ERROR";
             /** @description Why the last probe or sync failed; null while healthy. */
@@ -2346,7 +2348,7 @@ export interface components {
         SpendAttributionRuleRequest: {
             spendUnitId: string;
             /** @enum {string} */
-            provider: "ANTHROPIC" | "OPENAI";
+            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             /** @enum {string} */
             matchKind: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
             /** @description Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id). */
@@ -2369,7 +2371,7 @@ export interface components {
             id?: string;
             spendUnitId?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             /** @enum {string} */
             matchKind?: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
             matchValue?: string;
@@ -2393,6 +2395,10 @@ export interface components {
              * @description When it shipped. Default: now.
              */
             occurredAt?: string;
+            /** @description An AI assistant was in the work. */
+            aiAssisted?: boolean;
+            /** @description Which one, if known: claude-code, copilot, cursor, codex, … */
+            aiTool?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseOutcomeDto: {
@@ -2417,6 +2423,8 @@ export interface components {
             unitName?: string;
             /** Format: date-time */
             occurredAt?: string;
+            aiAssisted?: boolean;
+            aiTool?: string;
         };
         OutcomeSourceRequest: {
             /** @enum {string} */
@@ -2501,7 +2509,7 @@ export interface components {
         VendorInvoiceDto: {
             id?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             /** Format: date */
             periodStart?: string;
             /** Format: date */
@@ -2515,11 +2523,13 @@ export interface components {
         };
         CreateVendorConnectionRequest: {
             /** @enum {string} */
-            provider: "ANTHROPIC" | "OPENAI";
+            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             /** @description How this org shows up in the console, e.g. "Anthropic — engineering org" */
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
+            /** @description Required for COPILOT: the GitHub organization name. Ignored by other providers. */
+            scope?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseListSpendAlertDto: {
@@ -3911,16 +3921,36 @@ export interface components {
         };
         ActorRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             /** @description Claude Code actor email or key name, or OpenAI user id. */
             actor?: string;
             /** Format: int64 */
             totalTokens?: number;
             /** Format: int64 */
             sessions?: number;
-            /** @description The vendor's own estimate for this actor (Claude Code); null for OpenAI users. */
+            /** @description The vendor's own estimate for this actor (Claude Code, Cursor charged); null when the vendor gives none. */
             vendorCostCents?: number;
             meteredCostCents?: number;
+            /**
+             * Format: int32
+             * @description Per-person signals the vendor reports for the window; null where it reports none.
+             */
+            requests?: number;
+            /** Format: int32 */
+            linesAdded?: number;
+            /** Format: int32 */
+            linesRemoved?: number;
+            /** Format: int32 */
+            accepted?: number;
+            /** Format: int32 */
+            rejected?: number;
+            /** Format: int32 */
+            commits?: number;
+            /** Format: int32 */
+            pullRequests?: number;
+            creditsUsed?: number;
+            /** @description Last tool seen: Claude Code terminal, Cursor model, Copilot surface. */
+            tool?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendUsageReportDto: {
@@ -3940,7 +3970,7 @@ export interface components {
         };
         ModelRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             model?: string;
             /** Format: int64 */
             uncachedInputTokens?: number;
@@ -4003,7 +4033,7 @@ export interface components {
         };
         ReconcileRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
             meteredCents?: number;
             /** @description True when some model was unpriced or a cache rate was missing, so metered is a floor or a ceiling, not a figure. */
             meteredIsEstimate?: boolean;
@@ -4044,6 +4074,11 @@ export interface components {
             custom?: number;
             /** Format: int64 */
             outcomes?: number;
+            /**
+             * Format: int64
+             * @description Outcomes where an AI assistant was in the work (label, trailer, bot author, or said so when posted).
+             */
+            aiAssisted?: number;
             /** @description Metered spend allocated to the unit and its descendants — the price-book figure, same basis for every row. */
             spendCents?: number;
             /** @description PERSON units only: the vendor's own Claude Code estimate. Shown beside, never inside, spendCents. */
@@ -4059,6 +4094,8 @@ export interface components {
             rows?: components["schemas"]["OutcomeRow"][];
             /** Format: int64 */
             totalOutcomes?: number;
+            /** Format: int64 */
+            aiAssistedOutcomes?: number;
             /** Format: int64 */
             unattributedOutcomes?: number;
             totalSpendCents?: number;
@@ -5470,7 +5507,7 @@ export interface operations {
     importCsv_1: {
         parameters: {
             query: {
-                provider: "ANTHROPIC" | "OPENAI";
+                provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
                 periodStart: string;
                 periodEnd: string;
                 currency?: string;
