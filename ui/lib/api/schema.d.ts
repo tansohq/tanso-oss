@@ -256,6 +256,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent outcomes, newest first (200) */
+        get: operations["recent"];
+        put?: never;
+        /**
+         * Record that something shipped
+         * @description For CI jobs and scripts. Same externalId again updates the outcome. Attributed to the person whose email/login matches (person level on), else the given unit.
+         */
+        post: operations["record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/outcome-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List outcome sources */
+        get: operations["sources"];
+        put?: never;
+        /**
+         * Connect GitHub repos or Linear teams
+         * @description The token is stored encrypted and never returned.
+         */
+        post: operations["createSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/outcome-sources/{sourceId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull outcomes for a window
+         * @description [from, to). Defaults to the last 30 days. Re-pulls upsert.
+         */
+        post: operations["sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/outcome-sources/{sourceId}/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the stored token against the system */
+        post: operations["probe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/invoices": {
         parameters: {
             query?: never;
@@ -311,7 +390,7 @@ export interface paths {
          * Pull usage and cost for a window
          * @description Rewrites [from, to) from the vendor's reports. Defaults to the last 30 days. Runs synchronously; a 30-day window is a handful of requests.
          */
-        post: operations["sync"];
+        post: operations["sync_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -331,7 +410,7 @@ export interface paths {
          * Check the stored key against the vendor
          * @description One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.
          */
-        post: operations["probe"];
+        post: operations["probe_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1240,6 +1319,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cost per outcome per unit
+         * @description [from, to). Spend (unit + descendants) over outcomes (unit + descendants).
+         */
+        get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/reports/allocation": {
         parameters: {
             query?: never;
@@ -1781,6 +1880,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/outcome-sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect a source and drop the outcomes it pulled */
+        delete: operations["deleteSource"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/invoices/{invoiceId}": {
         parameters: {
             query?: never;
@@ -2007,6 +2123,8 @@ export interface components {
             name: string;
             /** @description For PERSON units: the address Claude Code reports them under. */
             email?: string;
+            /** @description For PERSON units: their GitHub login, so merged pull requests attribute to them. */
+            githubLogin?: string;
             /** @description Unit this one rolls up into (a team for a person, a project for a team). Optional. */
             parentId?: string;
         };
@@ -2024,6 +2142,7 @@ export interface components {
             type?: "TEAM" | "PERSON" | "PROJECT";
             name?: string;
             email?: string;
+            githubLogin?: string;
             parentId?: string;
             /** Format: date-time */
             createdAt?: string;
@@ -2257,6 +2376,112 @@ export interface components {
             /** Format: int32 */
             priority?: number;
         };
+        OutcomeRequest: {
+            /** @enum {string} */
+            kind: "PR_MERGED" | "ISSUE_DONE" | "CUSTOM";
+            /** @description Stable id in your system, e.g. a PR URL or ticket key. Posting the same id again updates the outcome. */
+            externalId: string;
+            title?: string;
+            url?: string;
+            /** @description Who did it, for attribution to a person (needs person level on). */
+            actorEmail?: string;
+            actorLogin?: string;
+            /** @description Unit to attribute to when no person matches. Optional. */
+            spendUnitId?: string;
+            /**
+             * Format: date-time
+             * @description When it shipped. Default: now.
+             */
+            occurredAt?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseOutcomeDto: {
+            /** @description Response data */
+            data?: components["schemas"]["OutcomeDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        OutcomeDto: {
+            id?: string;
+            /** @enum {string} */
+            source?: "GITHUB" | "LINEAR" | "MANUAL";
+            /** @enum {string} */
+            kind?: "PR_MERGED" | "ISSUE_DONE" | "CUSTOM";
+            externalId?: string;
+            title?: string;
+            url?: string;
+            actorEmail?: string;
+            actorLogin?: string;
+            spendUnitId?: string;
+            unitName?: string;
+            /** Format: date-time */
+            occurredAt?: string;
+        };
+        OutcomeSourceRequest: {
+            /** @enum {string} */
+            source: "GITHUB" | "LINEAR" | "MANUAL";
+            label: string;
+            /** @description GitHub token with read access to the repos, or a Linear API key. Stored encrypted; never returned. */
+            token: string;
+            /** @description GitHub: comma-separated owner/repo. Linear: comma-separated team keys, or * for all. */
+            scope: string;
+            /** @description Unit an outcome lands on when no person matches its author. */
+            defaultSpendUnitId?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseOutcomeSourceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["OutcomeSourceDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        OutcomeSourceDto: {
+            id?: string;
+            /** @enum {string} */
+            source?: "GITHUB" | "LINEAR" | "MANUAL";
+            label?: string;
+            /** @description GitHub: owner/repo list. Linear: team keys or *. */
+            scope?: string;
+            defaultSpendUnitId?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "ERROR";
+            lastError?: string;
+            /** Format: date-time */
+            lastSyncedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorSyncResultDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorSyncResultDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorSyncResultDto: {
+            connectionId?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            rowsWritten?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorProbeResultDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorProbeResultDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorProbeResultDto: {
+            ok?: boolean;
+            message?: string;
+        };
         /** @description Generic API response wrapper */
         ApiResponseVendorInvoiceDto: {
             /** @description Response data */
@@ -2295,35 +2520,6 @@ export interface components {
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
-        };
-        /** @description Generic API response wrapper */
-        ApiResponseVendorSyncResultDto: {
-            /** @description Response data */
-            data?: components["schemas"]["VendorSyncResultDto"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        VendorSyncResultDto: {
-            connectionId?: string;
-            /** Format: date */
-            from?: string;
-            /** Format: date */
-            to?: string;
-            /** Format: int32 */
-            rowsWritten?: number;
-        };
-        /** @description Generic API response wrapper */
-        ApiResponseVendorProbeResultDto: {
-            /** @description Response data */
-            data?: components["schemas"]["VendorProbeResultDto"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        VendorProbeResultDto: {
-            ok?: boolean;
-            message?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseListSpendAlertDto: {
@@ -3827,6 +4023,28 @@ export interface components {
             rows?: components["schemas"]["Row"][];
         };
         /** @description Generic API response wrapper */
+        ApiResponseSpendOutcomeReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendOutcomeReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendOutcomeReportDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            rows?: components["schemas"]["Row"][];
+            /** Format: int64 */
+            totalOutcomes?: number;
+            /** Format: int64 */
+            unattributedOutcomes?: number;
+            totalSpendCents?: number;
+            /** @description Total spend over total outcomes; null when there are no outcomes. */
+            costPerOutcomeCents?: number;
+        };
+        /** @description Generic API response wrapper */
         ApiResponseSpendAllocationReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAllocationReportDto"];
@@ -3845,6 +4063,22 @@ export interface components {
             totalMeteredCents?: number;
             /** @description False when person-level attribution is off for the account; PERSON units then receive nothing. */
             personLevelEnabled?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListOutcomeDto: {
+            /** @description Response data */
+            data?: components["schemas"]["OutcomeDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListOutcomeSourceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["OutcomeSourceDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseListVendorInvoiceDto: {
@@ -5040,6 +5274,143 @@ export interface operations {
             };
         };
     };
+    recent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListOutcomeDto"];
+                };
+            };
+        };
+    };
+    record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseOutcomeDto"];
+                };
+            };
+        };
+    };
+    sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListOutcomeSourceDto"];
+                };
+            };
+        };
+    };
+    createSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeSourceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseOutcomeSourceDto"];
+                };
+            };
+        };
+    };
+    sync: {
+        parameters: {
+            query?: {
+                /** @description First day, inclusive (UTC). */
+                from?: string;
+                /** @description Day to stop at, EXCLUSIVE (UTC). */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorSyncResultDto"];
+                };
+            };
+        };
+    };
+    probe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorProbeResultDto"];
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -5136,7 +5507,7 @@ export interface operations {
             };
         };
     };
-    sync: {
+    sync_1: {
         parameters: {
             query?: {
                 /** @description First day to pull, inclusive (UTC). Default: 30 days before `to`. */
@@ -5163,7 +5534,7 @@ export interface operations {
             };
         };
     };
-    probe: {
+    probe_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -6998,6 +7369,31 @@ export interface operations {
             };
         };
     };
+    report: {
+        parameters: {
+            query?: {
+                /** @description First day, inclusive (UTC). Default: 30 days before `to`. */
+                from?: string;
+                /** @description Day to stop at, EXCLUSIVE (UTC). Default: tomorrow. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendOutcomeReportDto"];
+                };
+            };
+        };
+    };
     allocation: {
         parameters: {
             query?: {
@@ -7770,6 +8166,28 @@ export interface operations {
             header?: never;
             path: {
                 ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    deleteSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                sourceId: string;
             };
             cookie?: never;
         };

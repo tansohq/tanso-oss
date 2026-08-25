@@ -121,6 +121,10 @@
             "description": "Issue and manage customer-scoped API keys for end-customer agents"
         },
         {
+            "name": "Spend \u2014 Outcomes",
+            "description": "Shipped work (merged PRs, done issues, anything a CI job posts) and cost per outcome"
+        },
+        {
             "name": "Spend \u2014 Vendor Invoices",
             "description": "The vendor's bill as finance sees it, imported from CSV, for reconciliation"
         },
@@ -1175,6 +1179,221 @@
                 ]
             }
         },
+        "/api/v1/spend/outcomes": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Recent outcomes, newest first (200)",
+                "operationId": "recent",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListOutcomeDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Record that something shipped",
+                "description": "For CI jobs and scripts. Same externalId again updates the outcome. Attributed to the person whose email/login matches (person level on), else the given unit.",
+                "operationId": "record",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OutcomeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseOutcomeDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/outcome-sources": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "List outcome sources",
+                "operationId": "sources",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListOutcomeSourceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Connect GitHub repos or Linear teams",
+                "description": "The token is stored encrypted and never returned.",
+                "operationId": "createSource",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OutcomeSourceRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseOutcomeSourceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/outcome-sources/{sourceId}/sync": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Pull outcomes for a window",
+                "description": "[from, to). Defaults to the last 30 days. Re-pulls upsert.",
+                "operationId": "sync",
+                "parameters": [
+                    {
+                        "name": "sourceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day, inclusive (UTC).",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Day to stop at, EXCLUSIVE (UTC).",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorSyncResultDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/outcome-sources/{sourceId}/probe": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Check the stored token against the system",
+                "operationId": "probe",
+                "parameters": [
+                    {
+                        "name": "sourceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorProbeResultDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/invoices": {
             "get": {
                 "tags": [
@@ -1353,7 +1572,7 @@
                 ],
                 "summary": "Pull usage and cost for a window",
                 "description": "Rewrites [from, to) from the vendor's reports. Defaults to the last 30 days. Runs synchronously; a 30-day window is a handful of requests.",
-                "operationId": "sync",
+                "operationId": "sync_1",
                 "parameters": [
                     {
                         "name": "connectionId",
@@ -1410,7 +1629,7 @@
                 ],
                 "summary": "Check the stored key against the vendor",
                 "description": "One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.",
-                "operationId": "probe",
+                "operationId": "probe_1",
                 "parameters": [
                     {
                         "name": "connectionId",
@@ -4814,6 +5033,55 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/outcomes": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Cost per outcome per unit",
+                "description": "[from, to). Spend (unit + descendants) over outcomes (unit + descendants).",
+                "operationId": "report",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day, inclusive (UTC). Default: 30 days before `to`.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendOutcomeReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/reports/allocation": {
             "get": {
                 "tags": [
@@ -6673,6 +6941,42 @@
                 ]
             }
         },
+        "/api/v1/spend/outcome-sources/{sourceId}": {
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Outcomes"
+                ],
+                "summary": "Disconnect a source and drop the outcomes it pulled",
+                "operationId": "deleteSource",
+                "parameters": [
+                    {
+                        "name": "sourceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/invoices/{invoiceId}": {
             "delete": {
                 "tags": [
@@ -7227,6 +7531,12 @@
                         "maxLength": 255,
                         "minLength": 0
                     },
+                    "githubLogin": {
+                        "type": "string",
+                        "description": "For PERSON units: their GitHub login, so merged pull requests attribute to them.",
+                        "maxLength": 120,
+                        "minLength": 0
+                    },
                     "parentId": {
                         "type": "string",
                         "description": "Unit this one rolls up into (a team for a person, a project for a team). Optional."
@@ -7275,6 +7585,9 @@
                         "type": "string"
                     },
                     "email": {
+                        "type": "string"
+                    },
+                    "githubLogin": {
                         "type": "string"
                     },
                     "parentId": {
@@ -7845,6 +8158,301 @@
                     }
                 }
             },
+            "OutcomeRequest": {
+                "type": "object",
+                "properties": {
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "PR_MERGED",
+                            "ISSUE_DONE",
+                            "CUSTOM"
+                        ]
+                    },
+                    "externalId": {
+                        "type": "string",
+                        "description": "Stable id in your system, e.g. a PR URL or ticket key. Posting the same id again updates the outcome.",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "title": {
+                        "type": "string",
+                        "maxLength": 500,
+                        "minLength": 0
+                    },
+                    "url": {
+                        "type": "string",
+                        "maxLength": 1000,
+                        "minLength": 0
+                    },
+                    "actorEmail": {
+                        "type": "string",
+                        "description": "Who did it, for attribution to a person (needs person level on).",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "actorLogin": {
+                        "type": "string",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "spendUnitId": {
+                        "type": "string",
+                        "description": "Unit to attribute to when no person matches. Optional."
+                    },
+                    "occurredAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When it shipped. Default: now."
+                    }
+                },
+                "required": [
+                    "externalId",
+                    "kind"
+                ]
+            },
+            "ApiResponseOutcomeDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/OutcomeDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "OutcomeDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "GITHUB",
+                            "LINEAR",
+                            "MANUAL"
+                        ]
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "PR_MERGED",
+                            "ISSUE_DONE",
+                            "CUSTOM"
+                        ]
+                    },
+                    "externalId": {
+                        "type": "string"
+                    },
+                    "title": {
+                        "type": "string"
+                    },
+                    "url": {
+                        "type": "string"
+                    },
+                    "actorEmail": {
+                        "type": "string"
+                    },
+                    "actorLogin": {
+                        "type": "string"
+                    },
+                    "spendUnitId": {
+                        "type": "string"
+                    },
+                    "unitName": {
+                        "type": "string"
+                    },
+                    "occurredAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "OutcomeSourceRequest": {
+                "type": "object",
+                "properties": {
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "GITHUB",
+                            "LINEAR",
+                            "MANUAL"
+                        ]
+                    },
+                    "label": {
+                        "type": "string",
+                        "maxLength": 100,
+                        "minLength": 0
+                    },
+                    "token": {
+                        "type": "string",
+                        "description": "GitHub token with read access to the repos, or a Linear API key. Stored encrypted; never returned.",
+                        "minLength": 1
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "GitHub: comma-separated owner/repo. Linear: comma-separated team keys, or * for all.",
+                        "minLength": 1
+                    },
+                    "defaultSpendUnitId": {
+                        "type": "string",
+                        "description": "Unit an outcome lands on when no person matches its author."
+                    }
+                },
+                "required": [
+                    "label",
+                    "scope",
+                    "source",
+                    "token"
+                ]
+            },
+            "ApiResponseOutcomeSourceDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/OutcomeSourceDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "OutcomeSourceDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": [
+                            "GITHUB",
+                            "LINEAR",
+                            "MANUAL"
+                        ]
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "scope": {
+                        "type": "string",
+                        "description": "GitHub: owner/repo list. Linear: team keys or *."
+                    },
+                    "defaultSpendUnitId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ERROR"
+                        ]
+                    },
+                    "lastError": {
+                        "type": "string"
+                    },
+                    "lastSyncedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "ApiResponseVendorSyncResultDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorSyncResultDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorSyncResultDto": {
+                "type": "object",
+                "properties": {
+                    "connectionId": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rowsWritten": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "ApiResponseVendorProbeResultDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorProbeResultDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorProbeResultDto": {
+                "type": "object",
+                "properties": {
+                    "ok": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
+                    }
+                }
+            },
             "ApiResponseVendorInvoiceDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -7960,77 +8568,6 @@
                     "label",
                     "provider"
                 ]
-            },
-            "ApiResponseVendorSyncResultDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/VendorSyncResultDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "VendorSyncResultDto": {
-                "type": "object",
-                "properties": {
-                    "connectionId": {
-                        "type": "string"
-                    },
-                    "from": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "to": {
-                        "type": "string",
-                        "format": "date"
-                    },
-                    "rowsWritten": {
-                        "type": "integer",
-                        "format": "int32"
-                    }
-                }
-            },
-            "ApiResponseVendorProbeResultDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/VendorProbeResultDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "VendorProbeResultDto": {
-                "type": "object",
-                "properties": {
-                    "ok": {
-                        "type": "boolean"
-                    },
-                    "message": {
-                        "type": "string"
-                    }
-                }
             },
             "ApiResponseListSpendAlertDto": {
                 "type": "object",
@@ -11594,6 +12131,60 @@
                     }
                 }
             },
+            "ApiResponseSpendOutcomeReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendOutcomeReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendOutcomeReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Row"
+                        }
+                    },
+                    "totalOutcomes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "unattributedOutcomes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "totalSpendCents": {
+                        "type": "number"
+                    },
+                    "costPerOutcomeCents": {
+                        "type": "number",
+                        "description": "Total spend over total outcomes; null when there are no outcomes."
+                    }
+                }
+            },
             "ApiResponseSpendAllocationReportDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -11641,6 +12232,52 @@
                     "personLevelEnabled": {
                         "type": "boolean",
                         "description": "False when person-level attribution is off for the account; PERSON units then receive nothing."
+                    }
+                }
+            },
+            "ApiResponseListOutcomeDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/OutcomeDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ApiResponseListOutcomeSourceDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/OutcomeSourceDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
                     }
                 }
             },
