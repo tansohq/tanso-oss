@@ -26,6 +26,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/connections/{connectionId}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the stored admin key
+         * @description Swaps the key in place — pulled usage stays attached to the connection — and clears the recorded error.
+         */
+        put: operations["replaceKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/v1/login": {
         parameters: {
             query?: never;
@@ -1796,6 +1816,34 @@ export interface components {
              */
             alertingSince?: string;
         };
+        ReplaceVendorKeyRequest: {
+            /** @description The new vendor admin key. Stored encrypted; never returned. */
+            adminKey: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorConnectionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorConnectionDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorConnectionDto: {
+            id?: string;
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            label?: string;
+            /** @description Last four characters of the admin key. The key itself is never returned. */
+            keyHint?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "ERROR";
+            /** @description Why the last probe or sync failed; null while healthy. */
+            lastError?: string;
+            /** Format: date-time */
+            lastSyncedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         UsernameAndPasswordRequest: {
             username?: string;
             password?: string;
@@ -1943,30 +1991,6 @@ export interface components {
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
-        };
-        /** @description Generic API response wrapper */
-        ApiResponseVendorConnectionDto: {
-            /** @description Response data */
-            data?: components["schemas"]["VendorConnectionDto"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        VendorConnectionDto: {
-            id?: string;
-            /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI";
-            label?: string;
-            /** @description Last four characters of the admin key. The key itself is never returned. */
-            keyHint?: string;
-            /** @enum {string} */
-            status?: "ACTIVE" | "ERROR";
-            /** @description Why the last probe or sync failed; null while healthy. */
-            lastError?: string;
-            /** Format: date-time */
-            lastSyncedAt?: string;
-            /** Format: date-time */
-            createdAt?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseVendorSyncResultDto: {
@@ -3375,12 +3399,17 @@ export interface components {
             cacheCreationTokens?: number;
             /** Format: int64 */
             outputTokens?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Null when the vendor does not report request counts for this model.
+             */
             requests?: number;
             meteredCostCents?: number;
             /** @description Cost-report rows the vendor attributed to this model; null when the vendor does not break cost down by model (OpenAI). */
             vendorCostCents?: number;
             priced?: boolean;
+            /** @description False when the price book has no cache rates for this model, so cached tokens were priced at the full input rate (an overestimate). */
+            cacheRatesKnown?: boolean;
         };
         SpendUsageReportDto: {
             /** Format: date */
@@ -3403,7 +3432,10 @@ export interface components {
             cacheCreationTokens?: number;
             /** Format: int64 */
             outputTokens?: number;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Null when no vendor in the window reports request counts (Anthropic does not).
+             */
             requests?: number;
             /** @description What the vendors' cost reports say, in cents. */
             vendorCostCents?: number;
@@ -4149,6 +4181,32 @@ export interface operations {
             };
         };
     };
+    replaceKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceVendorKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorConnectionDto"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -4456,7 +4514,9 @@ export interface operations {
     sync: {
         parameters: {
             query?: {
+                /** @description First day to pull, inclusive (UTC). Default: 30 days before `to`. */
                 from?: string;
+                /** @description Day to stop at, exclusive (UTC). Default: tomorrow. Windows over 31 days are pulled in 31-day chunks. */
                 to?: string;
             };
             header?: never;
@@ -6224,7 +6284,9 @@ export interface operations {
     usage: {
         parameters: {
             query?: {
+                /** @description First day, inclusive (UTC). Default: 30 days before `to`. */
                 from?: string;
+                /** @description Day to stop at, EXCLUSIVE (UTC). Default: tomorrow. */
                 to?: string;
             };
             header?: never;
@@ -6247,7 +6309,9 @@ export interface operations {
     reconcile: {
         parameters: {
             query?: {
+                /** @description First day of the period, inclusive. Default: first day of last month. */
                 from?: string;
+                /** @description Last day of the period, INCLUSIVE — invoices are dated, not timestamped. Default: last day of last month. */
                 to?: string;
             };
             header?: never;

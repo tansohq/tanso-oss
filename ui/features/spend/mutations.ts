@@ -33,6 +33,22 @@ export function useDeleteVendorConnection() {
   })
 }
 
+export function useReplaceVendorKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: { id: string; adminKey: string }) =>
+      apiFetch<VendorConnectionDto>(
+        `/api/v1/spend/connections/${input.id}/key`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ adminKey: input.adminKey }),
+        }
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["vendor-connections"] }),
+  })
+}
+
 export function useProbeVendorConnection() {
   const queryClient = useQueryClient()
   return useMutation({

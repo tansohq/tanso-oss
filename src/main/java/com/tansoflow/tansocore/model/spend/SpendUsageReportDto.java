@@ -47,7 +47,8 @@ public class SpendUsageReportDto {
         private long cacheReadTokens;
         private long cacheCreationTokens;
         private long outputTokens;
-        private long requests;
+        @Schema(description = "Null when no vendor in the window reports request counts (Anthropic does not).")
+        private Long requests;
         @Schema(description = "What the vendors' cost reports say, in cents.")
         private BigDecimal vendorCostCents;
         @Schema(description = "What the price book says the tokens should cost, in cents.")
@@ -63,11 +64,14 @@ public class SpendUsageReportDto {
         private long cacheReadTokens;
         private long cacheCreationTokens;
         private long outputTokens;
-        private long requests;
+        @Schema(description = "Null when the vendor does not report request counts for this model.")
+        private Long requests;
         private BigDecimal meteredCostCents;
         @Schema(description = "Cost-report rows the vendor attributed to this model; null when the vendor does not break cost down by model (OpenAI).")
         private BigDecimal vendorCostCents;
         private boolean priced;
+        @Schema(description = "False when the price book has no cache rates for this model, so cached tokens were priced at the full input rate (an overestimate).")
+        private boolean cacheRatesKnown;
     }
 
     @Getter

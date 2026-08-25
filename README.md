@@ -269,6 +269,13 @@ It works from the vendor's admin API, not a proxy in your request path:
 
 Pulled data lands in `vendor_usage_buckets` in the vendor's own dimensions
 (model, workspace/project, key, actor); a window is rewritten on every pull.
+`POST /api/v1/spend/connections/{id}/sync?from=&to=` pulls any window (`to`
+exclusive; longer than 31 days is pulled in 31-day chunks). Dates on the usage
+report are `[from, to)`; on reconcile they are inclusive, because invoices are
+dated, not timestamped. "Metered" means tokens × the price book; it is marked
+an estimate when a model is unpriced or has no cache rates. Seat lines on an
+invoice count toward "invoiced" but never appear in the vendor's token cost
+report, so "vendor − invoice" carries the seats.
 API: `/api/v1/spend/connections`, `/api/v1/spend/reports/usage`,
 `/api/v1/spend/reports/reconcile`, `/api/v1/spend/invoices` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at

@@ -32,6 +32,7 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -118,5 +119,6 @@ class AnthropicUsagePullerTest {
         assertTrue(e.isAuthFailure());
         assertEquals(401, e.getStatus());
         assertTrue(e.getMessage().contains("invalid x-api-key"));
+        assertFalse(e.getMessage().contains("{"), "vendor JSON should be reduced to its message");
     }
 }

@@ -40,7 +40,8 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 
     @Override
     public String convertToDatabaseColumn(String attribute) {
-        if (attribute == null || cipher.isEncrypted(attribute)) {
+        if (attribute == null || attribute.isEmpty() || cipher.isEncrypted(attribute)) {
+            // Empty means "no secret" (a disconnected connection); encrypting it would hide that.
             return attribute;
         }
         return cipher.encrypt(attribute);

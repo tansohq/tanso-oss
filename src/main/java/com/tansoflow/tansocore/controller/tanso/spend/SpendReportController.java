@@ -23,6 +23,7 @@ import com.tansoflow.tansocore.model.spend.SpendReconcileReportDto;
 import com.tansoflow.tansocore.model.spend.SpendUsageReportDto;
 import com.tansoflow.tansocore.service.internal.spend.SpendReportService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +53,9 @@ public class SpendReportController {
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<SpendUsageReportDto>> usage(
             @AuthenticationPrincipal UserContext userContext,
+            @Parameter(description = "First day, inclusive (UTC). Default: 30 days before `to`.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         SpendUsageReportDto report = spendReportService.usage(userContext.getAccountId(), from, to);
         return ResponseEntity.ok(ApiResponse.<SpendUsageReportDto>builder().data(report).success(true).build());
@@ -65,7 +68,9 @@ public class SpendReportController {
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<SpendReconcileReportDto>> reconcile(
             @AuthenticationPrincipal UserContext userContext,
+            @Parameter(description = "First day of the period, inclusive. Default: first day of last month.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Last day of the period, INCLUSIVE — invoices are dated, not timestamped. Default: last day of last month.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         SpendReconcileReportDto report = spendReportService.reconcile(userContext.getAccountId(), from, to);
         return ResponseEntity.ok(ApiResponse.<SpendReconcileReportDto>builder().data(report).success(true).build());

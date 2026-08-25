@@ -42,7 +42,8 @@ import java.util.function.Function;
 /**
  * OpenAI organisation usage (completions, by project / user / key / model)
  * and costs (by project / line item, in dollars). Daily buckets, at most 31
- * per page, cursor-paginated. Cached input tokens are reported as a subset of
+ * per page, cursor-paginated. group_by is a repeated plain parameter here;
+ * Anthropic wants the bracketed form. Cached input tokens are reported as a subset of
  * input_tokens, so uncached = input - cached.
  */
 @Slf4j
@@ -76,7 +77,7 @@ public class OpenAiUsagePuller implements VendorUsagePuller {
                         .queryParam("end_time", epoch(toExclusive))
                         .queryParam("bucket_width", "1d")
                         .queryParam("limit", MAX_DAILY_BUCKETS)
-                        .queryParam("group_by[]", "project_id", "user_id", "api_key_id", "model")
+                        .queryParam("group_by", "project_id", "user_id", "api_key_id", "model")
                         .queryParamIfPresent("page", Optional.ofNullable(page))
                         .build(),
                 this::usageRows));
@@ -85,7 +86,7 @@ public class OpenAiUsagePuller implements VendorUsagePuller {
                         .queryParam("end_time", epoch(toExclusive))
                         .queryParam("bucket_width", "1d")
                         .queryParam("limit", MAX_DAILY_BUCKETS)
-                        .queryParam("group_by[]", "project_id", "line_item")
+                        .queryParam("group_by", "project_id", "line_item")
                         .queryParamIfPresent("page", Optional.ofNullable(page))
                         .build(),
                 this::costRows));
@@ -120,8 +121,9 @@ public class OpenAiUsagePuller implements VendorUsagePuller {
                 JsonNode amount = r.path("amount");
                 // amount.value is in whole currency units (dollars); the ledger keeps cents
                 BigDecimal cents = new BigDecimal(amount.path("value").asText("0")).movePointRight(2);
+                String lineItem = text(r, "line_item");
                 out.add(new UsageBucketRecord(VendorUsageSource.COST_API, start, end,
-                        null, text(r, "project_id"), null, null, null, text(r, "line_item"),
+                        modelFromLineItem(lineItem), text(r, "project_id"), null, null, null, lineItem,
                         0, 0, 0, 0, null, cents, amount.path("currency").asText("usd").toUpperCase()));
             }
         }
@@ -145,14 +147,25 @@ public class OpenAiUsagePuller implements VendorUsagePuller {
         try {
             return client.get().uri(uri)
                     .header("Authorization", "Bearer " + adminKey)
+                    .header("User-Agent", VendorErrors.USER_AGENT)
                     .retrieve()
                     .body(JsonNode.class);
         } catch (RestClientResponseException e) {
             throw new VendorApiException(e.getStatusCode().value(),
-                    "OpenAI admin API returned " + e.getStatusCode().value() + ": " + e.getResponseBodyAsString());
+                    "OpenAI admin API returned " + e.getStatusCode().value() + ": " + VendorErrors.message(e.getResponseBodyAsString()));
         } catch (ResourceAccessException e) {
             throw new VendorApiException("Could not reach the OpenAI admin API: " + e.getMessage(), e);
         }
+    }
+
+    /** OpenAI line items read "gpt-4o-mini, input" / "gpt-4o-mini, output"; the model is the part before the comma. */
+    static String modelFromLineItem(String lineItem) {
+        if (lineItem == null) {
+            return null;
+        }
+        int comma = lineItem.indexOf(',');
+        String head = (comma < 0 ? lineItem : lineItem.substring(0, comma)).trim();
+        return head.isEmpty() ? null : head;
     }
 
     private static long epoch(LocalDate day) {

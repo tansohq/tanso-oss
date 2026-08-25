@@ -60,10 +60,14 @@ public class SpendReportServiceImpl implements SpendReportService {
     public SpendUsageReportDto usage(String accountId, LocalDate from, LocalDate to) {
         LocalDate end = to != null ? to : LocalDate.now(ZoneOffset.UTC).plusDays(1);
         LocalDate start = from != null ? from : end.minusDays(DEFAULT_WINDOW_DAYS);
+        if (!start.isBefore(end)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
         List<VendorUsageBucket> buckets = load(accountId, start, end);
 
         Map<String, SpendUsageReportDto.ModelRow.ModelRowBuilder> byModel = new LinkedHashMap<>();
         Map<String, long[]> modelTokens = new LinkedHashMap<>();
+        java.util.Set<String> modelHasRequests = new java.util.HashSet<>();
         Map<String, BigDecimal> vendorCostByModel = new LinkedHashMap<>();
         Map<LocalDate, BigDecimal[]> byDay = new TreeMap<>();
         Map<LocalDate, long[]> dayTokens = new TreeMap<>();
@@ -71,6 +75,8 @@ public class SpendReportServiceImpl implements SpendReportService {
         Map<String, BigDecimal[]> actorCost = new LinkedHashMap<>();
         Map<String, VendorProvider> actorProvider = new LinkedHashMap<>();
         long[] totals = new long[5];
+        boolean anyRequests = false;
+        java.util.Set<String> cacheRatesUnknown = new java.util.HashSet<>();
         BigDecimal vendorTotal = BigDecimal.ZERO;
         BigDecimal meteredTotal = BigDecimal.ZERO;
         TreeSet<String> unpriced = new TreeSet<>();
@@ -88,6 +94,13 @@ public class SpendReportServiceImpl implements SpendReportService {
                     long[] mt = modelTokens.computeIfAbsent(key, k -> new long[5]);
                     add(mt, b);
                     add(totals, b);
+                    if (b.getRequests() != null) {
+                        anyRequests = true;
+                        modelHasRequests.add(key);
+                    }
+                    if (est.priced() && !est.cacheRatesKnown()) {
+                        cacheRatesUnknown.add(key);
+                    }
                     byModel.computeIfAbsent(key, k -> SpendUsageReportDto.ModelRow.builder()
                             .provider(b.getProvider()).model(b.getModel()).priced(est.priced()).meteredCostCents(BigDecimal.ZERO));
                     SpendUsageReportDto.ModelRow.ModelRowBuilder row = byModel.get(key);
@@ -133,7 +146,9 @@ public class SpendReportServiceImpl implements SpendReportService {
         for (Map.Entry<String, SpendUsageReportDto.ModelRow.ModelRowBuilder> e : byModel.entrySet()) {
             long[] t = modelTokens.get(e.getKey());
             modelRows.add(e.getValue()
-                    .uncachedInputTokens(t[0]).cacheReadTokens(t[1]).cacheCreationTokens(t[2]).outputTokens(t[3]).requests(t[4])
+                    .uncachedInputTokens(t[0]).cacheReadTokens(t[1]).cacheCreationTokens(t[2]).outputTokens(t[3])
+                    .requests(modelHasRequests.contains(e.getKey()) ? t[4] : null)
+                    .cacheRatesKnown(!cacheRatesUnknown.contains(e.getKey()))
                     .vendorCostCents(vendorCostByModel.get(e.getKey()))
                     .build());
         }
@@ -163,7 +178,7 @@ public class SpendReportServiceImpl implements SpendReportService {
                 .from(start).to(end)
                 .totals(SpendUsageReportDto.Totals.builder()
                         .uncachedInputTokens(totals[0]).cacheReadTokens(totals[1]).cacheCreationTokens(totals[2])
-                        .outputTokens(totals[3]).requests(totals[4])
+                        .outputTokens(totals[3]).requests(anyRequests ? totals[4] : null)
                         .vendorCostCents(vendorTotal).meteredCostCents(meteredTotal).build())
                 .byModel(modelRows).byDay(dayRows).byActor(actorRows)
                 .unpricedModels(new ArrayList<>(unpriced))
@@ -182,6 +197,9 @@ public class SpendReportServiceImpl implements SpendReportService {
         } else {
             start = from;
             endInclusive = to;
+        }
+        if (endInclusive.isBefore(start)) {
+            throw new IllegalArgumentException("to is before from");
         }
         List<VendorUsageBucket> buckets = load(accountId, start, endInclusive.plusDays(1));
         Map<VendorProvider, BigDecimal[]> sums = new EnumMap<>(VendorProvider.class);

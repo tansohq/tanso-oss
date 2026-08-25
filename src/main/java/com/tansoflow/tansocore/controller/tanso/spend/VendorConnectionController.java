@@ -23,9 +23,11 @@ import com.tansoflow.tansocore.model.spend.VendorConnectionDto;
 import com.tansoflow.tansocore.model.spend.VendorProbeResultDto;
 import com.tansoflow.tansocore.model.spend.VendorSyncResultDto;
 import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest;
+import com.tansoflow.tansocore.model.spend.request.ReplaceVendorKeyRequest;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
 import com.tansoflow.tansocore.service.internal.spend.VendorSyncService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,6 +41,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -82,6 +85,18 @@ public class VendorConnectionController {
                 .body(ApiResponse.<VendorConnectionDto>builder().data(created).success(true).build());
     }
 
+    @PutMapping("/{connectionId}/key")
+    @Operation(summary = "Replace the stored admin key",
+            description = "Swaps the key in place — pulled usage stays attached to the connection — and clears the recorded error.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<VendorConnectionDto>> replaceKey(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String connectionId,
+            @Valid @RequestBody ReplaceVendorKeyRequest request) {
+        VendorConnectionDto updated = vendorConnectionService.replaceKey(userContext.getAccountId(), connectionId, request.getAdminKey());
+        return ResponseEntity.ok(ApiResponse.<VendorConnectionDto>builder().data(updated).success(true).build());
+    }
+
     @PostMapping("/{connectionId}/probe")
     @Operation(summary = "Check the stored key against the vendor",
             description = "One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.",
@@ -100,7 +115,9 @@ public class VendorConnectionController {
     public ResponseEntity<ApiResponse<VendorSyncResultDto>> sync(
             @AuthenticationPrincipal UserContext userContext,
             @PathVariable String connectionId,
+            @Parameter(description = "First day to pull, inclusive (UTC). Default: 30 days before `to`.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Day to stop at, exclusive (UTC). Default: tomorrow. Windows over 31 days are pulled in 31-day chunks.")
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         VendorSyncResultDto result = vendorSyncService.sync(userContext.getAccountId(), connectionId, from, to);
         return ResponseEntity.ok(ApiResponse.<VendorSyncResultDto>builder().data(result).success(true).build());

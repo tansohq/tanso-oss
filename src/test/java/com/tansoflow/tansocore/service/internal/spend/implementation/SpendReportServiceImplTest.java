@@ -41,6 +41,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -72,6 +73,27 @@ class SpendReportServiceImplTest {
                         BigDecimal.valueOf((inv.<Long>getArgument(1) + inv.<Long>getArgument(2) + inv.<Long>getArgument(3) + inv.<Long>getArgument(4)) / 1000L), true, true));
         lenient().when(estimator.estimate(eq("mystery"), anyLong(), anyLong(), anyLong(), anyLong()))
                 .thenReturn(VendorCostEstimator.Estimate.UNPRICED);
+    }
+
+    private static SpendUsageReportDto.ModelRow sonnetRow(SpendUsageReportDto r) {
+        return r.getByModel().stream().filter(m -> "claude-sonnet-4-5".equals(m.getModel())).findFirst().orElseThrow();
+    }
+
+    @Test
+    void requestsAreNullWhenNoVendorReportsThem() {
+        when(bucketRepository.findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(eq(accountId), any(), any()))
+                .thenReturn(List.of(bucket(VendorUsageSource.USAGE_API, day1, "claude-sonnet-4-5", null, 1000, 0, 0, 0, null, null)));
+        SpendUsageReportDto r = service.usage(accountId.toString(), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2));
+        assertNull(r.getTotals().getRequests());
+        assertNull(r.getByModel().get(0).getRequests());
+    }
+
+    @Test
+    void invertedWindowsAreRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.usage(accountId.toString(), LocalDate.of(2026, 7, 2), LocalDate.of(2026, 7, 1)));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reconcile(accountId.toString(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 7, 1)));
     }
 
     private VendorUsageBucket bucket(VendorUsageSource source, Instant start, String model, String actor,
@@ -110,7 +132,8 @@ class SpendReportServiceImplTest {
         // totals: USAGE_API only — Claude Code rows are the same traffic seen per person
         assertEquals(14_500, r.getTotals().getUncachedInputTokens());
         assertEquals(4_500, r.getTotals().getOutputTokens());
-        assertEquals(11, r.getTotals().getRequests());
+        assertEquals(11L, r.getTotals().getRequests());
+        assertTrue(sonnetRow(r).isCacheRatesKnown());
         assertEquals(0, new BigDecimal("21").compareTo(r.getTotals().getMeteredCostCents())); // 16 + 5 + 0
         assertEquals(0, new BigDecimal("24.5").compareTo(r.getTotals().getVendorCostCents()));
         assertEquals(List.of("mystery"), r.getUnpricedModels());

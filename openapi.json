@@ -297,6 +297,53 @@
                 ]
             }
         },
+        "/api/v1/spend/connections/{connectionId}/key": {
+            "put": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Replace the stored admin key",
+                "description": "Swaps the key in place \u2014 pulled usage stays attached to the connection \u2014 and clears the recorded error.",
+                "operationId": "replaceKey",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReplaceVendorKeyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorConnectionDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/budget": {
             "get": {
                 "tags": [
@@ -932,6 +979,7 @@
                     {
                         "name": "from",
                         "in": "query",
+                        "description": "First day to pull, inclusive (UTC). Default: 30 days before `to`.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -941,6 +989,7 @@
                     {
                         "name": "to",
                         "in": "query",
+                        "description": "Day to stop at, exclusive (UTC). Default: tomorrow. Windows over 31 days are pulled in 31-day chunks.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -4229,6 +4278,7 @@
                     {
                         "name": "from",
                         "in": "query",
+                        "description": "First day, inclusive (UTC). Default: 30 days before `to`.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -4238,6 +4288,7 @@
                     {
                         "name": "to",
                         "in": "query",
+                        "description": "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -4276,6 +4327,7 @@
                     {
                         "name": "from",
                         "in": "query",
+                        "description": "First day of the period, inclusive. Default: first day of last month.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -4285,6 +4337,7 @@
                     {
                         "name": "to",
                         "in": "query",
+                        "description": "Last day of the period, INCLUSIVE \u2014 invoices are dated, not timestamped. Default: last day of last month.",
                         "required": false,
                         "schema": {
                             "type": "string",
@@ -6580,6 +6633,80 @@
                     }
                 }
             },
+            "ReplaceVendorKeyRequest": {
+                "type": "object",
+                "properties": {
+                    "adminKey": {
+                        "type": "string",
+                        "description": "The new vendor admin key. Stored encrypted; never returned.",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "adminKey"
+                ]
+            },
+            "ApiResponseVendorConnectionDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorConnectionDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorConnectionDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "keyHint": {
+                        "type": "string",
+                        "description": "Last four characters of the admin key. The key itself is never returned."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ERROR"
+                        ]
+                    },
+                    "lastError": {
+                        "type": "string",
+                        "description": "Why the last probe or sync failed; null while healthy."
+                    },
+                    "lastSyncedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
             "UsernameAndPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -6947,67 +7074,6 @@
                     "label",
                     "provider"
                 ]
-            },
-            "ApiResponseVendorConnectionDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/VendorConnectionDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "VendorConnectionDto": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string"
-                    },
-                    "provider": {
-                        "type": "string",
-                        "enum": [
-                            "ANTHROPIC",
-                            "OPENAI"
-                        ]
-                    },
-                    "label": {
-                        "type": "string"
-                    },
-                    "keyHint": {
-                        "type": "string",
-                        "description": "Last four characters of the admin key. The key itself is never returned."
-                    },
-                    "status": {
-                        "type": "string",
-                        "enum": [
-                            "ACTIVE",
-                            "ERROR"
-                        ]
-                    },
-                    "lastError": {
-                        "type": "string",
-                        "description": "Why the last probe or sync failed; null while healthy."
-                    },
-                    "lastSyncedAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    }
-                }
             },
             "ApiResponseVendorSyncResultDto": {
                 "type": "object",
@@ -10329,7 +10395,8 @@
                     },
                     "requests": {
                         "type": "integer",
-                        "format": "int64"
+                        "format": "int64",
+                        "description": "Null when the vendor does not report request counts for this model."
                     },
                     "meteredCostCents": {
                         "type": "number"
@@ -10340,6 +10407,10 @@
                     },
                     "priced": {
                         "type": "boolean"
+                    },
+                    "cacheRatesKnown": {
+                        "type": "boolean",
+                        "description": "False when the price book has no cache rates for this model, so cached tokens were priced at the full input rate (an overestimate)."
                     }
                 }
             },
@@ -10405,7 +10476,8 @@
                     },
                     "requests": {
                         "type": "integer",
-                        "format": "int64"
+                        "format": "int64",
+                        "description": "Null when no vendor in the window reports request counts (Anthropic does not)."
                     },
                     "vendorCostCents": {
                         "type": "number",

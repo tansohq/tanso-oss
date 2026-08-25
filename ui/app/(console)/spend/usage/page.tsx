@@ -30,7 +30,7 @@ import { isBuildSideOff, useSpendUsage } from "@/features/spend/queries"
 import { formatNumber } from "@/lib/format"
 
 export default function SpendUsagePage() {
-  const [from, setFrom] = useState(daysAgo(30))
+  const [from, setFrom] = useState(daysAgo(29))
   const [to, setTo] = useState(daysAgo(-1))
   const report = useSpendUsage(from, to)
   const data = report.data
@@ -117,7 +117,9 @@ export default function SpendUsagePage() {
               <CardHeader>
                 <CardDescription>Requests</CardDescription>
                 <CardTitle className="text-2xl tabular-nums">
-                  {data ? formatNumber(data.totals.requests) : "—"}
+                  {data?.totals.requests != null
+                    ? formatNumber(data.totals.requests)
+                    : "—"}
                 </CardTitle>
               </CardHeader>
             </Card>
@@ -177,7 +179,9 @@ export default function SpendUsagePage() {
                         {formatTokens(row.outputTokens)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
-                        {formatNumber(row.requests)}
+                        {row.requests != null
+                          ? formatNumber(row.requests)
+                          : "—"}
                       </TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatCents(row.meteredCostCents)}

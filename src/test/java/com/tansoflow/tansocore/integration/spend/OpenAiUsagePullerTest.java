@@ -38,6 +38,14 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 class OpenAiUsagePullerTest {
 
     @Test
+    void modelComesFromTheLineItemHead() {
+        assertEquals("gpt-4o-mini", OpenAiUsagePuller.modelFromLineItem("gpt-4o-mini, input"));
+        assertEquals("gpt-4o", OpenAiUsagePuller.modelFromLineItem("gpt-4o"));
+        assertEquals(null, OpenAiUsagePuller.modelFromLineItem(null));
+        assertEquals(null, OpenAiUsagePuller.modelFromLineItem(" , input"));
+    }
+
+    @Test
     void mapsCachedTokensAndDollarsToCents() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
@@ -47,6 +55,8 @@ class OpenAiUsagePullerTest {
                 .andExpect(header("Authorization", "Bearer sk-admin-test"))
                 .andExpect(queryParam("start_time", "1787184000"))
                 .andExpect(queryParam("end_time", "1787270400"))
+                .andExpect(queryParam("group_by", "project_id", "user_id", "api_key_id", "model"))
+                .andExpect(header("User-Agent", "tanso-oss (https://github.com/tansohq/tanso-oss)"))
                 .andRespond(withSuccess(new ClassPathResource("spend/openai-usage.json"), MediaType.APPLICATION_JSON));
         server.expect(requestTo(org.hamcrest.Matchers.startsWith("https://vendor.test/v1/organization/costs")))
                 .andRespond(withSuccess(new ClassPathResource("spend/openai-costs.json"), MediaType.APPLICATION_JSON));
@@ -72,6 +82,7 @@ class OpenAiUsagePullerTest {
         assertEquals(0, new BigDecimal("4.32").compareTo(cost.vendorCostCents()));
         assertEquals("USD", cost.currency());
         assertEquals("gpt-4o-mini, input", cost.description());
+        assertEquals("gpt-4o-mini", cost.model());
         assertEquals("proj_1", cost.workspaceId());
     }
 }

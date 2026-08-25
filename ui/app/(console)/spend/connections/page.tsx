@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
+import { KeyRound, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
 
 import { DataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
@@ -20,11 +20,23 @@ import {
   useCreateVendorConnection,
   useDeleteVendorConnection,
   useProbeVendorConnection,
+  useReplaceVendorKey,
   useSyncVendorConnection,
 } from "@/features/spend/mutations"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 import type { VendorConnectionDto } from "@/features/spend/types"
+import { ReplaceKeyForm } from "@/features/spend/replace-key-form"
 import { VendorConnectionForm } from "@/features/spend/vendor-connection-form"
+
+function shortError(message: string | undefined | null): string {
+  if (!message) return "Error"
+  const status = message.match(/returned (\d{3})/)?.[1]
+  return status
+    ? `Key rejected (${status})`
+    : message.length > 60
+      ? `${message.slice(0, 60)}…`
+      : message
+}
 
 export default function SpendConnectionsPage() {
   const connections = useVendorConnections()
@@ -32,7 +44,9 @@ export default function SpendConnectionsPage() {
   const remove = useDeleteVendorConnection()
   const probe = useProbeVendorConnection()
   const sync = useSyncVendorConnection()
+  const replaceKey = useReplaceVendorKey()
   const [open, setOpen] = useState(false)
+  const [replacing, setReplacing] = useState<VendorConnectionDto | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
   const columns: ColumnDef<VendorConnectionDto>[] = [
@@ -64,7 +78,7 @@ export default function SpendConnectionsPage() {
             className="text-destructive"
             title={row.original.lastError ?? undefined}
           >
-            Error — {row.original.lastError}
+            {shortError(row.original.lastError)}
           </span>
         ) : (
           <span className="text-muted-foreground">OK</span>
@@ -140,6 +154,18 @@ export default function SpendConnectionsPage() {
             </Button>
             <Button
               variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={(event) => {
+                event.stopPropagation()
+                setReplacing(row.original)
+              }}
+            >
+              <KeyRound data-icon="inline-start" />
+              Replace key
+            </Button>
+            <Button
+              variant="ghost"
               size="icon"
               aria-label="Disconnect"
               disabled={busy || remove.isPending}
@@ -205,7 +231,10 @@ export default function SpendConnectionsPage() {
         <SheetContent>
           <SheetHeader>
             <SheetTitle>Connect a vendor</SheetTitle>
-            <SheetDescription>One admin key per vendor org.</SheetDescription>
+            <SheetDescription>
+              One admin key per vendor org. To swap a key that stopped working,
+              use Replace key on its row instead.
+            </SheetDescription>
           </SheetHeader>
           <div className="px-4">
             <VendorConnectionForm
@@ -225,6 +254,42 @@ export default function SpendConnectionsPage() {
                       description: error.message,
                     }),
                 })
+              }
+            />
+          </div>
+        </SheetContent>
+      </Sheet>
+      <Sheet open={!!replacing} onOpenChange={(v) => !v && setReplacing(null)}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Replace key</SheetTitle>
+            <SheetDescription>
+              {replacing?.label} — pulled usage stays; the stored key is swapped
+              and the error cleared.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="px-4">
+            <ReplaceKeyForm
+              isPending={replaceKey.isPending}
+              onSubmit={(adminKey) =>
+                replacing &&
+                replaceKey.mutate(
+                  { id: replacing.id ?? "", adminKey },
+                  {
+                    onSuccess: () => {
+                      setReplacing(null)
+                      toast.add({
+                        title: "Key replaced",
+                        description: "Check the key, then sync.",
+                      })
+                    },
+                    onError: (error) =>
+                      toast.add({
+                        title: "Replace failed",
+                        description: error.message,
+                      }),
+                  }
+                )
               }
             />
           </div>

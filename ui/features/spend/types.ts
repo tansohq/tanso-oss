@@ -36,7 +36,7 @@ export interface SpendUsageReportDto {
     cacheReadTokens: number
     cacheCreationTokens: number
     outputTokens: number
-    requests: number
+    requests?: number | null
     vendorCostCents: number
     meteredCostCents: number
   }
@@ -47,10 +47,11 @@ export interface SpendUsageReportDto {
     cacheReadTokens: number
     cacheCreationTokens: number
     outputTokens: number
-    requests: number
+    requests?: number | null
     meteredCostCents: number
-    vendorCostCents?: number
+    vendorCostCents?: number | null
     priced: boolean
+    cacheRatesKnown: boolean
   }[]
   byDay: {
     date: string

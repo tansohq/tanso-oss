@@ -15,20 +15,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.service.internal.spend;
+package com.tansoflow.tansocore.model.spend.request;
 
-import com.tansoflow.tansocore.model.spend.VendorConnectionDto;
-import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
+import lombok.ToString;
 
-import java.util.List;
-
-public interface VendorConnectionService {
-    List<VendorConnectionDto> list(String accountId);
-
-    VendorConnectionDto create(String accountId, CreateVendorConnectionRequest request);
-
-    /** Swaps the stored admin key in place and clears any recorded error; usage already pulled stays. */
-    VendorConnectionDto replaceKey(String accountId, String connectionId, String adminKey);
-
-    void delete(String accountId, String connectionId);
+@Data
+public class ReplaceVendorKeyRequest {
+    @NotBlank
+    @ToString.Exclude
+    @Schema(description = "The new vendor admin key. Stored encrypted; never returned.")
+    private String adminKey;
 }

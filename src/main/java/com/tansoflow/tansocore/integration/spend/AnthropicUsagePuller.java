@@ -181,11 +181,12 @@ public class AnthropicUsagePuller implements VendorUsagePuller {
             return client.get().uri(uri)
                     .header("x-api-key", adminKey)
                     .header("anthropic-version", VERSION_HEADER)
+                    .header("User-Agent", VendorErrors.USER_AGENT)
                     .retrieve()
                     .body(JsonNode.class);
         } catch (RestClientResponseException e) {
             throw new VendorApiException(e.getStatusCode().value(),
-                    "Anthropic admin API returned " + e.getStatusCode().value() + ": " + e.getResponseBodyAsString());
+                    "Anthropic admin API returned " + e.getStatusCode().value() + ": " + VendorErrors.message(e.getResponseBodyAsString()));
         } catch (ResourceAccessException e) {
             throw new VendorApiException("Could not reach the Anthropic admin API: " + e.getMessage(), e);
         }

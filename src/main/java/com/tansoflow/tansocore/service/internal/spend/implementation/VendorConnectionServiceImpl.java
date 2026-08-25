@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.entity.VendorConnection;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.spend.VendorConnectionDto;
 import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest;
+import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
@@ -59,6 +60,23 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         connection.setLabel(request.getLabel().trim());
         connection.setAdminKey(adminKey);
         connection.setKeyHint(hintOf(adminKey));
+        return toDto(vendorConnectionRepository.save(connection));
+    }
+
+    @Override
+    @Transactional
+    public VendorConnectionDto replaceKey(String accountId, String connectionId, String adminKey) {
+        VendorConnection connection = vendorConnectionRepository
+                .findByIdAndAccountId(UUID.fromString(connectionId), UUID.fromString(accountId))
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
+        String trimmed = adminKey.trim();
+        if (trimmed.isEmpty()) {
+            throw new IllegalArgumentException("adminKey is empty");
+        }
+        connection.setAdminKey(trimmed);
+        connection.setKeyHint(hintOf(trimmed));
+        connection.setStatus(VendorConnectionStatus.ACTIVE);
+        connection.setLastError(null);
         return toDto(vendorConnectionRepository.save(connection));
     }
 

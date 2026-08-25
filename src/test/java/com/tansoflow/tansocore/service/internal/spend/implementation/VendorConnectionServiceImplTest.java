@@ -105,6 +105,27 @@ class VendorConnectionServiceImplTest {
     }
 
     @Test
+    void replaceKeySwapsHintAndClearsTheError() {
+        UUID id = UUID.randomUUID();
+        VendorConnection connection = new VendorConnection();
+        connection.setId(id);
+        connection.setAdminKey("old");
+        connection.setKeyHint("old");
+        connection.setStatus(com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus.ERROR);
+        connection.setLastError("401");
+        when(vendorConnectionRepository.findByIdAndAccountId(id, accountId)).thenReturn(Optional.of(connection));
+        when(vendorConnectionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        VendorConnectionDto dto = service.replaceKey(accountId.toString(), id.toString(), " sk-ant-admin01-new-9999 ");
+
+        assertEquals("sk-ant-admin01-new-9999", connection.getAdminKey());
+        assertEquals("9999", dto.getKeyHint());
+        assertEquals(com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus.ACTIVE, dto.getStatus());
+        assertEquals(null, dto.getLastError());
+        assertThrows(IllegalArgumentException.class, () -> service.replaceKey(accountId.toString(), id.toString(), "  "));
+    }
+
+    @Test
     void deleteIsSoftAndScopedToTheAccount() {
         UUID id = UUID.randomUUID();
         VendorConnection connection = new VendorConnection();

@@ -50,6 +50,12 @@ class EncryptedStringConverterTest {
     }
 
     @Test
+    void emptyMeansNoSecretAndStaysEmpty() {
+        assertEquals("", converter.convertToDatabaseColumn(""));
+        assertEquals("", converter.convertToEntityAttribute(""));
+    }
+
+    @Test
     void nullBothWays() {
         assertNull(converter.convertToDatabaseColumn(null));
         assertNull(converter.convertToEntityAttribute(null));
