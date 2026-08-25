@@ -34,7 +34,9 @@ import com.tansoflow.tansocore.service.internal.spend.VendorSyncService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -57,12 +59,15 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     private final VendorConnectionRepository connectionRepository;
     private final VendorUsageBucketRepository bucketRepository;
     private final Map<VendorProvider, VendorUsagePuller> pullers = new EnumMap<>(VendorProvider.class);
+    private final TransactionTemplate transactionTemplate;
 
     public VendorSyncServiceImpl(VendorConnectionRepository connectionRepository,
                                  VendorUsageBucketRepository bucketRepository,
-                                 List<VendorUsagePuller> pullers) {
+                                 List<VendorUsagePuller> pullers,
+                                 PlatformTransactionManager transactionManager) {
         this.connectionRepository = connectionRepository;
         this.bucketRepository = bucketRepository;
+        this.transactionTemplate = new TransactionTemplate(transactionManager);
         for (VendorUsagePuller puller : pullers) {
             this.pullers.put(puller.provider(), puller);
         }
@@ -82,8 +87,9 @@ public class VendorSyncServiceImpl implements VendorSyncService {
         }
     }
 
+    // A vendor refusal must leave the connection marked ERROR, so it must not roll the transaction back.
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = VendorApiException.class)
     public VendorSyncResultDto sync(String accountId, String connectionId, LocalDate from, LocalDate to) {
         VendorConnection connection = require(accountId, connectionId);
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
@@ -100,21 +106,24 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     @Override
     public void syncAll() {
         LocalDate end = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-        for (VendorConnection connection : connectionRepository.findAll()) {
+        LocalDate from = end.minusDays(JOB_WINDOW_DAYS);
+        // Programmatic transactions: a call through `this` would not pass the
+        // Spring proxy, and the delete+rewrite of a window has to be one unit.
+        for (VendorConnection listed : connectionRepository.findAll()) {
+            UUID id = listed.getId();
             try {
-                syncOne(connection.getId(), end.minusDays(JOB_WINDOW_DAYS), end);
+                transactionTemplate.executeWithoutResult(status -> {
+                    VendorConnection connection = connectionRepository.findById(id)
+                            .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + id));
+                    pullWindow(connection, from, end);
+                });
             } catch (VendorApiException e) {
-                // Already recorded on the connection; keep going so one bad key does not stall the rest.
-                log.warn("Vendor sync failed for connection {}: {}", connection.getId(), e.getMessage());
+                // The failed transaction rolled the ERROR mark back with it; record it on its own.
+                transactionTemplate.executeWithoutResult(status ->
+                        connectionRepository.findById(id).ifPresent(c -> markFailed(c, e)));
+                log.warn("Vendor sync failed for connection {}: {}", id, e.getMessage());
             }
         }
-    }
-
-    @Transactional
-    protected void syncOne(UUID connectionId, LocalDate from, LocalDate to) {
-        VendorConnection connection = connectionRepository.findById(connectionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
-        pullWindow(connection, from, to);
     }
 
     private int pullWindow(VendorConnection connection, LocalDate from, LocalDate to) {

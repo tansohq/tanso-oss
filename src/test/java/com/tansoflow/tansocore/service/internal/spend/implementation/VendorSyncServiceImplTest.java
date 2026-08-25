@@ -69,6 +69,8 @@ class VendorSyncServiceImplTest {
     private VendorUsageBucketRepository bucketRepository;
     @Mock
     private VendorUsagePuller anthropic;
+    @Mock
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
 
     private VendorSyncServiceImpl service;
     private final UUID accountId = UUID.randomUUID();
@@ -78,7 +80,7 @@ class VendorSyncServiceImplTest {
     @BeforeEach
     void setUp() {
         when(anthropic.provider()).thenReturn(VendorProvider.ANTHROPIC);
-        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, List.of(anthropic));
+        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, List.of(anthropic), transactionManager);
         Account account = new Account();
         account.setId(accountId);
         connection = new VendorConnection();
@@ -168,7 +170,11 @@ class VendorSyncServiceImplTest {
         service.syncAll();
 
         assertEquals(VendorConnectionStatus.ERROR, connection.getStatus());
+        assertTrue(connection.getLastError().contains("nope"));
         assertEquals(VendorConnectionStatus.ACTIVE, other.getStatus());
         assertNotNull(other.getLastSyncedAt());
+        // one transaction per connection, plus one to record the failure outside the rolled-back one
+        verify(transactionManager, times(3)).getTransaction(any());
+        verify(transactionManager, times(1)).rollback(any());
     }
 }

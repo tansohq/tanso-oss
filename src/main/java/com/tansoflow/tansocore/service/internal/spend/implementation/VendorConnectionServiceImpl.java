@@ -25,6 +25,7 @@ import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest
 import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
+import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -40,6 +41,7 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class VendorConnectionServiceImpl implements VendorConnectionService {
     private final VendorConnectionRepository vendorConnectionRepository;
+    private final VendorUsageBucketRepository vendorUsageBucketRepository;
     private final AccountRepository accountRepository;
 
     @Override
@@ -86,8 +88,10 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         VendorConnection connection = vendorConnectionRepository
                 .findByIdAndAccountId(UUID.fromString(connectionId), UUID.fromString(accountId))
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
-        // Soft-deleted for the audit trail, but the credential itself does not
-        // need to outlive the disconnect.
+        // Soft-deleted for the audit trail, but neither the credential nor the
+        // pulled usage outlives the disconnect: reconnecting the same org would
+        // otherwise count its window twice.
+        vendorUsageBucketRepository.deleteByConnectionId(connection.getId());
         connection.setAdminKey("");
         connection.setDeletedAt(Instant.now());
         vendorConnectionRepository.save(connection);

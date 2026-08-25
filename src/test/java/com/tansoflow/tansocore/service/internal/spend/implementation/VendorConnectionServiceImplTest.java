@@ -50,6 +50,8 @@ class VendorConnectionServiceImplTest {
     private VendorConnectionRepository vendorConnectionRepository;
     @Mock
     private AccountRepository accountRepository;
+    @Mock
+    private com.tansoflow.tansocore.repository.VendorUsageBucketRepository bucketRepository;
 
     private VendorConnectionServiceImpl service;
     private final UUID accountId = UUID.randomUUID();
@@ -57,7 +59,7 @@ class VendorConnectionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new VendorConnectionServiceImpl(vendorConnectionRepository, accountRepository);
+        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, accountRepository);
         account = new Account();
         account.setId(accountId);
     }
@@ -137,6 +139,7 @@ class VendorConnectionServiceImplTest {
 
         assertNotNull(connection.getDeletedAt());
         assertEquals("", connection.getAdminKey());
+        verify(bucketRepository).deleteByConnectionId(id);
         verify(vendorConnectionRepository).save(connection);
     }
 

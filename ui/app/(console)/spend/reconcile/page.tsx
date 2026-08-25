@@ -54,9 +54,20 @@ function signed(cents: number | undefined | null): string {
 
 export default function SpendReconcilePage() {
   const initial = lastFullMonth()
-  const [from, setFrom] = useState(initial.from)
-  const [to, setTo] = useState(initial.to)
-  const report = useSpendReconcile(from, to)
+  const [range, setRange] = useState({ from: initial.from, to: initial.to })
+  const [draft, setDraft] = useState(range)
+  // Date inputs emit every partial value while typing a year; only a complete,
+  // ordered range reaches the query key.
+  const commit = () => {
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(draft.from) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(draft.to) &&
+      draft.from < draft.to
+    ) {
+      setRange(draft)
+    }
+  }
+  const report = useSpendReconcile(range.from, range.to)
   const invoices = useVendorInvoices()
   const importInvoice = useImportVendorInvoice()
   const deleteInvoice = useDeleteVendorInvoice()
@@ -78,8 +89,10 @@ export default function SpendReconcilePage() {
             <Input
               id="rec-from"
               type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              value={draft.from}
+              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && commit()}
             />
           </div>
           <div className="grid gap-1">
@@ -87,8 +100,10 @@ export default function SpendReconcilePage() {
             <Input
               id="rec-to"
               type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
+              value={draft.to}
+              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && commit()}
             />
           </div>
           <Button onClick={() => setOpen(true)}>
@@ -112,7 +127,7 @@ export default function SpendReconcilePage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              {from} → {to}
+              {range.from} → {range.to}
             </CardTitle>
             <CardDescription>
               Metered is an estimate when a model is unpriced or a cache rate is

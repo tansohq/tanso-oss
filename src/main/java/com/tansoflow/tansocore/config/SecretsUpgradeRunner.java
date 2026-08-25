@@ -47,6 +47,21 @@ public class SecretsUpgradeRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // Fail fast if the key no longer matches what is stored: every Stripe and
+        // vendor path would otherwise 500 on first touch with no way to recover
+        // from the console.
+        List<String> sample = jdbcTemplate.queryForList(
+                "SELECT key_value FROM external_api_keys WHERE key_value LIKE ? LIMIT 1", String.class,
+                SecretCipher.PREFIX + "%");
+        if (!sample.isEmpty()) {
+            try {
+                cipher.decrypt(sample.get(0));
+            } catch (IllegalStateException e) {
+                throw new IllegalStateException(
+                        "APP_SECRETS_KEY does not decrypt the secrets already stored in external_api_keys. "
+                                + "Restore the previous key, or clear the table (DELETE FROM external_api_keys) and reconnect Stripe and vendors.", e);
+            }
+        }
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT external_api_key_id, key_value FROM external_api_keys WHERE key_value NOT LIKE ?",
                 SecretCipher.PREFIX + "%");

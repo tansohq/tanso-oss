@@ -35,6 +35,10 @@ public interface VendorUsageBucketRepository extends JpaRepository<VendorUsageBu
             + "AND b.bucketStart >= :from AND b.bucketStart < :to")
     int deleteWindow(UUID connectionId, VendorUsageSource source, Instant from, Instant to);
 
+    @Modifying
+    @Query("DELETE FROM VendorUsageBucket b WHERE b.connectionId = :connectionId")
+    int deleteByConnectionId(UUID connectionId);
+
     List<VendorUsageBucket> findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(
             UUID accountId, Instant from, Instant to);
 }

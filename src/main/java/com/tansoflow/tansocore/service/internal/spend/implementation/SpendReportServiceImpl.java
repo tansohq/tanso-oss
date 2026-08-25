@@ -50,6 +50,8 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class SpendReportServiceImpl implements SpendReportService {
     static final int DEFAULT_WINDOW_DAYS = 30;
+    /** Buckets are aggregated in memory; a year is the most a report page should ever ask for. */
+    static final int MAX_SPAN_DAYS = 366;
 
     private final VendorUsageBucketRepository bucketRepository;
     private final VendorInvoiceRepository invoiceRepository;
@@ -62,6 +64,9 @@ public class SpendReportServiceImpl implements SpendReportService {
         LocalDate start = from != null ? from : end.minusDays(DEFAULT_WINDOW_DAYS);
         if (!start.isBefore(end)) {
             throw new IllegalArgumentException("from must be before to");
+        }
+        if (start.plusDays(MAX_SPAN_DAYS).isBefore(end)) {
+            throw new IllegalArgumentException("Window is longer than " + MAX_SPAN_DAYS + " days");
         }
         List<VendorUsageBucket> buckets = load(accountId, start, end);
 
@@ -152,6 +157,19 @@ public class SpendReportServiceImpl implements SpendReportService {
                     .vendorCostCents(vendorCostByModel.get(e.getKey()))
                     .build());
         }
+        // Cost the vendor attributes to something no usage row names (OpenAI "Image models",
+        // "Fine-tuning", …) still belongs in the table, or the column under-sums its own total.
+        for (Map.Entry<String, BigDecimal> e : vendorCostByModel.entrySet()) {
+            if (!byModel.containsKey(e.getKey())) {
+                int bar = e.getKey().indexOf('|');
+                modelRows.add(SpendUsageReportDto.ModelRow.builder()
+                        .provider(VendorProvider.valueOf(e.getKey().substring(0, bar)))
+                        .model(e.getKey().substring(bar + 1))
+                        .meteredCostCents(BigDecimal.ZERO).vendorCostCents(e.getValue())
+                        .priced(true).cacheRatesKnown(true)
+                        .build());
+            }
+        }
         modelRows.sort(Comparator.comparing(SpendUsageReportDto.ModelRow::getMeteredCostCents).reversed());
 
         List<SpendUsageReportDto.DayRow> dayRows = new ArrayList<>();
@@ -200,6 +218,9 @@ public class SpendReportServiceImpl implements SpendReportService {
         }
         if (endInclusive.isBefore(start)) {
             throw new IllegalArgumentException("to is before from");
+        }
+        if (start.plusDays(MAX_SPAN_DAYS).isBefore(endInclusive)) {
+            throw new IllegalArgumentException("Window is longer than " + MAX_SPAN_DAYS + " days");
         }
         List<VendorUsageBucket> buckets = load(accountId, start, endInclusive.plusDays(1));
         Map<VendorProvider, BigDecimal[]> sums = new EnumMap<>(VendorProvider.class);

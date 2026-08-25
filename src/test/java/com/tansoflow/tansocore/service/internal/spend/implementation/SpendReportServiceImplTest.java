@@ -89,6 +89,26 @@ class SpendReportServiceImplTest {
     }
 
     @Test
+    void costOnlyLineItemsGetTheirOwnRow() {
+        VendorUsageBucket images = bucket(VendorUsageSource.COST_API, day1, "Image models", null, 0, 0, 0, 0, null, "1200");
+        images.setProvider(VendorProvider.OPENAI);
+        when(bucketRepository.findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(eq(accountId), any(), any()))
+                .thenReturn(List.of(images));
+        SpendUsageReportDto r = service.usage(accountId.toString(), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 2));
+        assertEquals(1, r.getByModel().size());
+        assertEquals("Image models", r.getByModel().get(0).getModel());
+        assertEquals(VendorProvider.OPENAI, r.getByModel().get(0).getProvider());
+        assertEquals(0, new BigDecimal("1200").compareTo(r.getByModel().get(0).getVendorCostCents()));
+        assertEquals(0, new BigDecimal("1200").compareTo(r.getTotals().getVendorCostCents()));
+    }
+
+    @Test
+    void windowsOverAYearAreRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.usage(accountId.toString(), LocalDate.of(2025, 1, 1), LocalDate.of(2026, 7, 1)));
+    }
+
+    @Test
     void invertedWindowsAreRejected() {
         assertThrows(IllegalArgumentException.class,
                 () -> service.usage(accountId.toString(), LocalDate.of(2026, 7, 2), LocalDate.of(2026, 7, 1)));

@@ -30,9 +30,20 @@ import { isBuildSideOff, useSpendUsage } from "@/features/spend/queries"
 import { formatNumber } from "@/lib/format"
 
 export default function SpendUsagePage() {
-  const [from, setFrom] = useState(daysAgo(29))
-  const [to, setTo] = useState(daysAgo(-1))
-  const report = useSpendUsage(from, to)
+  const [range, setRange] = useState({ from: daysAgo(29), to: daysAgo(-1) })
+  const [draft, setDraft] = useState(range)
+  // Date inputs emit every partial value while typing a year; only a complete,
+  // ordered range reaches the query key.
+  const commit = () => {
+    if (
+      /^\d{4}-\d{2}-\d{2}$/.test(draft.from) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(draft.to) &&
+      draft.from < draft.to
+    ) {
+      setRange(draft)
+    }
+  }
+  const report = useSpendUsage(range.from, range.to)
   const data = report.data
 
   return (
@@ -53,8 +64,10 @@ export default function SpendUsagePage() {
             <Input
               id="usage-from"
               type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
+              value={draft.from}
+              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && commit()}
             />
           </div>
           <div className="grid gap-1">
@@ -62,8 +75,10 @@ export default function SpendUsagePage() {
             <Input
               id="usage-to"
               type="date"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
+              value={draft.to}
+              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
+              onBlur={commit}
+              onKeyDown={(e) => e.key === "Enter" && commit()}
             />
           </div>
         </div>

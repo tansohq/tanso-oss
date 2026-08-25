@@ -94,9 +94,6 @@ public class VendorConnection {
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;
 
-    @Column(name = "sync_cursor", length = Integer.MAX_VALUE)
-    private String syncCursor;
-
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
