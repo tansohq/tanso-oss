@@ -251,6 +251,7 @@ supply them via environment variables. The common ones:
 | `SPRING_PROFILES_ACTIVE` | Active profile (`dev`, `staging`, `sandbox`, `prod`) |
 | `SPRING_DATASOURCE_URL` / `_USERNAME` / `_PASSWORD` | PostgreSQL connection |
 | `JWT_SECRET` | Signing secret for UI session tokens |
+| `APP_SECRETS_KEY` | Encrypts stored integration credentials (Stripe keys, vendor admin keys) at rest. Required; rotating it requires re-entering every connected key |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe integration |
 | `RESEND_API_KEY` | Transactional email |
 | `OPENAI_API_KEY` | AI features (optional) |

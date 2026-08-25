@@ -26,6 +26,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       # Required — the app fails to start without it (no insecure default shipped)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set — e.g. openssl rand -base64 48}
+      APP_SECRETS_KEY: ${APP_SECRETS_KEY:?APP_SECRETS_KEY must be set — e.g. openssl rand -base64 48; it encrypts stored Stripe and vendor admin keys}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Optional MCP server for AI agents — both must be true to expose /mcp

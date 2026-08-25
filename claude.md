@@ -73,6 +73,8 @@ Powers the bundled admin console (`ui/`, Next.js + shadcn/ui) for managing the p
 | Property | Default | Description |
 | :--- | :--- | :--- |
 | `app.dogfooding-enabled` | `true` | When `false`, skips Tanso Platform entitlement checks and usage tracking. Useful for local dev. |
+| `app.secrets.key` | — (required) | `APP_SECRETS_KEY`. AES-256-GCM key material for `SecretCipher`; `external_api_keys.key_value` (and any column using `EncryptedStringConverter`) is stored as `enc:v1:…`. Startup fails without it; `SecretsUpgradeRunner` encrypts legacy plaintext rows on boot. |
+| `app.modules.build.enabled` | `true` | Build side (internal AI spend): `/api/v1/spend/**` and the console Spend section. Off = serve-side-only install. |
 | `app.telemetry.enabled` | `true` | Anonymous daily instance ping (`TANSO_TELEMETRY_ENABLED=false` to opt out). Entire surface is one class, `TelemetryPingJob`; payload is documented verbatim in the README (random `instance_id` UUID, version, entity counts, coarse event-volume bucket — no PII, no financial data, no keys). |
 | `app.telemetry.endpoint` | `https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping` | Where the ping posts — Supabase edge function `ping` (project `tanso-telemetry`), inserts into `telemetry_pings`. Swap to `telemetry.tansohq.com` if/when DNS is set up. |
 

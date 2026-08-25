@@ -40,6 +40,18 @@ public class AppProperty {
     private String apiKeyPrefix;
     private String defaultFreePlanId;
     private Telemetry telemetry = new Telemetry();
+    private Modules modules = new Modules();
+
+    /** Which halves of the product this install runs. Both on by default. */
+    @Data
+    public static class Modules {
+        private Build build = new Build();
+
+        @Data
+        public static class Build {
+            private boolean enabled = true;
+        }
+    }
 
     @Data
     public static class Telemetry {

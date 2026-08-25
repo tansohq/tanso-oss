@@ -17,7 +17,9 @@
  */
 package com.tansoflow.tansocore.entity;
 
+import com.tansoflow.tansocore.util.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
@@ -59,6 +61,7 @@ public class ExternalApiKey {
     private String keyType;
 
     @NotNull
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "key_value", nullable = false, length = Integer.MAX_VALUE)
     private String keyValue;
 

@@ -5,3 +5,6 @@ spring:
     password: dev_pass
   liquibase:
     enabled: false   # or true, if you want it during tests
+app:
+  secrets:
+    key: test-only-secrets-key

@@ -3,6 +3,9 @@
 app:
   # Keep this in env in prod so you can rotate/mask in logs
   stripe-webhook-endpoint: ${APP_WEBHOOK_ENDPOINT:https://example.com/public/stripe/ingest/webhook}
+  secrets:
+    # Local dev only. Provide your own via APP_SECRETS_KEY; this fallback is NOT secret and must never be used outside local dev.
+    key: ${APP_SECRETS_KEY:local-dev-insecure-secrets-key-change-me-0123456789abcdef}
   mcp:
     enabled: ${APP_MCP_ENABLED:false}
   resend:
