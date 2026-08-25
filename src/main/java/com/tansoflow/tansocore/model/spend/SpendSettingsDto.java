@@ -15,9 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Builder;
+import lombok.Getter;
+
+@Getter
+@Builder
+public class SpendSettingsDto {
+    @Schema(description = "Whether spend may be attributed to named people (PERSON units, the by-person view).")
+    private boolean personLevelEnabled;
+    @Schema(description = "What staff were told about spend attribution. Required to enable person level.")
+    private String workerNotice;
+    @Schema(description = "A Slack incoming webhook is stored for alerts. The URL itself is never returned.")
+    private boolean slackConfigured;
 }

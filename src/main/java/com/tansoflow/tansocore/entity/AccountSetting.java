@@ -86,6 +86,15 @@ public class AccountSetting {
     @Column(name = "agent_signup_hourly_cap", nullable = false)
     private int agentSignupHourlyCap = 10;
 
+    // Attributing spend to a named employee is a monitoring capability; off until the
+    // operator says so and has told their staff (the notice is required to enable it).
+    @ColumnDefault("false")
+    @Column(name = "spend_person_level_enabled", nullable = false)
+    private boolean spendPersonLevelEnabled = false;
+
+    @Column(name = "spend_worker_notice", length = Integer.MAX_VALUE)
+    private String spendWorkerNotice;
+
     // Max money one agent-initiated purchase may move; null = uncapped
     @Column(name = "agent_max_topup_amount", precision = 18, scale = 2)
     private java.math.BigDecimal agentMaxTopupAmount;

@@ -15,9 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.service.internal.spend;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.model.spend.SpendSettingsDto;
+import com.tansoflow.tansocore.model.spend.request.SpendSettingsRequest;
+
+public interface SpendSettingsService {
+    SpendSettingsDto get(String accountId);
+
+    SpendSettingsDto update(String accountId, SpendSettingsRequest request);
+
+    boolean personLevelEnabled(String accountId);
 }

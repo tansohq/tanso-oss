@@ -1,0 +1,94 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-4"
+      author: tanso
+      comment: >
+        Build side, allocate and control. spend_units are the people, teams
+        and projects internal AI spend gets allocated to; a unit may sit under
+        another so a team is the sum of its people. spend_attribution_rules
+        map a vendor dimension (workspace/project id, API key id, actor) onto
+        a unit; allocation applies them at report time, so a rule change
+        re-allocates history without a re-sync. spend_budgets are two clocks
+        per unit on calendar windows — a small daily one to catch a runaway
+        agent, a monthly one for the real ceiling — with an alert threshold.
+        spend_alerts is what fired and who acknowledged it; one row per
+        (unit, kind, window) so a breach is said once. Person-level
+        attribution is off by default (spend_person_level_enabled) and needs a
+        worker notice before it can be turned on: attributing spend to a
+        named employee is a monitoring capability, and the operator should
+        have to say so to their staff first.
+      changes:
+        - createTable:
+            tableName: spend_units
+            columns:
+              - column: { name: spend_unit_id, type: UUID, defaultValueComputed: gen_random_uuid(), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: account_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: type, type: VARCHAR(16), constraints: { nullable: false } }
+              - column: { name: name, type: VARCHAR(120), constraints: { nullable: false } }
+              - column: { name: email, type: VARCHAR(255) }
+              - column: { name: parent_id, type: UUID }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: NOW(), constraints: { nullable: false } }
+              - column: { name: deleted_at, type: TIMESTAMP WITH TIME ZONE }
+        - createIndex:
+            tableName: spend_units
+            indexName: idx_spend_units_account
+            columns:
+              - column: { name: account_id }
+        - createTable:
+            tableName: spend_attribution_rules
+            columns:
+              - column: { name: spend_attribution_rule_id, type: UUID, defaultValueComputed: gen_random_uuid(), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: account_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: spend_unit_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: provider, type: VARCHAR(32), constraints: { nullable: false } }
+              - column: { name: match_kind, type: VARCHAR(16), constraints: { nullable: false } }
+              - column: { name: match_value, type: VARCHAR(255), constraints: { nullable: false } }
+              - column: { name: priority, type: INTEGER, defaultValueNumeric: 100, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: NOW(), constraints: { nullable: false } }
+        - createIndex:
+            tableName: spend_attribution_rules
+            indexName: idx_spend_attribution_rules_account
+            columns:
+              - column: { name: account_id }
+        - createTable:
+            tableName: spend_budgets
+            columns:
+              - column: { name: spend_budget_id, type: UUID, defaultValueComputed: gen_random_uuid(), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: account_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: spend_unit_id, type: UUID, constraints: { nullable: false, unique: true } }
+              - column: { name: daily_cents, type: "NUMERIC(18, 2)" }
+              - column: { name: monthly_cents, type: "NUMERIC(18, 2)" }
+              - column: { name: alert_threshold, type: INTEGER, defaultValueNumeric: 80, constraints: { nullable: false } }
+              - column: { name: monthly_mode, type: VARCHAR(16), defaultValue: ALERT, constraints: { nullable: false } }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: NOW(), constraints: { nullable: false } }
+              - column: { name: modified_at, type: TIMESTAMP WITH TIME ZONE }
+        - createTable:
+            tableName: spend_alerts
+            columns:
+              - column: { name: spend_alert_id, type: UUID, defaultValueComputed: gen_random_uuid(), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: account_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: spend_unit_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: kind, type: VARCHAR(16), constraints: { nullable: false } }
+              - column: { name: period, type: VARCHAR(16) }
+              - column: { name: window_start, type: TIMESTAMP WITH TIME ZONE, constraints: { nullable: false } }
+              - column: { name: spent_cents, type: "NUMERIC(18, 2)", constraints: { nullable: false } }
+              - column: { name: limit_cents, type: "NUMERIC(18, 2)" }
+              - column: { name: message, type: VARCHAR(500), constraints: { nullable: false } }
+              - column: { name: fired_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: NOW(), constraints: { nullable: false } }
+              - column: { name: acked_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: acked_by, type: VARCHAR(255) }
+        - createIndex:
+            tableName: spend_alerts
+            indexName: idx_spend_alerts_account_fired
+            columns:
+              - column: { name: account_id }
+              - column: { name: fired_at }
+        - addUniqueConstraint:
+            tableName: spend_alerts
+            columnNames: spend_unit_id, kind, period, window_start
+            constraintName: uq_spend_alerts_once_per_window
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column: { name: spend_person_level_enabled, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: spend_worker_notice, type: TEXT }

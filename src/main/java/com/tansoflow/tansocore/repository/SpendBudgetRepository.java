@@ -15,9 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.repository;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.entity.SpendBudget;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface SpendBudgetRepository extends JpaRepository<SpendBudget, UUID> {
+    List<SpendBudget> findAllByAccountId(UUID accountId);
+
+    Optional<SpendBudget> findBySpendUnitIdAndAccountId(UUID spendUnitId, UUID accountId);
 }

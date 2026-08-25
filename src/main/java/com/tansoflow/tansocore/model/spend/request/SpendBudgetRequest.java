@@ -15,9 +15,25 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.request;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.model.spend.type.BudgetMode;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import lombok.Data;
+
+import java.math.BigDecimal;
+
+@Data
+public class SpendBudgetRequest {
+    @Schema(description = "Cents per UTC day. Null = no daily ceiling.")
+    private BigDecimal dailyCents;
+    @Schema(description = "Cents per calendar month. Null = no monthly ceiling.")
+    private BigDecimal monthlyCents;
+    @Min(1)
+    @Max(100)
+    @Schema(description = "Percent of either ceiling that raises a THRESHOLD alert. Default 80.")
+    private Integer alertThreshold;
+    private BudgetMode monthlyMode;
 }

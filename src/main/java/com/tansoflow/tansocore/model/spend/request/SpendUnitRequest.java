@@ -15,9 +15,25 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.request;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+import lombok.Data;
+
+@Data
+public class SpendUnitRequest {
+    @NotNull
+    private SpendUnitType type;
+    @NotBlank
+    @Size(max = 120)
+    private String name;
+    @Size(max = 255)
+    @Schema(description = "For PERSON units: the address Claude Code reports them under.")
+    private String email;
+    @Schema(description = "Unit this one rolls up into (a team for a person, a project for a team). Optional.")
+    private String parentId;
 }

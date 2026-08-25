@@ -15,9 +15,29 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
+import com.tansoflow.tansocore.model.spend.type.SpendAlertKind;
+import lombok.Builder;
+import lombok.Getter;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+
+@Getter
+@Builder
+public class SpendAlertDto {
+    private String id;
+    private String spendUnitId;
+    private String unitName;
+    private SpendAlertKind kind;
+    private BudgetPeriod period;
+    private Instant windowStart;
+    private BigDecimal spentCents;
+    private BigDecimal limitCents;
+    private String message;
+    private Instant firedAt;
+    private Instant ackedAt;
+    private String ackedBy;
 }

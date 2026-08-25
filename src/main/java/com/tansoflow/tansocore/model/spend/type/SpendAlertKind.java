@@ -15,9 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.type;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+/** THRESHOLD crossed the alert percentage, BREACH crossed the limit, SPIKE is today running well above the trailing week. */
+public enum SpendAlertKind {
+    THRESHOLD,
+    BREACH,
+    SPIKE
 }

@@ -58,6 +58,8 @@ class SpendReportServiceImplTest {
     private VendorInvoiceRepository invoiceRepository;
     @Mock
     private VendorCostEstimator estimator;
+    @Mock
+    private com.tansoflow.tansocore.service.internal.spend.SpendSettingsService settingsService;
 
     private SpendReportServiceImpl service;
     private final UUID accountId = UUID.randomUUID();
@@ -66,7 +68,8 @@ class SpendReportServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendReportServiceImpl(bucketRepository, invoiceRepository, estimator);
+        service = new SpendReportServiceImpl(bucketRepository, invoiceRepository, estimator, settingsService);
+        lenient().when(settingsService.personLevelEnabled(accountId.toString())).thenReturn(true);
         // sonnet: 1 cent per 1000 tokens of any class, cache rates known; mystery: unpriced
         lenient().when(estimator.estimate(eq("claude-sonnet-4-5"), anyLong(), anyLong(), anyLong(), anyLong()))
                 .thenAnswer(inv -> new VendorCostEstimator.Estimate(

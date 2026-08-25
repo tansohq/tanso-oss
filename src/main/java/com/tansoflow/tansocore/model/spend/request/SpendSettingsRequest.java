@@ -15,9 +15,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.request;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import io.swagger.v3.oas.annotations.media.Schema;
+import lombok.Data;
+import lombok.ToString;
+
+@Data
+public class SpendSettingsRequest {
+    private Boolean personLevelEnabled;
+    private String workerNotice;
+    @ToString.Exclude
+    @Schema(description = "Slack incoming webhook URL (https://hooks.slack.com/services/…). Stored encrypted. Empty string removes it; null leaves it alone.")
+    private String slackWebhookUrl;
 }

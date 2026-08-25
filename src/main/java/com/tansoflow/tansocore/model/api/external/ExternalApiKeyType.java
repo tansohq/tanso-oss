@@ -22,4 +22,6 @@ public enum ExternalApiKeyType {
 
     // Stripe webhook signing secret type
     WEBHOOK_SECRET_SIGNING,
+    // Slack incoming webhook URL for spend alerts
+    SLACK_SPEND_WEBHOOK,
 }

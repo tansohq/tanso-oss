@@ -15,9 +15,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.config;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.time.Clock;
+
+/** One clock so budget windows and tests agree on what "now" is. */
+@Configuration
+public class ClockConfig {
+    @Bean
+    public Clock clock() {
+        return Clock.systemUTC();
+    }
 }

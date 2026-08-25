@@ -19,8 +19,10 @@ package com.tansoflow.tansocore.controller.tanso.spend;
 
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
+import com.tansoflow.tansocore.model.spend.SpendAllocationReportDto;
 import com.tansoflow.tansocore.model.spend.SpendReconcileReportDto;
 import com.tansoflow.tansocore.model.spend.SpendUsageReportDto;
+import com.tansoflow.tansocore.service.internal.spend.SpendAllocationService;
 import com.tansoflow.tansocore.service.internal.spend.SpendReportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -47,6 +49,7 @@ import java.time.LocalDate;
 @Tag(name = "Spend — Reports", description = "Internal AI usage and the three-way reconcile (price book vs vendor report vs invoice)")
 public class SpendReportController {
     private final SpendReportService spendReportService;
+    private final SpendAllocationService spendAllocationService;
 
     @GetMapping("/usage")
     @Operation(summary = "Usage and cost for a window", description = "[from, to). Defaults to the last 30 days.",
@@ -59,6 +62,21 @@ public class SpendReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         SpendUsageReportDto report = spendReportService.usage(userContext.getAccountId(), from, to);
         return ResponseEntity.ok(ApiResponse.<SpendUsageReportDto>builder().data(report).success(true).build());
+    }
+
+    @GetMapping("/allocation")
+    @Operation(summary = "Metered spend allocated to units", description = "[from, to). Defaults to the last 30 days. Rules apply at report time.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendAllocationReportDto>> allocation(
+            @AuthenticationPrincipal UserContext userContext,
+            @Parameter(description = "First day, inclusive (UTC). Default: 30 days before `to`.")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @Parameter(description = "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.")
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        LocalDate end = to != null ? to : LocalDate.now(java.time.ZoneOffset.UTC).plusDays(1);
+        LocalDate start = from != null ? from : end.minusDays(30);
+        SpendAllocationReportDto report = spendAllocationService.allocate(userContext.getAccountId(), start, end);
+        return ResponseEntity.ok(ApiResponse.<SpendAllocationReportDto>builder().data(report).success(true).build());
     }
 
     @GetMapping("/reconcile")

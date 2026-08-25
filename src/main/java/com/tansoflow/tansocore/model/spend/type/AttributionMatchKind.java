@@ -15,9 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.type;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+/** Which vendor dimension a rule matches. WORKSPACE_ID covers OpenAI project ids too; ACTOR is a Claude Code email or OpenAI user id. */
+public enum AttributionMatchKind {
+    WORKSPACE_ID,
+    API_KEY_ID,
+    ACTOR
 }

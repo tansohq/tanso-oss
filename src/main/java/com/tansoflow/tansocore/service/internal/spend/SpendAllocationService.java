@@ -15,9 +15,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.service.internal.spend;
 
-public enum ExternalApiKeyEntityName {
-    STRIPE,
-    SLACK,
+import com.tansoflow.tansocore.model.spend.SpendAllocationReportDto;
+
+import java.time.LocalDate;
+
+public interface SpendAllocationService {
+    /** [from, to). Rules are applied at report time, so editing a rule re-allocates history. */
+    SpendAllocationReportDto allocate(String accountId, LocalDate from, LocalDate to);
 }
