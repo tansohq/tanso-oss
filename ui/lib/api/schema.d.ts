@@ -26,6 +26,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/units/{unitId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Rename or re-parent a unit */
+        put: operations["updateUnit"];
+        post?: never;
+        /** Remove a unit (its rules and budget go with it; children move up) */
+        delete: operations["deleteUnit"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/units/{unitId}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a unit's budget and where it stands */
+        get: operations["get"];
+        /** Set a unit's daily and/or monthly ceiling */
+        put: operations["put"];
+        post?: never;
+        /** Remove a unit's budget */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read spend settings */
+        get: operations["get_1"];
+        /**
+         * Update spend settings
+         * @description Person-level attribution needs a worker notice first. slackWebhookUrl is stored encrypted and never returned; send an empty string to remove it.
+         */
+        put: operations["update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/connections/{connectionId}/key": {
         parameters: {
             query?: never;
@@ -162,6 +220,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List spend units */
+        get: operations["listUnits"];
+        put?: never;
+        /** Create a team, person or project */
+        post: operations["createUnit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List attribution rules, highest priority first */
+        get: operations["listRules"];
+        put?: never;
+        /** Map a vendor workspace, key or actor onto a unit */
+        post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/invoices": {
         parameters: {
             query?: never;
@@ -238,6 +332,43 @@ export interface paths {
          * @description One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.
          */
         post: operations["probe"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/budgets/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check every budget now
+         * @description Also runs after each sync and hourly. Returns what fired this time.
+         */
+        post: operations["evaluate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/alerts/{alertId}/ack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge an alert */
+        post: operations["ack"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1109,6 +1240,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/allocation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Metered spend allocated to units
+         * @description [from, to). Defaults to the last 30 days. Rules apply at report time.
+         */
+        get: operations["allocation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List alerts, newest first */
+        get: operations["alerts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/subscriptions/scheduled-changes": {
         parameters: {
             query?: never;
@@ -1596,6 +1764,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a rule */
+        delete: operations["deleteRule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/invoices/{invoiceId}": {
         parameters: {
             query?: never;
@@ -1607,7 +1792,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Remove an imported invoice */
-        delete: operations["delete"];
+        delete: operations["delete_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1624,7 +1809,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Disconnect a vendor account */
-        delete: operations["delete_1"];
+        delete: operations["delete_2"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1816,6 +2001,92 @@ export interface components {
              */
             alertingSince?: string;
         };
+        SpendUnitRequest: {
+            /** @enum {string} */
+            type: "TEAM" | "PERSON" | "PROJECT";
+            name: string;
+            /** @description For PERSON units: the address Claude Code reports them under. */
+            email?: string;
+            /** @description Unit this one rolls up into (a team for a person, a project for a team). Optional. */
+            parentId?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendUnitDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendUnitDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendUnitDto: {
+            id?: string;
+            /** @enum {string} */
+            type?: "TEAM" | "PERSON" | "PROJECT";
+            name?: string;
+            email?: string;
+            parentId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        SpendBudgetRequest: {
+            /** @description Cents per UTC day. Null = no daily ceiling. */
+            dailyCents?: number;
+            /** @description Cents per calendar month. Null = no monthly ceiling. */
+            monthlyCents?: number;
+            /**
+             * Format: int32
+             * @description Percent of either ceiling that raises a THRESHOLD alert. Default 80.
+             */
+            alertThreshold?: number;
+            /** @enum {string} */
+            monthlyMode?: "ALERT" | "BLOCK";
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendBudgetDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendBudgetDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendBudgetDto: {
+            spendUnitId?: string;
+            dailyCents?: number;
+            monthlyCents?: number;
+            /** Format: int32 */
+            alertThreshold?: number;
+            /** @enum {string} */
+            monthlyMode?: "ALERT" | "BLOCK";
+            /** @description Spend so far in the current UTC day / calendar month, for the unit including descendants. */
+            dailySpentCents?: number;
+            monthlySpentCents?: number;
+            /** Format: date-time */
+            dailyResetsAt?: string;
+            /** Format: date-time */
+            monthlyResetsAt?: string;
+        };
+        SpendSettingsRequest: {
+            personLevelEnabled?: boolean;
+            workerNotice?: string;
+            /** @description Slack incoming webhook URL (https://hooks.slack.com/services/…). Stored encrypted. Empty string removes it; null leaves it alone. */
+            slackWebhookUrl?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendSettingsDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendSettingsDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendSettingsDto: {
+            /** @description Whether spend may be attributed to named people (PERSON units, the by-person view). */
+            personLevelEnabled?: boolean;
+            /** @description What staff were told about spend attribution. Required to enable person level. */
+            workerNotice?: string;
+            /** @description A Slack incoming webhook is stored for alerts. The URL itself is never returned. */
+            slackConfigured?: boolean;
+        };
         ReplaceVendorKeyRequest: {
             /** @description The new vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
@@ -1953,6 +2224,39 @@ export interface components {
             /** Format: int32 */
             imported?: number;
         };
+        SpendAttributionRuleRequest: {
+            spendUnitId: string;
+            /** @enum {string} */
+            provider: "ANTHROPIC" | "OPENAI";
+            /** @enum {string} */
+            matchKind: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
+            /** @description Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id). */
+            matchValue: string;
+            /**
+             * Format: int32
+             * @description Lower wins when several rules match one row. Default 100.
+             */
+            priority?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendAttributionRuleDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendAttributionRuleDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendAttributionRuleDto: {
+            id?: string;
+            spendUnitId?: string;
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            /** @enum {string} */
+            matchKind?: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
+            matchValue?: string;
+            /** Format: int32 */
+            priority?: number;
+        };
         /** @description Generic API response wrapper */
         ApiResponseVendorInvoiceDto: {
             /** @description Response data */
@@ -2020,6 +2324,41 @@ export interface components {
         VendorProbeResultDto: {
             ok?: boolean;
             message?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListSpendAlertDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendAlertDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendAlertDto: {
+            id?: string;
+            spendUnitId?: string;
+            unitName?: string;
+            /** @enum {string} */
+            kind?: "THRESHOLD" | "BREACH" | "SPIKE";
+            /** @enum {string} */
+            period?: "DAY" | "WEEK" | "MONTH" | "TOTAL";
+            /** Format: date-time */
+            windowStart?: string;
+            spentCents?: number;
+            limitCents?: number;
+            message?: string;
+            /** Format: date-time */
+            firedAt?: string;
+            /** Format: date-time */
+            ackedAt?: string;
+            ackedBy?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendAlertDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendAlertDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         SubscriptionRequest: {
             planId: string;
@@ -3358,6 +3697,22 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        /** @description Generic API response wrapper */
+        ApiResponseListSpendUnitDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendUnitDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListSpendAttributionRuleDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendAttributionRuleDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
         ActorRow: {
             /** @enum {string} */
             provider?: "ANTHROPIC" | "OPENAI";
@@ -3470,6 +3825,26 @@ export interface components {
             /** Format: date */
             to?: string;
             rows?: components["schemas"]["Row"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendAllocationReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendAllocationReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendAllocationReportDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            rows?: components["schemas"]["Row"][];
+            /** @description Metered cents no rule claimed. Always sums with the rows' own cents to totalMeteredCents. */
+            unattributedCents?: number;
+            totalMeteredCents?: number;
+            /** @description False when person-level attribution is off for the account; PERSON units then receive nothing. */
+            personLevelEnabled?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseListVendorInvoiceDto: {
@@ -4181,6 +4556,168 @@ export interface operations {
             };
         };
     };
+    updateUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendUnitDto"];
+                };
+            };
+        };
+    };
+    deleteUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
+    put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendSettingsDto"];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendSettingsDto"];
+                };
+            };
+        };
+    };
     replaceKey: {
         parameters: {
             query?: never;
@@ -4415,6 +4952,94 @@ export interface operations {
             };
         };
     };
+    listUnits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListSpendUnitDto"];
+                };
+            };
+        };
+    };
+    createUnit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendUnitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendUnitDto"];
+                };
+            };
+        };
+    };
+    listRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListSpendAttributionRuleDto"];
+                };
+            };
+        };
+    };
+    createRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendAttributionRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendAttributionRuleDto"];
+                };
+            };
+        };
+    };
     list: {
         parameters: {
             query?: never;
@@ -4556,6 +5181,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVendorProbeResultDto"];
+                };
+            };
+        };
+    };
+    evaluate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListSpendAlertDto"];
+                };
+            };
+        };
+    };
+    ack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                alertId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendAlertDto"];
                 };
             };
         };
@@ -6331,6 +6998,53 @@ export interface operations {
             };
         };
     };
+    allocation: {
+        parameters: {
+            query?: {
+                /** @description First day, inclusive (UTC). Default: 30 days before `to`. */
+                from?: string;
+                /** @description Day to stop at, EXCLUSIVE (UTC). Default: tomorrow. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendAllocationReportDto"];
+                };
+            };
+        };
+    };
+    alerts: {
+        parameters: {
+            query?: {
+                unackedOnly?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListSpendAlertDto"];
+                };
+            };
+        };
+    };
     getScheduledChanges: {
         parameters: {
             query?: never;
@@ -7050,7 +7764,29 @@ export interface operations {
             };
         };
     };
-    delete: {
+    deleteRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    delete_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -7072,7 +7808,7 @@ export interface operations {
             };
         };
     };
-    delete_1: {
+    delete_2: {
         parameters: {
             query?: never;
             header?: never;

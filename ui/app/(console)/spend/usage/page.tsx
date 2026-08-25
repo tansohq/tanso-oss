@@ -26,7 +26,11 @@ import {
   formatTokens,
   providerLabel,
 } from "@/features/spend/format"
-import { isBuildSideOff, useSpendUsage } from "@/features/spend/queries"
+import {
+  isBuildSideOff,
+  useSpendSettings,
+  useSpendUsage,
+} from "@/features/spend/queries"
 import { formatNumber } from "@/lib/format"
 
 export default function SpendUsagePage() {
@@ -44,6 +48,7 @@ export default function SpendUsagePage() {
     }
   }
   const report = useSpendUsage(range.from, range.to)
+  const settings = useSpendSettings()
   const data = report.data
 
   return (
@@ -223,63 +228,67 @@ export default function SpendUsagePage() {
           </Card>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>By person</CardTitle>
-                <CardDescription>
-                  Claude Code actors and OpenAI users. Tokens here are already
-                  inside the totals above.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Actor</TableHead>
-                      <TableHead className="text-right">Tokens</TableHead>
-                      <TableHead className="text-right">Sessions</TableHead>
-                      <TableHead className="text-right">Metered</TableHead>
-                      <TableHead className="text-right">Vendor est.</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(data?.byActor ?? []).map((row) => (
-                      <TableRow key={`${row.provider}-${row.actor}`}>
-                        <TableCell>
-                          {row.actor}
-                          <span className="ml-2 text-xs text-muted-foreground">
-                            {providerLabel[row.provider]}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatTokens(row.totalTokens)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatNumber(row.sessions)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCents(row.meteredCostCents)}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">
-                          {formatCents(row.vendorCostCents)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {data && data.byActor.length === 0 && (
+            {settings.data?.personLevelEnabled !== false && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>By person</CardTitle>
+                  <CardDescription>
+                    Claude Code actors and OpenAI users. Tokens here are already
+                    inside the totals above.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-muted-foreground"
-                        >
-                          No per-person data. Anthropic reports people only for
-                          Claude Code; OpenAI only for user-scoped keys.
-                        </TableCell>
+                        <TableHead>Actor</TableHead>
+                        <TableHead className="text-right">Tokens</TableHead>
+                        <TableHead className="text-right">Sessions</TableHead>
+                        <TableHead className="text-right">Metered</TableHead>
+                        <TableHead className="text-right">
+                          Vendor est.
+                        </TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {(data?.byActor ?? []).map((row) => (
+                        <TableRow key={`${row.provider}-${row.actor}`}>
+                          <TableCell>
+                            {row.actor}
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {providerLabel[row.provider]}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatTokens(row.totalTokens)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatNumber(row.sessions)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatCents(row.meteredCostCents)}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {formatCents(row.vendorCostCents)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                      {data && data.byActor.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center text-muted-foreground"
+                          >
+                            No per-person data. Anthropic reports people only
+                            for Claude Code; OpenAI only for user-scoped keys.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>By day</CardTitle>

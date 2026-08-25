@@ -2,7 +2,13 @@ import { useQuery } from "@tanstack/react-query"
 
 import { ApiError, apiFetch, queryString } from "@/lib/api/client"
 import type {
+  SpendAlertDto,
+  SpendAllocationReportDto,
+  SpendAttributionRuleDto,
+  SpendBudgetDto,
   SpendReconcileReportDto,
+  SpendSettingsDto,
+  SpendUnitDto,
   SpendUsageReportDto,
   VendorConnectionDto,
   VendorInvoiceDto,
@@ -47,5 +53,59 @@ export function useSpendReconcile(from: string, to: string) {
         `/api/v1/spend/reports/reconcile${queryString({ from, to })}`
       ),
     enabled: !!from && !!to,
+  })
+}
+
+export function useSpendUnits() {
+  return useQuery({
+    queryKey: ["spend-units"],
+    queryFn: () => apiFetch<SpendUnitDto[]>("/api/v1/spend/units"),
+  })
+}
+
+export function useSpendRules() {
+  return useQuery({
+    queryKey: ["spend-rules"],
+    queryFn: () => apiFetch<SpendAttributionRuleDto[]>("/api/v1/spend/rules"),
+  })
+}
+
+export function useSpendAllocation(from: string, to: string) {
+  return useQuery({
+    queryKey: ["spend-allocation", from, to],
+    queryFn: () =>
+      apiFetch<SpendAllocationReportDto>(
+        `/api/v1/spend/reports/allocation${queryString({ from, to })}`
+      ),
+    enabled: !!from && !!to,
+    retry: (count, error) => !isBuildSideOff(error) && count < 3,
+  })
+}
+
+export function useSpendBudget(unitId: string | null) {
+  return useQuery({
+    queryKey: ["spend-budget", unitId],
+    queryFn: () =>
+      apiFetch<SpendBudgetDto>(`/api/v1/spend/units/${unitId}/budget`),
+    enabled: !!unitId,
+    retry: false,
+  })
+}
+
+export function useSpendAlerts(unackedOnly: boolean) {
+  return useQuery({
+    queryKey: ["spend-alerts", unackedOnly],
+    queryFn: () =>
+      apiFetch<SpendAlertDto[]>(
+        `/api/v1/spend/alerts${queryString({ unackedOnly: String(unackedOnly) })}`
+      ),
+  })
+}
+
+export function useSpendSettings() {
+  return useQuery({
+    queryKey: ["spend-settings"],
+    queryFn: () => apiFetch<SpendSettingsDto>("/api/v1/spend/settings"),
+    retry: (count, error) => !isBuildSideOff(error) && count < 3,
   })
 }

@@ -113,6 +113,10 @@
             "description": "Manage customer lifecycles. Supports Flat, Usage, and Hybrid models. Hybrid plans combine a base price with usage-based feature rules."
         },
         {
+            "name": "Spend \u2014 Settings",
+            "description": "Person-level attribution, the worker notice, and the Slack webhook for alerts"
+        },
+        {
             "name": "Customer API Keys",
             "description": "Issue and manage customer-scoped API keys for end-customer agents"
         },
@@ -127,6 +131,10 @@
         {
             "name": "Monetization Rules",
             "description": "Operations for managing monetization rules (linking plans and features)"
+        },
+        {
+            "name": "Spend \u2014 Units & Attribution",
+            "description": "Teams, people and projects, and the rules that map vendor usage onto them"
         },
         {
             "name": "Spend \u2014 Reports",
@@ -151,6 +159,10 @@
         {
             "name": "AI Insights",
             "description": "AI-powered analytics insights"
+        },
+        {
+            "name": "Spend \u2014 Budgets & Alerts",
+            "description": "Daily and monthly ceilings per unit, and what they said"
         },
         {
             "name": "Analytics",
@@ -285,6 +297,261 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/units/{unitId}": {
+            "put": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "Rename or re-parent a unit",
+                "operationId": "updateUnit",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendUnitRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendUnitDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "Remove a unit (its rules and budget go with it; children move up)",
+                "operationId": "deleteUnit",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/units/{unitId}/budget": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Read a unit's budget and where it stands",
+                "operationId": "get",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Set a unit's daily and/or monthly ceiling",
+                "operationId": "put",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendBudgetRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Remove a unit's budget",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/settings": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Settings"
+                ],
+                "summary": "Read spend settings",
+                "operationId": "get_1",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendSettingsDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Spend \u2014 Settings"
+                ],
+                "summary": "Update spend settings",
+                "description": "Person-level attribution needs a worker notice first. slackWebhookUrl is stored encrypted and never returned; send an empty string to remove it.",
+                "operationId": "update",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendSettingsRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendSettingsDto"
                                 }
                             }
                         }
@@ -788,6 +1055,126 @@
                 }
             }
         },
+        "/api/v1/spend/units": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "List spend units",
+                "operationId": "listUnits",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListSpendUnitDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "Create a team, person or project",
+                "operationId": "createUnit",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendUnitRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendUnitDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/rules": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "List attribution rules, highest priority first",
+                "operationId": "listRules",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListSpendAttributionRuleDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "Map a vendor workspace, key or actor onto a unit",
+                "operationId": "createRule",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendAttributionRuleRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendAttributionRuleDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/invoices": {
             "get": {
                 "tags": [
@@ -1041,6 +1428,69 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseVendorProbeResultDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/budgets/evaluate": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Check every budget now",
+                "description": "Also runs after each sync and hourly. Returns what fired this time.",
+                "operationId": "evaluate",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListSpendAlertDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/alerts/{alertId}/ack": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Acknowledge an alert",
+                "operationId": "ack",
+                "parameters": [
+                    {
+                        "name": "alertId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendAlertDto"
                                 }
                             }
                         }
@@ -4364,6 +4814,92 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/allocation": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "Metered spend allocated to units",
+                "description": "[from, to). Defaults to the last 30 days. Rules apply at report time.",
+                "operationId": "allocation",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day, inclusive (UTC). Default: 30 days before `to`.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendAllocationReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/alerts": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "List alerts, newest first",
+                "operationId": "alerts",
+                "parameters": [
+                    {
+                        "name": "unackedOnly",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "boolean",
+                            "default": false
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListSpendAlertDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/monetization/subscriptions/scheduled-changes": {
             "get": {
                 "tags": [
@@ -6101,13 +6637,49 @@
                 }
             }
         },
+        "/api/v1/spend/rules/{ruleId}": {
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Units & Attribution"
+                ],
+                "summary": "Remove a rule",
+                "operationId": "deleteRule",
+                "parameters": [
+                    {
+                        "name": "ruleId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/invoices/{invoiceId}": {
             "delete": {
                 "tags": [
                     "Spend \u2014 Vendor Invoices"
                 ],
                 "summary": "Remove an imported invoice",
-                "operationId": "delete",
+                "operationId": "delete_1",
                 "parameters": [
                     {
                         "name": "invoiceId",
@@ -6143,7 +6715,7 @@
                     "Spend \u2014 Vendor Connections"
                 ],
                 "summary": "Disconnect a vendor account",
-                "operationId": "delete_1",
+                "operationId": "delete_2",
                 "parameters": [
                     {
                         "name": "connectionId",
@@ -6633,6 +7205,226 @@
                     }
                 }
             },
+            "SpendUnitRequest": {
+                "type": "object",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "TEAM",
+                            "PERSON",
+                            "PROJECT"
+                        ]
+                    },
+                    "name": {
+                        "type": "string",
+                        "maxLength": 120,
+                        "minLength": 0
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "For PERSON units: the address Claude Code reports them under.",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "parentId": {
+                        "type": "string",
+                        "description": "Unit this one rolls up into (a team for a person, a project for a team). Optional."
+                    }
+                },
+                "required": [
+                    "name",
+                    "type"
+                ]
+            },
+            "ApiResponseSpendUnitDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendUnitDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendUnitDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "TEAM",
+                            "PERSON",
+                            "PROJECT"
+                        ]
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    },
+                    "parentId": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "SpendBudgetRequest": {
+                "type": "object",
+                "properties": {
+                    "dailyCents": {
+                        "type": "number",
+                        "description": "Cents per UTC day. Null = no daily ceiling."
+                    },
+                    "monthlyCents": {
+                        "type": "number",
+                        "description": "Cents per calendar month. Null = no monthly ceiling."
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Percent of either ceiling that raises a THRESHOLD alert. Default 80.",
+                        "maximum": 100,
+                        "minimum": 1
+                    },
+                    "monthlyMode": {
+                        "type": "string",
+                        "enum": [
+                            "ALERT",
+                            "BLOCK"
+                        ]
+                    }
+                }
+            },
+            "ApiResponseSpendBudgetDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendBudgetDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendBudgetDto": {
+                "type": "object",
+                "properties": {
+                    "spendUnitId": {
+                        "type": "string"
+                    },
+                    "dailyCents": {
+                        "type": "number"
+                    },
+                    "monthlyCents": {
+                        "type": "number"
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "monthlyMode": {
+                        "type": "string",
+                        "enum": [
+                            "ALERT",
+                            "BLOCK"
+                        ]
+                    },
+                    "dailySpentCents": {
+                        "type": "number",
+                        "description": "Spend so far in the current UTC day / calendar month, for the unit including descendants."
+                    },
+                    "monthlySpentCents": {
+                        "type": "number"
+                    },
+                    "dailyResetsAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "monthlyResetsAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "SpendSettingsRequest": {
+                "type": "object",
+                "properties": {
+                    "personLevelEnabled": {
+                        "type": "boolean"
+                    },
+                    "workerNotice": {
+                        "type": "string"
+                    },
+                    "slackWebhookUrl": {
+                        "type": "string",
+                        "description": "Slack incoming webhook URL (https://hooks.slack.com/services/\u2026). Stored encrypted. Empty string removes it; null leaves it alone."
+                    }
+                }
+            },
+            "ApiResponseSpendSettingsDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendSettingsDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendSettingsDto": {
+                "type": "object",
+                "properties": {
+                    "personLevelEnabled": {
+                        "type": "boolean",
+                        "description": "Whether spend may be attributed to named people (PERSON units, the by-person view)."
+                    },
+                    "workerNotice": {
+                        "type": "string",
+                        "description": "What staff were told about spend attribution. Required to enable person level."
+                    },
+                    "slackConfigured": {
+                        "type": "boolean",
+                        "description": "A Slack incoming webhook is stored for alerts. The URL itself is never returned."
+                    }
+                }
+            },
             "ReplaceVendorKeyRequest": {
                 "type": "object",
                 "properties": {
@@ -6959,6 +7751,100 @@
                     }
                 }
             },
+            "SpendAttributionRuleRequest": {
+                "type": "object",
+                "properties": {
+                    "spendUnitId": {
+                        "type": "string",
+                        "minLength": 1
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "matchKind": {
+                        "type": "string",
+                        "enum": [
+                            "WORKSPACE_ID",
+                            "API_KEY_ID",
+                            "ACTOR"
+                        ]
+                    },
+                    "matchValue": {
+                        "type": "string",
+                        "description": "Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id).",
+                        "maxLength": 255,
+                        "minLength": 0
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Lower wins when several rules match one row. Default 100."
+                    }
+                },
+                "required": [
+                    "matchKind",
+                    "matchValue",
+                    "provider",
+                    "spendUnitId"
+                ]
+            },
+            "ApiResponseSpendAttributionRuleDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendAttributionRuleDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendAttributionRuleDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "spendUnitId": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "matchKind": {
+                        "type": "string",
+                        "enum": [
+                            "WORKSPACE_ID",
+                            "API_KEY_ID",
+                            "ACTOR"
+                        ]
+                    },
+                    "matchValue": {
+                        "type": "string"
+                    },
+                    "priority": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
             "ApiResponseVendorInvoiceDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -7143,6 +8029,104 @@
                     },
                     "message": {
                         "type": "string"
+                    }
+                }
+            },
+            "ApiResponseListSpendAlertDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/SpendAlertDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendAlertDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "spendUnitId": {
+                        "type": "string"
+                    },
+                    "unitName": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "THRESHOLD",
+                            "BREACH",
+                            "SPIKE"
+                        ]
+                    },
+                    "period": {
+                        "type": "string",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ]
+                    },
+                    "windowStart": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "spentCents": {
+                        "type": "number"
+                    },
+                    "limitCents": {
+                        "type": "number"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "firedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "ackedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "ackedBy": {
+                        "type": "string"
+                    }
+                }
+            },
+            "ApiResponseSpendAlertDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendAlertDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -10294,6 +11278,52 @@
                     }
                 }
             },
+            "ApiResponseListSpendUnitDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/SpendUnitDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ApiResponseListSpendAttributionRuleDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/SpendAttributionRuleDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "ActorRow": {
                 "type": "object",
                 "properties": {
@@ -10561,6 +11591,56 @@
                         "items": {
                             "$ref": "#/components/schemas/Row"
                         }
+                    }
+                }
+            },
+            "ApiResponseSpendAllocationReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendAllocationReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendAllocationReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Row"
+                        }
+                    },
+                    "unattributedCents": {
+                        "type": "number",
+                        "description": "Metered cents no rule claimed. Always sums with the rows' own cents to totalMeteredCents."
+                    },
+                    "totalMeteredCents": {
+                        "type": "number"
+                    },
+                    "personLevelEnabled": {
+                        "type": "boolean",
+                        "description": "False when person-level attribution is off for the account; PERSON units then receive nothing."
                     }
                 }
             },

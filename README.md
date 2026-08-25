@@ -267,6 +267,27 @@ It works from the vendor's admin API, not a proxy in your request path:
    OTHER), `model`, `quantity`. An invoice only counts toward a window it sits
    entirely inside.
 
+4. **Spend → Teams**: units (teams, projects, and — once switched on — people,
+   nested however you like) and attribution rules that map a vendor workspace
+   or project id, an API key id, or an actor onto a unit. Rules apply at
+   report time, so editing one re-allocates history. Whatever no rule claims
+   shows as **Unattributed**. Each unit can carry a budget: a small **daily**
+   ceiling that catches a runaway agent and a **monthly** one for the real
+   number (UTC calendar windows), with an alert threshold (default 80%).
+5. **Spend → Alerts**: threshold, breach and spike alerts, once per window,
+   checked after every sync and hourly; acknowledge to clear. Posted to a
+   Slack incoming webhook if one is stored under Spend settings. Tanso is not
+   in the request path, so a "Block" budget cannot stop a request — its alert
+   says so; enforce at your gateway or revoke the key.
+
+Person-level attribution is **off by default**. Attributing spend to a named
+employee is a monitoring capability (in Germany a works council can veto it);
+the switch under Spend settings will not turn on until you have written down
+what staff were told. While it is off, people cannot be created, person rules
+are skipped, and the by-person view stays empty. A person's Claude Code
+estimate is shown on the person and not rolled up into the team — the same
+traffic already reaches the team through its key rules.
+
 Pulled data lands in `vendor_usage_buckets` in the vendor's own dimensions
 (model, workspace/project, key, actor); a window is rewritten on every pull.
 `POST /api/v1/spend/connections/{id}/sync?from=&to=` pulls any window (`to`
@@ -276,8 +297,9 @@ dated, not timestamped. "Metered" means tokens × the price book; it is marked
 an estimate when a model is unpriced or has no cache rates. Seat lines on an
 invoice count toward "invoiced" but never appear in the vendor's token cost
 report, so "vendor − invoice" carries the seats.
-API: `/api/v1/spend/connections`, `/api/v1/spend/reports/usage`,
-`/api/v1/spend/reports/reconcile`, `/api/v1/spend/invoices` (console JWT only).
+API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,allocation}`,
+`/api/v1/spend/invoices`, `/api/v1/spend/units` (+ `/rules`, `/{id}/budget`),
+`/api/v1/spend/alerts`, `/api/v1/spend/settings` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at
 a gateway or proxy instead of the vendor. Next: allocation to teams and people
 with daily + monthly budgets, then the join to merged PRs and closed issues.
