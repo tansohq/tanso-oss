@@ -109,11 +109,13 @@ class VendorConnectionServiceImplTest {
         UUID id = UUID.randomUUID();
         VendorConnection connection = new VendorConnection();
         connection.setId(id);
+        connection.setAdminKey("sk-ant-admin01-secret");
         when(vendorConnectionRepository.findByIdAndAccountId(id, accountId)).thenReturn(Optional.of(connection));
 
         service.delete(accountId.toString(), id.toString());
 
         assertNotNull(connection.getDeletedAt());
+        assertEquals("", connection.getAdminKey());
         verify(vendorConnectionRepository).save(connection);
     }
 

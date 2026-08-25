@@ -19,7 +19,7 @@ import {
   useCreateVendorConnection,
   useDeleteVendorConnection,
 } from "@/features/spend/mutations"
-import { useVendorConnections } from "@/features/spend/queries"
+import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 import type { VendorConnectionDto } from "@/features/spend/types"
 import { VendorConnectionForm } from "@/features/spend/vendor-connection-form"
 
@@ -75,6 +75,12 @@ export default function SpendConnectionsPage() {
           disabled={remove.isPending}
           onClick={(event) => {
             event.stopPropagation()
+            if (
+              !window.confirm(
+                `Disconnect ${row.original.label}? Tanso forgets the key.`
+              )
+            )
+              return
             remove.mutate(row.original.id ?? "", {
               onSuccess: () => toast.add({ title: "Disconnected" }),
               onError: (error) =>
@@ -108,13 +114,20 @@ export default function SpendConnectionsPage() {
           Connect vendor
         </Button>
       </div>
-      <DataTable
-        columns={columns}
-        data={connections.data ?? []}
-        isLoading={connections.isPending}
-        emptyTitle="No vendors connected"
-        emptyDescription="Connect an Anthropic or OpenAI admin key to start pulling internal spend."
-      />
+      {isBuildSideOff(connections.error) ? (
+        <p className="text-sm text-muted-foreground">
+          The build side is switched off on this install
+          (APP_MODULES_BUILD_ENABLED=false).
+        </p>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={connections.data ?? []}
+          isLoading={connections.isPending}
+          emptyTitle="No vendors connected"
+          emptyDescription="Connect an Anthropic or OpenAI admin key to start pulling internal spend."
+        />
+      )}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent>
           <SheetHeader>

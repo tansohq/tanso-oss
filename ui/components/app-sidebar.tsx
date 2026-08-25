@@ -29,6 +29,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { clearToken, getClaims } from "@/lib/auth"
+import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 
 const catalogNav = [
   { title: "Plans", href: "/plans", icon: Package },
@@ -52,6 +53,8 @@ export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const email = getClaims()?.email
+  const vendorConnections = useVendorConnections()
+  const buildSideOff = isBuildSideOff(vendorConnections.error)
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href)
@@ -142,24 +145,26 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Spend</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {spendNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(item.href)}
-                  >
-                    <item.icon />
-                    {item.title}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {!buildSideOff && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Spend</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {spendNav.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(item.href)}
+                    >
+                      <item.icon />
+                      {item.title}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>

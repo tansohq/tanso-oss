@@ -80,7 +80,7 @@ prerequisite:
 ```bash
 git clone https://github.com/tansohq/tanso-oss.git
 cd tanso-oss/deploy
-cp .env.example .env     # set JWT_SECRET (e.g. openssl rand -base64 48)
+cp .env.example .env     # set JWT_SECRET and APP_SECRETS_KEY (openssl rand -base64 48 each)
 docker compose up -d --build
 ./setup.sh               # seeds a test account and prints credentials
 ```
@@ -169,6 +169,10 @@ docker exec deploy-postgres-1 psql -U tanso -d tanso -c \
    WHERE key_type='WEBHOOK_SECRET_SIGNING';"
 ```
 
+Stored secrets are normally encrypted (`enc:v1:…` under `APP_SECRETS_KEY`); a
+plaintext value written like this is still read correctly and gets encrypted
+on the next restart.
+
 Then pay a checkout with Stripe's test card `4242 4242 4242 4242` and watch
 the invoice flip to `PAID` and the subscription activate.
 
@@ -240,6 +244,24 @@ psql "postgresql://dev_user:dev_pass@localhost:5432/core_db" \
 
 ---
 
+## Internal AI spend (build side)
+
+The engine has two halves. The **serve side** — everything above — answers what
+it costs to serve each customer. The **build side** answers what your own AI
+spend is: the Anthropic and OpenAI bills for your engineers and agents.
+
+Today it is the door: **Spend → Connections** in the console stores a vendor
+admin key (Anthropic `sk-ant-admin01-…`, OpenAI admin key) encrypted at rest and
+shows only its last four characters. Tanso does not call the vendor yet —
+"Last synced: Never" is expected until the usage pull ships. What comes next,
+in order: the usage/cost pull and usage-vs-invoice reconcile, allocation to
+teams and people with daily + monthly budgets, and the join to merged PRs and
+closed issues.
+
+An Anthropic admin key can administer your whole org (there is no read-only
+scope on Console admin keys), so use a dedicated reporting org where you can.
+Set `APP_MODULES_BUILD_ENABLED=false` to run a serve-side-only install.
+
 ## Configuration
 
 Configuration lives in `src/main/resources/application-*.yaml`, one file per
@@ -259,6 +281,7 @@ supply them via environment variables. The common ones:
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
+| `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

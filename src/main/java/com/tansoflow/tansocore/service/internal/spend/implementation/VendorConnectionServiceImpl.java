@@ -68,6 +68,9 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         VendorConnection connection = vendorConnectionRepository
                 .findByIdAndAccountId(UUID.fromString(connectionId), UUID.fromString(accountId))
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
+        // Soft-deleted for the audit trail, but the credential itself does not
+        // need to outlive the disconnect.
+        connection.setAdminKey("");
         connection.setDeletedAt(Instant.now());
         vendorConnectionRepository.save(connection);
     }

@@ -23,6 +23,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 public class CreateVendorConnectionRequest {
@@ -35,6 +36,7 @@ public class CreateVendorConnectionRequest {
     private String label;
 
     @NotBlank
+    @ToString.Exclude
     @Schema(description = "Vendor admin key. Stored encrypted; never returned.")
     private String adminKey;
 }
