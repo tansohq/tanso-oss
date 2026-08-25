@@ -250,6 +250,8 @@ The engine has two halves. The **serve side** — everything above — answers w
 it costs to serve each customer. The **build side** answers what your own AI
 spend is: the Anthropic and OpenAI bills for your engineers and agents.
 
+<img src=".github/assets/screenshots/spend-usage.png" alt="Spend → Usage — internal AI usage by model, by person, by day; price-book cost next to the vendor's report" width="800" />
+
 It works from the vendor's admin API, not a proxy in your request path:
 
 1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`)
@@ -285,6 +287,10 @@ It works from the vendor's admin API, not a proxy in your request path:
    in the request path, so a "Block" budget cannot stop a request — its alert
    says so; enforce at your gateway or revoke the key.
 
+<img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
+
+<img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
+
 6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
    have any CI job post one: `POST /api/v1/client/outcomes` with the tenant
@@ -300,6 +306,8 @@ It works from the vendor's admin API, not a proxy in your request path:
    a unit's spend (with descendants) by its outcomes (with descendants):
    cost per merged PR, per team, per month. Pulled hourly for the last three
    days; re-pulls upsert.
+
+<img src=".github/assets/screenshots/spend-outcomes.png" alt="Spend → Outcomes — merged PRs and completed issues next to allocated spend: cost per outcome per unit" width="800" />
 
 Person-level attribution is **off by default**. Attributing spend to a named
 employee is a monitoring capability (in Germany a works council can veto it);
