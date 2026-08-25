@@ -40,4 +40,5 @@ export const providerLabel: Record<string, string> = {
   OPENAI: "OpenAI",
   CURSOR: "Cursor",
   COPILOT: "GitHub Copilot",
+  LITELLM: "LiteLLM",
 }

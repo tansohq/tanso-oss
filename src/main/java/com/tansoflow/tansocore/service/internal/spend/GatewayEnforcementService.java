@@ -15,13 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend.type;
+package com.tansoflow.tansocore.service.internal.spend;
 
-/** Where an operator's internal AI spend comes from. Phase 1 adds the pulls; this is the catalogue. */
-public enum VendorProvider {
-    ANTHROPIC,
-    OPENAI,
-    CURSOR,
-    COPILOT,
-    LITELLM
+import com.tansoflow.tansocore.entity.SpendBudget;
+
+public interface GatewayEnforcementService {
+    /**
+     * Pushes a Block budget to every gateway a unit's rules name, or clears
+     * it when the budget is no longer Block. Records the outcome on the
+     * budget; never throws — a gateway being down must not stop the save.
+     */
+    void apply(SpendBudget budget);
 }

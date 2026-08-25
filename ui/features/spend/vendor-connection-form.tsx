@@ -27,6 +27,7 @@ const providerItems = [
   { label: "OpenAI", value: "OPENAI" },
   { label: "Cursor", value: "CURSOR" },
   { label: "GitHub Copilot", value: "COPILOT" },
+  { label: "LiteLLM (gateway)", value: "LITELLM" },
 ]
 
 const keyLabel: Record<string, string> = {
@@ -34,6 +35,7 @@ const keyLabel: Record<string, string> = {
   OPENAI: "Admin key",
   CURSOR: "Admin API key",
   COPILOT: "GitHub token",
+  LITELLM: "Master key",
 }
 
 const keyHint: Record<string, string> = {
@@ -45,6 +47,8 @@ const keyHint: Record<string, string> = {
     "An Enterprise admin API key. Stored encrypted; Tanso reads usage events, spend and daily activity.",
   COPILOT:
     "A token with the View Organization Copilot Metrics permission (or read:org). Stored encrypted; Tanso reads the per-user daily reports.",
+  LITELLM:
+    "Your proxy's master key. Stored encrypted; Tanso reads spend logs and, for units with a Block budget, sets max_budget on the team, key or user a rule names — the one place a budget is actually enforced.",
 }
 
 interface VendorConnectionFormProps {
@@ -124,6 +128,18 @@ export function VendorConnectionForm({
           )}
           <p className="text-xs text-muted-foreground">{keyHint[provider]}</p>
         </Field>
+        {provider === "LITELLM" && (
+          <Field data-invalid={!!errors.scope || undefined}>
+            <FieldLabel htmlFor="vendor-scope">Proxy URL</FieldLabel>
+            <Input
+              id="vendor-scope"
+              placeholder="https://llm.internal:4000"
+              aria-invalid={!!errors.scope}
+              {...form.register("scope")}
+            />
+            {errors.scope && <FieldError>{errors.scope.message}</FieldError>}
+          </Field>
+        )}
         {provider === "COPILOT" && (
           <Field data-invalid={!!errors.scope || undefined}>
             <FieldLabel htmlFor="vendor-scope">GitHub organization</FieldLabel>

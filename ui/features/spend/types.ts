@@ -151,6 +151,9 @@ export interface SpendBudgetDto {
   monthlySpentCents: number
   dailyResetsAt?: string
   monthlyResetsAt?: string
+  enforcementTarget?: string | null
+  enforcedAt?: string | null
+  enforcementError?: string | null
 }
 
 export interface SpendAlertDto {

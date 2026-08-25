@@ -257,10 +257,11 @@ It works from the vendor's admin API, not a proxy in your request path:
 1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`),
    an OpenAI admin key, a Cursor admin API key (Enterprise; sent as HTTP
    Basic with the key as username; Cursor caps a window at 30 days, so a
-   longer sync is pulled in 30-day chunks), or a GitHub token with the *View
+   longer sync is pulled in 30-day chunks), a GitHub token with the *View
    Organization Copilot Metrics* permission plus the org name (a fine-grained
    PAT owned by an org admin; the org must have the Copilot metrics API
-   policy enabled; reports cover one UTC day each and 204 means no activity).
+   policy enabled; reports cover one UTC day each and 204 means no activity),
+   or a LiteLLM proxy's master key plus its URL.
    It is encrypted at rest and only its last four
    characters are ever shown. **Check key** makes one call to prove it works;
    **Sync now** pulls the last 30 days. An hourly job re-pulls the last three
@@ -293,8 +294,14 @@ It works from the vendor's admin API, not a proxy in your request path:
    trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
    Slack incoming webhook if one is stored under Spend settings. Tanso is not
-   in the request path, so a "Block" budget cannot stop a request — its alert
-   says so; enforce at your gateway or revoke the key.
+   in the request path, so on its own a "Block" budget cannot stop a request —
+   its alert says so. **Gateway mode**: connect a LiteLLM proxy and add a
+   LiteLLM rule to the unit (its team id, key or user); a Block budget is then
+   pushed to LiteLLM as that object's `max_budget` for the calendar month, the
+   budget card shows where it is enforced, and the proxy refuses requests past
+   the ceiling. Switching the budget back to Alert clears the limit. The
+   proxy's spend logs are pulled like any other vendor, with the team, key
+   and user LiteLLM already resolved per request.
 
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
@@ -346,7 +353,8 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
 `/api/v1/spend/reports/outcomes` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
-`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor. Next:
+`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
+LiteLLM connection carries its own proxy URL. Next:
 feature-level P&L — a project's build cost next to the serve-side revenue of
 the feature it shipped.
 

@@ -33,6 +33,7 @@ import com.tansoflow.tansocore.repository.SpendAlertRepository;
 import com.tansoflow.tansocore.repository.SpendBudgetRepository;
 import com.tansoflow.tansocore.repository.SpendUnitRepository;
 import com.tansoflow.tansocore.service.internal.spend.SpendAllocationService;
+import com.tansoflow.tansocore.service.internal.spend.GatewayEnforcementService;
 import com.tansoflow.tansocore.service.internal.spend.SpendBudgetService;
 import com.tansoflow.tansocore.util.BudgetWindow;
 import lombok.RequiredArgsConstructor;
@@ -75,6 +76,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     private final SpendUnitRepository unitRepository;
     private final SpendAllocationService allocationService;
     private final SlackNotifier slackNotifier;
+    private final GatewayEnforcementService gatewayEnforcement;
     private final Clock clock;
 
     @Override
@@ -114,6 +116,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         if (request.getMonthlyMode() != null) {
             budget.setMonthlyMode(request.getMonthlyMode());
         }
+        gatewayEnforcement.apply(budget);
         return toDto(budgetRepository.save(budget), account);
     }
 
@@ -122,7 +125,11 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     public void deleteBudget(String accountId, String unitId) {
         UUID account = UUID.fromString(accountId);
         SpendUnit unit = requireUnit(account, unitId);
-        budgetRepository.findBySpendUnitIdAndAccountId(unit.getId(), account).ifPresent(budgetRepository::delete);
+        budgetRepository.findBySpendUnitIdAndAccountId(unit.getId(), account).ifPresent(b -> {
+            b.setMonthlyMode(BudgetMode.ALERT);   // clears the hard limit at the gateway before the row goes
+            gatewayEnforcement.apply(b);
+            budgetRepository.delete(b);
+        });
     }
 
     @Override
@@ -174,9 +181,10 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         String window = period == BudgetPeriod.DAY ? "today" : "this month";
         String periodWord = period == BudgetPeriod.DAY ? "daily" : "monthly";
         if (percent >= 100 && !exists(budget, SpendAlertKind.BREACH, period, windowStart)) {
-            String tail = mode == BudgetMode.BLOCK
-                    ? " This budget is set to BLOCK; Tanso cannot stop requests itself — revoke the key or enforce it at your gateway."
-                    : "";
+            String tail = mode != BudgetMode.BLOCK ? ""
+                    : budget.getEnforcementTarget() != null
+                    ? " Enforced at " + budget.getEnforcementTarget() + " — the gateway is refusing further requests this month."
+                    : " This budget is set to BLOCK; Tanso cannot stop requests itself — connect LiteLLM and add a rule naming this unit's team or key, or revoke the key.";
             fired.add(fire(budget, SpendAlertKind.BREACH, period, windowStart, spent, limit,
                     name + " is over its " + periodWord + " budget: " + dollars(spent) + " of " + dollars(limit) + " " + window + "." + tail, name));
         } else if (percent >= budget.getAlertThreshold() && percent < 100 && !exists(budget, SpendAlertKind.THRESHOLD, period, windowStart)) {
@@ -262,6 +270,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
                 .alertThreshold(budget.getAlertThreshold()).monthlyMode(budget.getMonthlyMode())
                 .dailySpentCents(spentToday).monthlySpentCents(spentMonth)
                 .dailyResetsAt(day.resetsAt()).monthlyResetsAt(month.resetsAt())
+                .enforcementTarget(budget.getEnforcementTarget()).enforcedAt(budget.getEnforcedAt()).enforcementError(budget.getEnforcementError())
                 .build();
     }
 
