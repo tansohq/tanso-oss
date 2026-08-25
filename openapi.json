@@ -1441,7 +1441,8 @@
                                 "ANTHROPIC",
                                 "OPENAI",
                                 "CURSOR",
-                                "COPILOT"
+                                "COPILOT",
+                                "LITELLM"
                             ]
                         }
                     },
@@ -7726,6 +7727,18 @@
                     "monthlyResetsAt": {
                         "type": "string",
                         "format": "date-time"
+                    },
+                    "enforcementTarget": {
+                        "type": "string",
+                        "description": "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only."
+                    },
+                    "enforcedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "enforcementError": {
+                        "type": "string",
+                        "description": "Why the last push to the gateway failed; null when it worked or was never attempted."
                     }
                 }
             },
@@ -7826,7 +7839,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "label": {
@@ -8126,7 +8140,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "matchKind": {
@@ -8191,7 +8206,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "matchKind": {
@@ -8580,7 +8596,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "periodStart": {
@@ -8621,7 +8638,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "label": {
@@ -11949,7 +11967,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "actor": {
@@ -12057,7 +12076,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "model": {
@@ -12204,7 +12224,8 @@
                             "ANTHROPIC",
                             "OPENAI",
                             "CURSOR",
-                            "COPILOT"
+                            "COPILOT",
+                            "LITELLM"
                         ]
                     },
                     "meteredCents": {

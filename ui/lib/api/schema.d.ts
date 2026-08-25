@@ -2183,6 +2183,12 @@ export interface components {
             dailyResetsAt?: string;
             /** Format: date-time */
             monthlyResetsAt?: string;
+            /** @description Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only. */
+            enforcementTarget?: string;
+            /** Format: date-time */
+            enforcedAt?: string;
+            /** @description Why the last push to the gateway failed; null when it worked or was never attempted. */
+            enforcementError?: string;
         };
         SpendSettingsRequest: {
             personLevelEnabled?: boolean;
@@ -2221,7 +2227,7 @@ export interface components {
         VendorConnectionDto: {
             id?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             label?: string;
             /** @description Last four characters of the admin key. The key itself is never returned. */
             keyHint?: string;
@@ -2348,7 +2354,7 @@ export interface components {
         SpendAttributionRuleRequest: {
             spendUnitId: string;
             /** @enum {string} */
-            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @enum {string} */
             matchKind: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
             /** @description Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id). */
@@ -2371,7 +2377,7 @@ export interface components {
             id?: string;
             spendUnitId?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @enum {string} */
             matchKind?: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
             matchValue?: string;
@@ -2509,7 +2515,7 @@ export interface components {
         VendorInvoiceDto: {
             id?: string;
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** Format: date */
             periodStart?: string;
             /** Format: date */
@@ -2523,7 +2529,7 @@ export interface components {
         };
         CreateVendorConnectionRequest: {
             /** @enum {string} */
-            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @description How this org shows up in the console, e.g. "Anthropic — engineering org" */
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
@@ -3921,7 +3927,7 @@ export interface components {
         };
         ActorRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @description Claude Code actor email or key name, or OpenAI user id. */
             actor?: string;
             /** Format: int64 */
@@ -3970,7 +3976,7 @@ export interface components {
         };
         ModelRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             model?: string;
             /** Format: int64 */
             uncachedInputTokens?: number;
@@ -4033,7 +4039,7 @@ export interface components {
         };
         ReconcileRow: {
             /** @enum {string} */
-            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             meteredCents?: number;
             /** @description True when some model was unpriced or a cache rate was missing, so metered is a floor or a ceiling, not a figure. */
             meteredIsEstimate?: boolean;
@@ -5507,7 +5513,7 @@ export interface operations {
     importCsv_1: {
         parameters: {
             query: {
-                provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT";
+                provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
                 periodStart: string;
                 periodEnd: string;
                 currency?: string;
