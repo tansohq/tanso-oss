@@ -38,4 +38,6 @@ export function lastFullMonth(): { from: string; to: string } {
 export const providerLabel: Record<string, string> = {
   ANTHROPIC: "Anthropic",
   OPENAI: "OpenAI",
+  CURSOR: "Cursor",
+  COPILOT: "GitHub Copilot",
 }

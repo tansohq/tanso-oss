@@ -6,7 +6,7 @@ export type {
 
 // Report shapes are hand-written on purpose: the generated schema marks every field optional,
 // which would push null-handling into every cell. Keep in step with model/spend/*.java.
-export type VendorProvider = "ANTHROPIC" | "OPENAI"
+export type VendorProvider = "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT"
 
 export interface VendorInvoiceLineDto {
   description: string
@@ -66,6 +66,15 @@ export interface SpendUsageReportDto {
     sessions: number
     vendorCostCents?: number
     meteredCostCents: number
+    requests?: number | null
+    linesAdded?: number | null
+    linesRemoved?: number | null
+    accepted?: number | null
+    rejected?: number | null
+    commits?: number | null
+    pullRequests?: number | null
+    creditsUsed?: number | null
+    tool?: string | null
   }[]
   unpricedModels: string[]
 }
@@ -193,6 +202,8 @@ export interface OutcomeDto {
   spendUnitId?: string | null
   unitName?: string | null
   occurredAt: string
+  aiAssisted: boolean
+  aiTool?: string | null
 }
 
 export interface SpendOutcomeRowDto {
@@ -204,6 +215,7 @@ export interface SpendOutcomeRowDto {
   issuesDone: number
   custom: number
   outcomes: number
+  aiAssisted: number
   spendCents: number
   personEstimateCents?: number | null
   costPerOutcomeCents?: number | null
@@ -214,6 +226,7 @@ export interface SpendOutcomeReportDto {
   to: string
   rows: SpendOutcomeRowDto[]
   totalOutcomes: number
+  aiAssistedOutcomes: number
   unattributedOutcomes: number
   totalSpendCents: number
   costPerOutcomeCents?: number | null

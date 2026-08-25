@@ -212,6 +212,8 @@ public class OutcomeServiceImpl implements OutcomeService {
             o.setActorEmail(r.actorEmail());
             o.setActorLogin(r.actorLogin());
             o.setOccurredAt(r.occurredAt());
+            o.setAiAssisted(r.aiAssisted());
+            o.setAiTool(r.aiTool());
             o.setSpendUnitId(attribution.resolve(r.actorEmail(), r.actorLogin(), source.getDefaultSpendUnitId()));
             outcomeRepository.save(o);
             written++;
@@ -253,6 +255,12 @@ public class OutcomeServiceImpl implements OutcomeService {
         if (fresh || request.getOccurredAt() != null) {
             o.setOccurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : clock.instant());
         }
+        if (fresh || request.getAiAssisted() != null || request.getAiTool() != null) {
+            String tool = request.getAiTool() == null || request.getAiTool().isBlank() ? null : request.getAiTool().trim().toLowerCase(Locale.ROOT);
+            boolean assisted = request.getAiAssisted() != null ? request.getAiAssisted() : tool != null || (!fresh && o.isAiAssisted());
+            o.setAiAssisted(assisted);
+            o.setAiTool(assisted ? (tool != null ? tool : o.getAiTool()) : null);
+        }
         UUID fallback = explicit != null ? explicit : o.getSpendUnitId();
         o.setSpendUnitId(attribution(account).resolve(o.getActorEmail(), o.getActorLogin(), fallback));
         return toDto(outcomeRepository.save(o), unitName(account, o.getSpendUnitId()));
@@ -284,12 +292,16 @@ public class OutcomeServiceImpl implements OutcomeService {
         for (SpendUnit u : units) {
             unitById.put(u.getId(), u);
         }
-        Map<UUID, long[]> counts = new HashMap<>(); // [prs, issues, custom]
+        Map<UUID, long[]> counts = new HashMap<>(); // [prs, issues, custom, aiAssisted]
         long total = 0;
+        long aiAssisted = 0;
         long unattributed = 0;
         for (Outcome o : outcomeRepository.findAllByAccountIdAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtDesc(
                 account, start.atStartOfDay(ZoneOffset.UTC).toInstant(), end.atStartOfDay(ZoneOffset.UTC).toInstant())) {
             total++;
+            if (o.isAiAssisted()) {
+                aiAssisted++;
+            }
             if (o.getSpendUnitId() == null || !unitById.containsKey(o.getSpendUnitId())) {
                 unattributed++;
                 continue;
@@ -299,7 +311,11 @@ public class OutcomeServiceImpl implements OutcomeService {
             UUID cursor = o.getSpendUnitId();
             Set<UUID> seen = new HashSet<>();
             while (cursor != null && seen.add(cursor)) {
-                counts.computeIfAbsent(cursor, k -> new long[3])[slot]++;
+                long[] c = counts.computeIfAbsent(cursor, k -> new long[4]);
+                c[slot]++;
+                if (o.isAiAssisted()) {
+                    c[3]++;
+                }
                 SpendUnit parent = unitById.get(cursor);
                 cursor = parent == null ? null : parent.getParentId();
             }
@@ -314,13 +330,13 @@ public class OutcomeServiceImpl implements OutcomeService {
         }
         List<SpendOutcomeReportDto.OutcomeRow> rows = new ArrayList<>();
         for (SpendUnit u : units) {
-            long[] c = counts.getOrDefault(u.getId(), new long[3]);
+            long[] c = counts.getOrDefault(u.getId(), new long[4]);
             long n = c[0] + c[1] + c[2];
             BigDecimal spend = spendByUnit.getOrDefault(u.getId().toString(), BigDecimal.ZERO);
             rows.add(SpendOutcomeReportDto.OutcomeRow.builder()
                     .unitId(u.getId().toString()).name(u.getName()).type(u.getType())
                     .parentId(u.getParentId() == null ? null : u.getParentId().toString())
-                    .prsMerged(c[0]).issuesDone(c[1]).custom(c[2]).outcomes(n)
+                    .prsMerged(c[0]).issuesDone(c[1]).custom(c[2]).outcomes(n).aiAssisted(c[3])
                     .spendCents(spend)
                     .personEstimateCents(estimateByUnit.get(u.getId().toString()))
                     .costPerOutcomeCents(n == 0 || spend.signum() == 0 ? null : spend.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP))
@@ -329,7 +345,7 @@ public class OutcomeServiceImpl implements OutcomeService {
         BigDecimal totalSpend = allocation.getTotalMeteredCents();
         return SpendOutcomeReportDto.builder()
                 .from(start).to(end).rows(rows)
-                .totalOutcomes(total).unattributedOutcomes(unattributed)
+                .totalOutcomes(total).aiAssistedOutcomes(aiAssisted).unattributedOutcomes(unattributed)
                 .totalSpendCents(totalSpend)
                 .costPerOutcomeCents(total == 0 || totalSpend.signum() == 0 ? null : totalSpend.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP))
                 .build();
@@ -434,6 +450,7 @@ public class OutcomeServiceImpl implements OutcomeService {
                 .actorEmail(o.getActorEmail()).actorLogin(o.getActorLogin())
                 .spendUnitId(o.getSpendUnitId() == null ? null : o.getSpendUnitId().toString()).unitName(unitName)
                 .occurredAt(o.getOccurredAt())
+                .aiAssisted(o.isAiAssisted()).aiTool(o.getAiTool())
                 .build();
     }
 }

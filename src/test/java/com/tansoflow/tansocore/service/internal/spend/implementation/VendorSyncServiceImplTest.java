@@ -19,6 +19,7 @@ package com.tansoflow.tansocore.service.internal.spend.implementation;
 
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.VendorConnection;
+import com.tansoflow.tansocore.entity.VendorActorMetric;
 import com.tansoflow.tansocore.entity.VendorUsageBucket;
 import com.tansoflow.tansocore.integration.spend.UsageBucketRecord;
 import com.tansoflow.tansocore.integration.spend.VendorUsagePuller;
@@ -68,6 +69,8 @@ class VendorSyncServiceImplTest {
     @Mock
     private VendorUsageBucketRepository bucketRepository;
     @Mock
+    private com.tansoflow.tansocore.repository.VendorActorMetricRepository actorMetricRepository;
+    @Mock
     private VendorUsagePuller anthropic;
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
@@ -82,7 +85,9 @@ class VendorSyncServiceImplTest {
     @BeforeEach
     void setUp() {
         when(anthropic.provider()).thenReturn(VendorProvider.ANTHROPIC);
-        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, List.of(anthropic), transactionManager, budgetService);
+        lenient().when(anthropic.maxWindowDays()).thenReturn(31);
+        lenient().when(anthropic.pullActorMetrics(any(), any(), any(), any())).thenReturn(List.of());
+        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, actorMetricRepository, List.of(anthropic), transactionManager, budgetService);
         Account account = new Account();
         account.setId(accountId);
         connection = new VendorConnection();
@@ -96,16 +101,25 @@ class VendorSyncServiceImplTest {
     @Test
     void syncRewritesTheWindowAndStampsTheConnection() {
         Instant day = Instant.parse("2026-08-20T00:00:00Z");
-        when(anthropic.pull(eq("sk-ant-admin01-x"), any(), any())).thenReturn(List.of(
+        when(anthropic.pull(eq("sk-ant-admin01-x"), any(), any(), any())).thenReturn(List.of(
                 new UsageBucketRecord(VendorUsageSource.USAGE_API, day, day.plusSeconds(86400), "claude-sonnet-4-5",
                         null, null, null, null, null, 10, 2, 1, 5, null, null, null),
                 new UsageBucketRecord(VendorUsageSource.COST_API, day, day.plusSeconds(86400), null,
                         null, null, null, null, "Sonnet input", 0, 0, 0, 0, null, new BigDecimal("12.5"), "USD")));
 
+        when(anthropic.pullActorMetrics(eq("sk-ant-admin01-x"), any(), any(), any())).thenReturn(List.of(
+                new com.tansoflow.tansocore.integration.spend.ActorMetricRecord(LocalDate.of(2026, 8, 20), "dev@acme.test", "vscode",
+                        5, null, 10, 2, null, 45, 5, 1, 0, null, new BigDecimal("141"))));
+
         VendorSyncResultDto result = service.sync(accountId.toString(), connectionId.toString(),
                 LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 22));
 
         assertEquals(2, result.getRowsWritten());
+        verify(actorMetricRepository).deleteWindow(connectionId, LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 22));
+        ArgumentCaptor<List<VendorActorMetric>> metrics = ArgumentCaptor.forClass(List.class);
+        verify(actorMetricRepository).saveAll(metrics.capture());
+        assertEquals("dev@acme.test", metrics.getValue().get(0).getActorId());
+        assertEquals(45, metrics.getValue().get(0).getAccepted());
         for (VendorUsageSource source : VendorUsageSource.values()) {
             verify(bucketRepository).deleteWindow(connectionId, source,
                     Instant.parse("2026-08-20T00:00:00Z"), Instant.parse("2026-08-22T00:00:00Z"));
@@ -124,16 +138,16 @@ class VendorSyncServiceImplTest {
 
     @Test
     void longWindowIsChunkedToThirtyOneDays() {
-        when(anthropic.pull(anyString(), any(), any())).thenReturn(List.of());
+        when(anthropic.pull(anyString(), any(), any(), any())).thenReturn(List.of());
         service.sync(accountId.toString(), connectionId.toString(), LocalDate.of(2026, 6, 1), LocalDate.of(2026, 8, 1));
-        verify(anthropic).pull("sk-ant-admin01-x", LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 2));
-        verify(anthropic).pull("sk-ant-admin01-x", LocalDate.of(2026, 7, 2), LocalDate.of(2026, 8, 1));
-        verify(anthropic, times(2)).pull(anyString(), any(), any());
+        verify(anthropic).pull("sk-ant-admin01-x", null, LocalDate.of(2026, 6, 1), LocalDate.of(2026, 7, 2));
+        verify(anthropic).pull("sk-ant-admin01-x", null, LocalDate.of(2026, 7, 2), LocalDate.of(2026, 8, 1));
+        verify(anthropic, times(2)).pull(anyString(), any(), any(), any());
     }
 
     @Test
     void vendorRejectionMarksTheConnectionAndWritesNothing() {
-        when(anthropic.pull(anyString(), any(), any())).thenThrow(new VendorApiException(401, "Anthropic admin API returned 401: bad key"));
+        when(anthropic.pull(anyString(), any(), any(), any())).thenThrow(new VendorApiException(401, "Anthropic admin API returned 401: bad key"));
         assertThrows(VendorApiException.class,
                 () -> service.sync(accountId.toString(), connectionId.toString(), null, null));
         assertEquals(VendorConnectionStatus.ERROR, connection.getStatus());
@@ -144,7 +158,7 @@ class VendorSyncServiceImplTest {
 
     @Test
     void probeReportsWithoutThrowing() {
-        doThrow(new VendorApiException(403, "forbidden")).when(anthropic).probe("sk-ant-admin01-x");
+        doThrow(new VendorApiException(403, "forbidden")).when(anthropic).probe("sk-ant-admin01-x", null);
         VendorProbeResultDto bad = service.probe(accountId.toString(), connectionId.toString());
         assertFalse(bad.isOk());
         assertEquals(VendorConnectionStatus.ERROR, connection.getStatus());
@@ -166,8 +180,8 @@ class VendorSyncServiceImplTest {
         when(connectionRepository.findAll()).thenReturn(List.of(connection, other));
         when(connectionRepository.findById(connectionId)).thenReturn(Optional.of(connection));
         when(connectionRepository.findById(other.getId())).thenReturn(Optional.of(other));
-        when(anthropic.pull(eq("sk-ant-admin01-x"), any(), any())).thenThrow(new VendorApiException(401, "nope"));
-        when(anthropic.pull(eq("k2"), any(), any())).thenReturn(List.of());
+        when(anthropic.pull(eq("sk-ant-admin01-x"), any(), any(), any())).thenThrow(new VendorApiException(401, "nope"));
+        when(anthropic.pull(eq("k2"), any(), any(), any())).thenReturn(List.of());
 
         service.syncAll();
 

@@ -35,6 +35,8 @@ public class VendorConnectionDto {
     private String label;
     @Schema(description = "Last four characters of the admin key. The key itself is never returned.")
     private String keyHint;
+    @Schema(description = "Provider scope: the GitHub organization for Copilot. Null otherwise.")
+    private String scope;
     private VendorConnectionStatus status;
     @Schema(description = "Why the last probe or sync failed; null while healthy.")
     private String lastError;

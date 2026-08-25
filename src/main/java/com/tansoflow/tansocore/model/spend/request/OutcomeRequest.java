@@ -48,4 +48,9 @@ public class OutcomeRequest {
     private String spendUnitId;
     @Schema(description = "When it shipped. Default: now.")
     private Instant occurredAt;
+    @Schema(description = "An AI assistant was in the work.")
+    private Boolean aiAssisted;
+    @Size(max = 64)
+    @Schema(description = "Which one, if known: claude-code, copilot, cursor, codex, …")
+    private String aiTool;
 }

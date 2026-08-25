@@ -234,6 +234,30 @@ class OutcomeServiceImplTest {
     }
 
     @Test
+    void aiAssistedComesFromPullersAndPostsAndCountsInTheReport() {
+        when(settingsService.personLevelEnabled(accountId.toString())).thenReturn(false);
+        OutcomeRequest req = new OutcomeRequest();
+        req.setKind(OutcomeKind.CUSTOM);
+        req.setExternalId("deploy-9");
+        req.setAiTool("Claude-Code");
+        OutcomeDto dto = service.record(accountId.toString(), req);
+        assertEquals(true, dto.isAiAssisted());
+        assertEquals("claude-code", dto.getAiTool());
+
+        Instant d = Instant.parse("2026-08-10T00:00:00Z");
+        Outcome ai = new Outcome(); ai.setKind(OutcomeKind.PR_MERGED); ai.setSpendUnitId(team.getId()); ai.setOccurredAt(d); ai.setAiAssisted(true); ai.setAiTool("copilot");
+        Outcome human = new Outcome(); human.setKind(OutcomeKind.PR_MERGED); human.setSpendUnitId(team.getId()); human.setOccurredAt(d);
+        when(outcomeRepository.findAllByAccountIdAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtDesc(eq(accountId), any(), any()))
+                .thenReturn(List.of(ai, human));
+        when(allocationService.allocate(eq(accountId.toString()), any(), any())).thenReturn(SpendAllocationReportDto.builder()
+                .totalMeteredCents(new BigDecimal("400")).rows(List.of(
+                        SpendAllocationReportDto.AllocationRow.builder().unitId(team.getId().toString()).totalCents(new BigDecimal("400")).spendCents(new BigDecimal("400")).build())).build());
+        SpendOutcomeReportDto r = service.report(accountId.toString(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
+        assertEquals(1, r.getAiAssistedOutcomes());
+        assertEquals(1, r.getRows().stream().filter(x -> x.getName().equals("Backend")).findFirst().orElseThrow().getAiAssisted());
+    }
+
+    @Test
     void manualSourcesAreNotAThing() {
         OutcomeSourceRequest req = new OutcomeSourceRequest();
         req.setSource(OutcomeSource.MANUAL);

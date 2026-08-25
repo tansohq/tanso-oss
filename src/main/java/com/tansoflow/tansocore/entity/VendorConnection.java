@@ -83,6 +83,10 @@ public class VendorConnection {
     @Column(name = "key_hint", length = 8)
     private String keyHint;
 
+    /** Provider-specific scope: the GitHub org for Copilot. Null for vendors whose key already names the org. */
+    @Column(name = "scope", length = Integer.MAX_VALUE)
+    private String scope;
+
     @NotNull
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 16)

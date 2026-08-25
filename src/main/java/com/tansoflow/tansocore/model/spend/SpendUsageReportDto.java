@@ -91,8 +91,19 @@ public class SpendUsageReportDto {
         private String actor;
         private long totalTokens;
         private long sessions;
-        @Schema(description = "The vendor's own estimate for this actor (Claude Code); null for OpenAI users.")
+        @Schema(description = "The vendor's own estimate for this actor (Claude Code, Cursor charged); null when the vendor gives none.")
         private BigDecimal vendorCostCents;
         private BigDecimal meteredCostCents;
+        @Schema(description = "Per-person signals the vendor reports for the window; null where it reports none.")
+        private Integer requests;
+        private Integer linesAdded;
+        private Integer linesRemoved;
+        private Integer accepted;
+        private Integer rejected;
+        private Integer commits;
+        private Integer pullRequests;
+        private BigDecimal creditsUsed;
+        @Schema(description = "Last tool seen: Claude Code terminal, Cursor model, Copilot surface.")
+        private String tool;
     }
 }

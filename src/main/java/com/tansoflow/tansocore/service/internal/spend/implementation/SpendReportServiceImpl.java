@@ -18,12 +18,14 @@
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
 import com.tansoflow.tansocore.entity.VendorInvoice;
+import com.tansoflow.tansocore.entity.VendorActorMetric;
 import com.tansoflow.tansocore.entity.VendorUsageBucket;
 import com.tansoflow.tansocore.model.spend.SpendReconcileReportDto;
 import com.tansoflow.tansocore.model.spend.SpendUsageReportDto;
 import com.tansoflow.tansocore.model.spend.type.VendorProvider;
 import com.tansoflow.tansocore.model.spend.type.VendorUsageSource;
 import com.tansoflow.tansocore.repository.VendorInvoiceRepository;
+import com.tansoflow.tansocore.repository.VendorActorMetricRepository;
 import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.service.internal.spend.SpendReportService;
 import com.tansoflow.tansocore.service.internal.spend.SpendSettingsService;
@@ -55,6 +57,7 @@ public class SpendReportServiceImpl implements SpendReportService {
     static final int MAX_SPAN_DAYS = 366;
 
     private final VendorUsageBucketRepository bucketRepository;
+    private final VendorActorMetricRepository actorMetricRepository;
     private final VendorInvoiceRepository invoiceRepository;
     private final VendorCostEstimator estimator;
     private final SpendSettingsService settingsService;
@@ -182,15 +185,55 @@ public class SpendReportServiceImpl implements SpendReportService {
                     .meteredCostCents(e.getValue()[0]).vendorCostCents(e.getValue()[1]).build());
         }
 
+        // Per-person signals: summed over the window per (provider, actor); a vendor with no such column stays null.
+        Map<String, long[]> signals = new LinkedHashMap<>();   // requests, linesAdded, linesRemoved, accepted, rejected, commits, prs, sessions
+        Map<String, boolean[]> signalSeen = new LinkedHashMap<>();
+        Map<String, BigDecimal> credits = new LinkedHashMap<>();
+        Map<String, String> tools = new LinkedHashMap<>();
+        for (VendorActorMetric m : actorMetricRepository.findAllByAccountIdAndDayGreaterThanEqualAndDayLessThan(
+                UUID.fromString(accountId), start, end)) {
+            String key = m.getProvider() + "|" + m.getActorId();
+            long[] sg = signals.computeIfAbsent(key, k -> new long[8]);
+            boolean[] seen = signalSeen.computeIfAbsent(key, k -> new boolean[8]);
+            Integer[] vals = {m.getRequests(), m.getLinesAdded(), m.getLinesRemoved(), m.getAccepted(), m.getRejected(), m.getCommits(), m.getPullRequests(), m.getSessions()};
+            for (int i = 0; i < vals.length; i++) {
+                if (vals[i] != null) {
+                    sg[i] += vals[i];
+                    seen[i] = true;
+                }
+            }
+            if (m.getCreditsUsed() != null) {
+                credits.merge(key, m.getCreditsUsed(), BigDecimal::add);
+            }
+            if (m.getTool() != null) {
+                tools.put(key, m.getTool());
+            }
+            actorProvider.putIfAbsent(key, m.getProvider());
+            actorTokens.computeIfAbsent(key, k -> new long[5]);
+            actorCost.computeIfAbsent(key, k -> new BigDecimal[]{BigDecimal.ZERO, null});
+            if (m.getEstimatedCostCents() != null && m.getProvider() != VendorProvider.ANTHROPIC) {
+                // Claude Code's estimate already arrives on the CLAUDE_CODE_API bucket rows.
+                BigDecimal[] ac = actorCost.get(key);
+                ac[1] = (ac[1] == null ? BigDecimal.ZERO : ac[1]).add(m.getEstimatedCostCents());
+            }
+        }
+
         List<SpendUsageReportDto.ActorRow> actorRows = new ArrayList<>();
         for (Map.Entry<String, long[]> e : actorTokens.entrySet()) {
             long[] t = e.getValue();
             BigDecimal[] c = actorCost.get(e.getKey());
+            long[] sg = signals.get(e.getKey());
+            boolean[] seen = signalSeen.get(e.getKey());
+            long sessions = seen != null && seen[7] ? sg[7] : t[4];
             actorRows.add(SpendUsageReportDto.ActorRow.builder()
                     .provider(actorProvider.get(e.getKey()))
                     .actor(e.getKey().substring(e.getKey().indexOf('|') + 1))
-                    .totalTokens(t[0] + t[1] + t[2] + t[3]).sessions(t[4])
-                    .meteredCostCents(c[0]).vendorCostCents(c[1]).build());
+                    .totalTokens(t[0] + t[1] + t[2] + t[3]).sessions(sessions)
+                    .meteredCostCents(c[0]).vendorCostCents(c[1])
+                    .requests(signal(sg, seen, 0)).linesAdded(signal(sg, seen, 1)).linesRemoved(signal(sg, seen, 2))
+                    .accepted(signal(sg, seen, 3)).rejected(signal(sg, seen, 4)).commits(signal(sg, seen, 5)).pullRequests(signal(sg, seen, 6))
+                    .creditsUsed(credits.get(e.getKey())).tool(tools.get(e.getKey()))
+                    .build());
         }
         actorRows.sort(Comparator.comparing(SpendUsageReportDto.ActorRow::getMeteredCostCents).reversed());
         if (!settingsService.personLevelEnabled(accountId)) {
@@ -271,6 +314,10 @@ public class SpendReportServiceImpl implements SpendReportService {
                     .build());
         }
         return SpendReconcileReportDto.builder().from(start).to(endInclusive).rows(rows).build();
+    }
+
+    private static Integer signal(long[] values, boolean[] seen, int i) {
+        return values == null || seen == null || !seen[i] ? null : (int) values[i];
     }
 
     private List<VendorUsageBucket> load(String accountId, LocalDate from, LocalDate toExclusive) {

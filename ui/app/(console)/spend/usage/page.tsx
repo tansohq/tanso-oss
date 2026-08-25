@@ -244,6 +244,24 @@ export default function SpendUsagePage() {
                         <TableHead>Actor</TableHead>
                         <TableHead className="text-right">Tokens</TableHead>
                         <TableHead className="text-right">Sessions</TableHead>
+                        <TableHead
+                          className="text-right"
+                          title="Accepted / rejected suggestions"
+                        >
+                          Acc / rej
+                        </TableHead>
+                        <TableHead
+                          className="text-right"
+                          title="Lines added by the assistant"
+                        >
+                          Lines
+                        </TableHead>
+                        <TableHead
+                          className="text-right"
+                          title="Commits / pull requests made through the assistant"
+                        >
+                          Commits / PRs
+                        </TableHead>
                         <TableHead className="text-right">Metered</TableHead>
                         <TableHead className="text-right">
                           Vendor est.
@@ -266,6 +284,23 @@ export default function SpendUsagePage() {
                             {formatNumber(row.sessions)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
+                            {row.accepted != null
+                              ? `${formatNumber(row.accepted)} / ${row.rejected != null ? formatNumber(row.rejected) : "—"}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.linesAdded != null
+                              ? `+${formatNumber(row.linesAdded)}`
+                              : "—"}
+                            {row.linesRemoved != null &&
+                              ` −${formatNumber(row.linesRemoved)}`}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
+                            {row.commits != null || row.pullRequests != null
+                              ? `${row.commits ?? "—"} / ${row.pullRequests ?? "—"}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCents(row.meteredCostCents)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
@@ -276,11 +311,12 @@ export default function SpendUsagePage() {
                       {data && data.byActor.length === 0 && (
                         <TableRow>
                           <TableCell
-                            colSpan={5}
+                            colSpan={8}
                             className="text-center text-muted-foreground"
                           >
                             No per-person data. Anthropic reports people only
-                            for Claude Code; OpenAI only for user-scoped keys.
+                            for Claude Code; OpenAI only for user-scoped keys;
+                            Cursor and Copilot per seat.
                           </TableCell>
                         </TableRow>
                       )}

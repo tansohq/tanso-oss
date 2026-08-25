@@ -18,7 +18,9 @@
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
 import com.tansoflow.tansocore.entity.VendorConnection;
+import com.tansoflow.tansocore.entity.VendorActorMetric;
 import com.tansoflow.tansocore.entity.VendorUsageBucket;
+import com.tansoflow.tansocore.integration.spend.ActorMetricRecord;
 import com.tansoflow.tansocore.integration.spend.UsageBucketRecord;
 import com.tansoflow.tansocore.integration.spend.VendorUsagePuller;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
@@ -29,6 +31,7 @@ import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.model.spend.type.VendorProvider;
 import com.tansoflow.tansocore.model.spend.type.VendorUsageSource;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
+import com.tansoflow.tansocore.repository.VendorActorMetricRepository;
 import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.service.internal.spend.SpendBudgetService;
 import com.tansoflow.tansocore.service.internal.spend.VendorSyncService;
@@ -52,24 +55,25 @@ import java.util.UUID;
 @Service
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class VendorSyncServiceImpl implements VendorSyncService {
-    /** Vendors allow at most 31 daily buckets per page; keeping windows under that keeps a sync to one page per source. */
-    static final int MAX_WINDOW_DAYS = 31;
     static final int DEFAULT_WINDOW_DAYS = 30;
     static final int JOB_WINDOW_DAYS = 3;
 
     private final VendorConnectionRepository connectionRepository;
     private final VendorUsageBucketRepository bucketRepository;
+    private final VendorActorMetricRepository actorMetricRepository;
     private final Map<VendorProvider, VendorUsagePuller> pullers = new EnumMap<>(VendorProvider.class);
     private final TransactionTemplate transactionTemplate;
     private final SpendBudgetService budgetService;
 
     public VendorSyncServiceImpl(VendorConnectionRepository connectionRepository,
                                  VendorUsageBucketRepository bucketRepository,
+                                 VendorActorMetricRepository actorMetricRepository,
                                  List<VendorUsagePuller> pullers,
                                  PlatformTransactionManager transactionManager,
                                  SpendBudgetService budgetService) {
         this.connectionRepository = connectionRepository;
         this.bucketRepository = bucketRepository;
+        this.actorMetricRepository = actorMetricRepository;
         this.budgetService = budgetService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         for (VendorUsagePuller puller : pullers) {
@@ -82,7 +86,7 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     public VendorProbeResultDto probe(String accountId, String connectionId) {
         VendorConnection connection = require(accountId, connectionId);
         try {
-            puller(connection).probe(connection.getAdminKey());
+            puller(connection).probe(connection.getAdminKey(), connection.getScope());
             markHealthy(connection);
             return VendorProbeResultDto.builder().ok(true).message("The vendor accepted the key.").build();
         } catch (VendorApiException e) {
@@ -134,11 +138,14 @@ public class VendorSyncServiceImpl implements VendorSyncService {
 
     private int pullWindow(VendorConnection connection, LocalDate from, LocalDate to) {
         VendorUsagePuller puller = puller(connection);
+        int window = puller.maxWindowDays();
         List<UsageBucketRecord> records = new ArrayList<>();
+        List<ActorMetricRecord> actorRecords = new ArrayList<>();
         try {
-            for (LocalDate chunk = from; chunk.isBefore(to); chunk = chunk.plusDays(MAX_WINDOW_DAYS)) {
-                LocalDate chunkEnd = chunk.plusDays(MAX_WINDOW_DAYS).isBefore(to) ? chunk.plusDays(MAX_WINDOW_DAYS) : to;
-                records.addAll(puller.pull(connection.getAdminKey(), chunk, chunkEnd));
+            for (LocalDate chunk = from; chunk.isBefore(to); chunk = chunk.plusDays(window)) {
+                LocalDate chunkEnd = chunk.plusDays(window).isBefore(to) ? chunk.plusDays(window) : to;
+                records.addAll(puller.pull(connection.getAdminKey(), connection.getScope(), chunk, chunkEnd));
+                actorRecords.addAll(puller.pullActorMetrics(connection.getAdminKey(), connection.getScope(), chunk, chunkEnd));
             }
         } catch (VendorApiException e) {
             markFailed(connection, e);
@@ -151,6 +158,8 @@ public class VendorSyncServiceImpl implements VendorSyncService {
         }
         List<VendorUsageBucket> rows = records.stream().map(r -> toEntity(connection, r)).toList();
         bucketRepository.saveAll(rows);
+        actorMetricRepository.deleteWindow(connection.getId(), from, to);
+        actorMetricRepository.saveAll(actorRecords.stream().map(r -> toEntity(connection, r)).toList());
         markHealthy(connection);
         connection.setLastSyncedAt(Instant.now());
         connectionRepository.save(connection);
@@ -181,6 +190,28 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     private VendorConnection require(String accountId, String connectionId) {
         return connectionRepository.findByIdAndAccountId(UUID.fromString(connectionId), UUID.fromString(accountId))
                 .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
+    }
+
+    static VendorActorMetric toEntity(VendorConnection connection, ActorMetricRecord r) {
+        VendorActorMetric m = new VendorActorMetric();
+        m.setAccountId(connection.getAccount().getId());
+        m.setConnectionId(connection.getId());
+        m.setProvider(connection.getProvider());
+        m.setDay(r.day());
+        m.setActorId(r.actorId());
+        m.setTool(r.tool());
+        m.setSessions(r.sessions());
+        m.setRequests(r.requests());
+        m.setLinesAdded(r.linesAdded());
+        m.setLinesRemoved(r.linesRemoved());
+        m.setLinesSuggested(r.linesSuggested());
+        m.setAccepted(r.accepted());
+        m.setRejected(r.rejected());
+        m.setCommits(r.commits());
+        m.setPullRequests(r.pullRequests());
+        m.setCreditsUsed(r.creditsUsed());
+        m.setEstimatedCostCents(r.estimatedCostCents());
+        return m;
     }
 
     static VendorUsageBucket toEntity(VendorConnection connection, UsageBucketRecord r) {
