@@ -151,7 +151,13 @@ export default function SpendOutcomesPage() {
                 <TableHead className="text-right">PRs</TableHead>
                 <TableHead className="text-right">Issues</TableHead>
                 <TableHead className="text-right">Custom</TableHead>
-                <TableHead className="text-right">Spend</TableHead>
+                <TableHead className="text-right">Metered spend</TableHead>
+                <TableHead
+                  className="text-right"
+                  title="Claude Code's own per-person estimate; not part of the spend basis"
+                >
+                  Claude Code est.
+                </TableHead>
                 <TableHead className="text-right">Cost / outcome</TableHead>
               </TableRow>
             </TableHeader>
@@ -172,6 +178,9 @@ export default function SpendOutcomesPage() {
                     {formatCents(r.spendCents)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
+                    {formatCents(r.personEstimateCents)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {formatCents(r.costPerOutcomeCents)}
                   </TableCell>
                 </TableRow>
@@ -179,7 +188,7 @@ export default function SpendOutcomesPage() {
               {report.data && report.data.rows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={6}
+                    colSpan={7}
                     className="text-center text-muted-foreground"
                   >
                     No units yet. Create teams under Spend → Teams first.
@@ -250,7 +259,7 @@ export default function SpendOutcomesPage() {
                                   title: r.ok
                                     ? "Token accepted"
                                     : "Token rejected",
-                                  description: r.message,
+                                  description: (r.message ?? "").slice(0, 160),
                                 }),
                               onError: (e) =>
                                 toast.add({

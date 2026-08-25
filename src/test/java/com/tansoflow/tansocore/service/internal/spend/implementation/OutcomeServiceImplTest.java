@@ -161,6 +161,30 @@ class OutcomeServiceImplTest {
     }
 
     @Test
+    void rePostUpdatesOnlyWhatItSends() {
+        when(settingsService.personLevelEnabled(accountId.toString())).thenReturn(false);
+        Outcome existing = new Outcome();
+        existing.setId(UUID.randomUUID());
+        existing.setAccountId(accountId);
+        existing.setSource(OutcomeSource.MANUAL);
+        existing.setExternalId("deploy-1");
+        existing.setTitle("first");
+        existing.setUrl("https://ci/1");
+        existing.setOccurredAt(Instant.parse("2026-08-01T00:00:00Z"));
+        existing.setSpendUnitId(team.getId());
+        when(outcomeRepository.findByAccountIdAndSourceAndExternalId(accountId, OutcomeSource.MANUAL, "deploy-1")).thenReturn(Optional.of(existing));
+        OutcomeRequest req = new OutcomeRequest();
+        req.setKind(OutcomeKind.CUSTOM);
+        req.setExternalId("deploy-1");
+        req.setTitle("second");
+        OutcomeDto dto = service.record(accountId.toString(), req);
+        assertEquals("second", dto.getTitle());
+        assertEquals("https://ci/1", dto.getUrl());
+        assertEquals(Instant.parse("2026-08-01T00:00:00Z"), dto.getOccurredAt());
+        assertEquals(team.getId().toString(), dto.getSpendUnitId());
+    }
+
+    @Test
     void reportDividesRolledUpSpendByRolledUpOutcomes() {
         Instant d = Instant.parse("2026-08-10T00:00:00Z");
         Outcome pr = new Outcome(); pr.setKind(OutcomeKind.PR_MERGED); pr.setSpendUnitId(alice.getId()); pr.setOccurredAt(d);
@@ -171,8 +195,8 @@ class OutcomeServiceImplTest {
         when(allocationService.allocate(eq(accountId.toString()), any(), any())).thenReturn(SpendAllocationReportDto.builder()
                 .totalMeteredCents(new BigDecimal("900"))
                 .rows(List.of(
-                        SpendAllocationReportDto.Row.builder().unitId(team.getId().toString()).spendCents(new BigDecimal("600")).build(),
-                        SpendAllocationReportDto.Row.builder().unitId(alice.getId().toString()).spendCents(new BigDecimal("250")).build()))
+                        SpendAllocationReportDto.AllocationRow.builder().unitId(team.getId().toString()).totalCents(new BigDecimal("600")).spendCents(new BigDecimal("600")).build(),
+                        SpendAllocationReportDto.AllocationRow.builder().unitId(alice.getId().toString()).totalCents(new BigDecimal("250")).personEstimateCents(new BigDecimal("7500")).spendCents(new BigDecimal("7750")).build()))
                 .build());
 
         SpendOutcomeReportDto r = service.report(accountId.toString(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
@@ -180,14 +204,33 @@ class OutcomeServiceImplTest {
         assertEquals(3, r.getTotalOutcomes());
         assertEquals(1, r.getUnattributedOutcomes());
         assertEquals(0, new BigDecimal("300.00").compareTo(r.getCostPerOutcomeCents()));
-        SpendOutcomeReportDto.Row t = r.getRows().stream().filter(x -> x.getName().equals("Backend")).findFirst().orElseThrow();
+        SpendOutcomeReportDto.OutcomeRow t = r.getRows().stream().filter(x -> x.getName().equals("Backend")).findFirst().orElseThrow();
         assertEquals(2, t.getOutcomes());   // Alice's PR rolls up
         assertEquals(1, t.getPrsMerged());
         assertEquals(1, t.getIssuesDone());
         assertEquals(0, new BigDecimal("300.00").compareTo(t.getCostPerOutcomeCents()));
-        SpendOutcomeReportDto.Row a = r.getRows().stream().filter(x -> x.getName().equals("Alice")).findFirst().orElseThrow();
+        SpendOutcomeReportDto.OutcomeRow a = r.getRows().stream().filter(x -> x.getName().equals("Alice")).findFirst().orElseThrow();
         assertEquals(1, a.getOutcomes());
-        assertEquals(0, new BigDecimal("250.00").compareTo(a.getCostPerOutcomeCents()));
+        assertEquals(0, new BigDecimal("250.00").compareTo(a.getCostPerOutcomeCents()));   // metered only
+        assertEquals(0, new BigDecimal("7500").compareTo(a.getPersonEstimateCents()));
+    }
+
+    @Test
+    void noMeteredSpendMeansNoCostPerOutcome() {
+        Outcome pr = new Outcome(); pr.setKind(OutcomeKind.PR_MERGED); pr.setSpendUnitId(team.getId()); pr.setOccurredAt(Instant.parse("2026-08-10T00:00:00Z"));
+        when(outcomeRepository.findAllByAccountIdAndOccurredAtGreaterThanEqualAndOccurredAtLessThanOrderByOccurredAtDesc(eq(accountId), any(), any()))
+                .thenReturn(List.of(pr));
+        when(allocationService.allocate(eq(accountId.toString()), any(), any())).thenReturn(SpendAllocationReportDto.builder()
+                .totalMeteredCents(BigDecimal.ZERO).rows(List.of()).build());
+        SpendOutcomeReportDto r = service.report(accountId.toString(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 9, 1));
+        assertNull(r.getRows().stream().filter(x -> x.getName().equals("Backend")).findFirst().orElseThrow().getCostPerOutcomeCents());
+        assertNull(r.getCostPerOutcomeCents());
+    }
+
+    @Test
+    void scopesAreNormalised() {
+        assertEquals("*", OutcomeServiceImpl.normaliseLinearScope(" * "));
+        assertEquals("BE, FE", OutcomeServiceImpl.normaliseLinearScope("be, fe,"));
     }
 
     @Test

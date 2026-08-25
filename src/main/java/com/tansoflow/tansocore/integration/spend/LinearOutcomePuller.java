@@ -79,10 +79,14 @@ public class LinearOutcomePuller implements OutcomePuller {
                 if (!teams.isEmpty() && (team == null || !teams.contains(team))) {
                     continue;
                 }
+                Instant completedAt = Instant.parse(n.path("completedAt").asText());
+                if (completedAt.isBefore(from) || !completedAt.isBefore(to)) {
+                    continue; // trust the filter, verify the row
+                }
                 out.add(new OutcomeRecord(OutcomeKind.ISSUE_DONE, n.path("identifier").asText(),
                         n.path("title").asText(null), n.path("url").asText(null),
                         n.path("assignee").path("email").asText(null), null,
-                        Instant.parse(n.path("completedAt").asText())));
+                        completedAt));
             }
             after = issues.path("pageInfo").path("hasNextPage").asBoolean(false)
                     ? issues.path("pageInfo").path("endCursor").asText(null) : null;
@@ -90,7 +94,7 @@ public class LinearOutcomePuller implements OutcomePuller {
         return out;
     }
 
-    static List<String> teams(String scope) {
+    public static List<String> teams(String scope) {
         List<String> teams = new ArrayList<>();
         for (String s : scope.split(",")) {
             String t = s.trim();

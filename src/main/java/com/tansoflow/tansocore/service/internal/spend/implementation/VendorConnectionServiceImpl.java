@@ -19,6 +19,12 @@ package com.tansoflow.tansocore.service.internal.spend.implementation;
 
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.VendorConnection;
+import com.tansoflow.tansocore.integration.spend.VendorUsagePuller;
+import com.tansoflow.tansocore.model.exception.VendorApiException;
+import com.tansoflow.tansocore.model.spend.type.VendorProvider;
+import com.tansoflow.tansocore.integration.spend.VendorUsagePuller;
+import com.tansoflow.tansocore.model.exception.VendorApiException;
+import com.tansoflow.tansocore.model.spend.type.VendorProvider;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.spend.VendorConnectionDto;
 import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest;
@@ -27,7 +33,6 @@ import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
 import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,12 +42,24 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class VendorConnectionServiceImpl implements VendorConnectionService {
     private final VendorConnectionRepository vendorConnectionRepository;
     private final VendorUsageBucketRepository vendorUsageBucketRepository;
     private final AccountRepository accountRepository;
+    private final java.util.Map<VendorProvider, VendorUsagePuller> pullers = new java.util.EnumMap<>(VendorProvider.class);
+
+    public VendorConnectionServiceImpl(VendorConnectionRepository vendorConnectionRepository,
+                                       VendorUsageBucketRepository vendorUsageBucketRepository,
+                                       AccountRepository accountRepository,
+                                       List<VendorUsagePuller> pullers) {
+        this.vendorConnectionRepository = vendorConnectionRepository;
+        this.vendorUsageBucketRepository = vendorUsageBucketRepository;
+        this.accountRepository = accountRepository;
+        for (VendorUsagePuller p : pullers) {
+            this.pullers.put(p.provider(), p);
+        }
+    }
 
     @Override
     public List<VendorConnectionDto> list(String accountId) {
@@ -62,7 +79,21 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         connection.setLabel(request.getLabel().trim());
         connection.setAdminKey(adminKey);
         connection.setKeyHint(hintOf(adminKey));
-        return toDto(vendorConnectionRepository.save(connection));
+        connection = vendorConnectionRepository.saveAndFlush(connection);
+        // Check the key now so the row never shows "OK" for a credential nobody has tried.
+        VendorUsagePuller puller = pullers.get(connection.getProvider());
+        if (puller != null) {
+            try {
+                puller.probe(adminKey);
+                connection.setStatus(VendorConnectionStatus.ACTIVE);
+                connection.setLastError(null);
+            } catch (VendorApiException e) {
+                connection.setStatus(VendorConnectionStatus.ERROR);
+                connection.setLastError(e.getMessage());
+            }
+            connection = vendorConnectionRepository.save(connection);
+        }
+        return toDto(connection);
     }
 
     @Override

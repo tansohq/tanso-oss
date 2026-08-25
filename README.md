@@ -287,10 +287,16 @@ It works from the vendor's admin API, not a proxy in your request path:
 
 6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
-   have any CI job post one: `POST /api/v1/spend/outcomes` with a kind
-   (`PR_MERGED`, `ISSUE_DONE`, `CUSTOM`), a stable `externalId`, and who did
-   it. An outcome lands on the person whose email or GitHub login matches
-   (person level on), else on the source's default unit. The report divides
+   have any CI job post one: `POST /api/v1/client/outcomes` with the tenant
+   `sk_` key (or `/api/v1/spend/outcomes` with a console JWT) and a body of
+   `kind` (`PR_MERGED`, `ISSUE_DONE`, `CUSTOM`), a stable `externalId`, and
+   optionally `title`, `url`, `actorEmail`, `actorLogin`, `spendUnitId`,
+   `occurredAt`; posting the same `externalId` again updates only the fields
+   you send. GitHub scope is a comma-separated `owner/repo` list; Linear
+   scope is comma-separated team keys or `*`. A person's GitHub login goes on
+   the PERSON unit. An outcome lands on the person whose email or GitHub
+   login matches (person level on), else on the source's default unit.
+   Disconnecting a source removes the outcomes it pulled; posted ones stay. The report divides
    a unit's spend (with descendants) by its outcomes (with descendants):
    cost per merged PR, per team, per month. Pulled hourly for the last three
    days; re-pulls upsert.

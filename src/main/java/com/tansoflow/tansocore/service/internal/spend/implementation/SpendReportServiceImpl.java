@@ -254,12 +254,12 @@ public class SpendReportServiceImpl implements SpendReportService {
                 sums.computeIfAbsent(inv.getProvider(), k -> new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO});
             }
         }
-        List<SpendReconcileReportDto.Row> rows = new ArrayList<>();
+        List<SpendReconcileReportDto.ReconcileRow> rows = new ArrayList<>();
         for (Map.Entry<VendorProvider, BigDecimal[]> e : sums.entrySet()) {
             BigDecimal metered = e.getValue()[0];
             BigDecimal vendor = e.getValue()[1];
             BigDecimal inv = invoiced.get(e.getKey());
-            rows.add(SpendReconcileReportDto.Row.builder()
+            rows.add(SpendReconcileReportDto.ReconcileRow.builder()
                     .provider(e.getKey())
                     .meteredCents(metered)
                     .meteredIsEstimate(estimateFlag.getOrDefault(e.getKey(), false))

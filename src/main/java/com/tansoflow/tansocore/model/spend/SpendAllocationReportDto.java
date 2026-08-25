@@ -33,7 +33,7 @@ public class SpendAllocationReportDto {
     private LocalDate from;
     /** Exclusive. */
     private LocalDate to;
-    private List<Row> rows;
+    private List<AllocationRow> rows;
     @Schema(description = "Metered cents no rule claimed. Always sums with the rows' own cents to totalMeteredCents.")
     private BigDecimal unattributedCents;
     private BigDecimal totalMeteredCents;
@@ -42,7 +42,7 @@ public class SpendAllocationReportDto {
 
     @Getter
     @Builder
-    public static class Row {
+    public static class AllocationRow {
         private String unitId;
         private String name;
         private SpendUnitType type;

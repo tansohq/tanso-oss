@@ -205,6 +205,7 @@ export interface SpendOutcomeRowDto {
   custom: number
   outcomes: number
   spendCents: number
+  personEstimateCents?: number | null
   costPerOutcomeCents?: number | null
 }
 

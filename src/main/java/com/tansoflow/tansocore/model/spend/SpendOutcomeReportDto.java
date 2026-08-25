@@ -33,7 +33,7 @@ public class SpendOutcomeReportDto {
     private LocalDate from;
     /** Exclusive. */
     private LocalDate to;
-    private List<Row> rows;
+    private List<OutcomeRow> rows;
     private long totalOutcomes;
     private long unattributedOutcomes;
     private BigDecimal totalSpendCents;
@@ -42,7 +42,7 @@ public class SpendOutcomeReportDto {
 
     @Getter
     @Builder
-    public static class Row {
+    public static class OutcomeRow {
         private String unitId;
         private String name;
         private SpendUnitType type;
@@ -51,8 +51,11 @@ public class SpendOutcomeReportDto {
         private long issuesDone;
         private long custom;
         private long outcomes;
+        @Schema(description = "Metered spend allocated to the unit and its descendants — the price-book figure, same basis for every row.")
         private BigDecimal spendCents;
-        @Schema(description = "spendCents / outcomes; null when the unit shipped nothing in the window.")
+        @Schema(description = "PERSON units only: the vendor's own Claude Code estimate. Shown beside, never inside, spendCents.")
+        private BigDecimal personEstimateCents;
+        @Schema(description = "spendCents / outcomes; null when the unit shipped nothing or has no metered spend to divide.")
         private BigDecimal costPerOutcomeCents;
     }
 }

@@ -241,7 +241,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         if (!from.isBefore(to)) {
             return out;
         }
-        for (SpendAllocationReportDto.Row row : allocationService.allocate(accountId, from, to).getRows()) {
+        for (SpendAllocationReportDto.AllocationRow row : allocationService.allocate(accountId, from, to).getRows()) {
             out.put(row.getUnitId(), row.getSpendCents());
         }
         return out;

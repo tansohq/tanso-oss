@@ -105,7 +105,7 @@ class SpendBudgetServiceImplTest {
             else if (from.equals(LocalDate.of(2026, 8, 1))) cents = month;
             else if (from.equals(LocalDate.of(2026, 8, 18)) && to.equals(LocalDate.of(2026, 8, 25))) cents = week;
             else throw new AssertionError("unexpected window " + from + " → " + to);
-            return SpendAllocationReportDto.builder().rows(List.of(SpendAllocationReportDto.Row.builder()
+            return SpendAllocationReportDto.builder().rows(List.of(SpendAllocationReportDto.AllocationRow.builder()
                     .unitId(unit.getId().toString()).name("Backend").spendCents(new BigDecimal(cents)).build())).build();
         });
     }

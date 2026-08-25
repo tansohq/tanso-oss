@@ -140,9 +140,9 @@ class SpendAllocationServiceImplTest {
         assertTrue(r.isPersonLevelEnabled());
         assertEquals(0, new BigDecimal("350").compareTo(r.getTotalMeteredCents()));
         assertEquals(0, new BigDecimal("50").compareTo(r.getUnattributedCents()));
-        SpendAllocationReportDto.Row a = row(r, "Alice");
-        SpendAllocationReportDto.Row t = row(r, "Backend");
-        SpendAllocationReportDto.Row p = row(r, "Platform");
+        SpendAllocationReportDto.AllocationRow a = row(r, "Alice");
+        SpendAllocationReportDto.AllocationRow t = row(r, "Backend");
+        SpendAllocationReportDto.AllocationRow p = row(r, "Platform");
         assertEquals(0, new BigDecimal("100").compareTo(a.getOwnCents()));
         assertEquals(0, new BigDecimal("100").compareTo(a.getTotalCents()));
         assertEquals(0, new BigDecimal("77").compareTo(a.getPersonEstimateCents()));
@@ -193,7 +193,7 @@ class SpendAllocationServiceImplTest {
         assertNull(SpendAllocationServiceImpl.firstMatch(List.of(rule(team, AttributionMatchKind.WORKSPACE_ID, "proj_1", 1)), b));
     }
 
-    private static SpendAllocationReportDto.Row row(SpendAllocationReportDto r, String name) {
+    private static SpendAllocationReportDto.AllocationRow row(SpendAllocationReportDto r, String name) {
         return r.getRows().stream().filter(x -> x.getName().equals(name)).findFirst().orElseThrow();
     }
 }

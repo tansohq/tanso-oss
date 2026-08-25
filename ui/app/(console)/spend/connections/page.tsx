@@ -113,7 +113,7 @@ export default function SpendConnectionsPage() {
                   onSuccess: (result) =>
                     toast.add({
                       title: result.ok ? "Key accepted" : "Key rejected",
-                      description: result.message,
+                      description: (result.message ?? "").slice(0, 160),
                     }),
                   onError: (error) =>
                     toast.add({

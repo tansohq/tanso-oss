@@ -124,11 +124,11 @@ public class SpendAllocationServiceImpl implements SpendAllocationService {
             }
         }
 
-        List<SpendAllocationReportDto.Row> rows = new ArrayList<>();
+        List<SpendAllocationReportDto.AllocationRow> rows = new ArrayList<>();
         for (SpendUnit u : units) {
             BigDecimal t = total.getOrDefault(u.getId(), BigDecimal.ZERO);
             BigDecimal pe = u.getType() == SpendUnitType.PERSON ? personEstimate.getOrDefault(u.getId(), BigDecimal.ZERO) : null;
-            rows.add(SpendAllocationReportDto.Row.builder()
+            rows.add(SpendAllocationReportDto.AllocationRow.builder()
                     .unitId(u.getId().toString()).name(u.getName()).type(u.getType())
                     .parentId(u.getParentId() == null ? null : u.getParentId().toString())
                     .ownCents(own.getOrDefault(u.getId(), BigDecimal.ZERO))

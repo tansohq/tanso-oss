@@ -113,10 +113,9 @@ public class OutcomeServiceImpl implements OutcomeService {
             throw new IllegalArgumentException("MANUAL outcomes are posted to /outcomes; they do not need a source");
         }
         OutcomePuller puller = puller(request.getSource());
-        String scope = request.getScope().trim();
-        if (request.getSource() == OutcomeSource.GITHUB) {
-            com.tansoflow.tansocore.integration.spend.GitHubOutcomePuller.repos(scope); // validates the shape
-        }
+        String scope = request.getSource() == OutcomeSource.GITHUB
+                ? String.join(", ", com.tansoflow.tansocore.integration.spend.GitHubOutcomePuller.repos(request.getScope()))
+                : normaliseLinearScope(request.getScope());
         OutcomeSourceConnection source = new OutcomeSourceConnection();
         source.setAccountId(account);
         source.setSource(request.getSource());
@@ -126,9 +125,13 @@ public class OutcomeServiceImpl implements OutcomeService {
         if (request.getDefaultSpendUnitId() != null && !request.getDefaultSpendUnitId().isBlank()) {
             source.setDefaultSpendUnitId(requireUnit(account, request.getDefaultSpendUnitId()).getId());
         }
-        source = sourceRepository.save(source);
-        if (puller == null) {
-            throw new IllegalStateException("No puller for " + request.getSource());
+        source = sourceRepository.saveAndFlush(source);
+        // Check the token now so the row never shows "OK" for a credential nobody has tried.
+        try {
+            puller.probe(source.getToken(), source.getScope());
+            markHealthy(source);
+        } catch (VendorApiException e) {
+            markFailed(source, e);
         }
         return toDto(source);
     }
@@ -229,16 +232,29 @@ public class OutcomeServiceImpl implements OutcomeService {
                 ? null : requireUnit(account, request.getSpendUnitId()).getId();
         Outcome o = outcomeRepository.findByAccountIdAndSourceAndExternalId(account, OutcomeSource.MANUAL, request.getExternalId().trim())
                 .orElseGet(Outcome::new);
+        boolean fresh = o.getId() == null;
         o.setAccountId(account);
         o.setSource(OutcomeSource.MANUAL);
         o.setKind(request.getKind());
         o.setExternalId(request.getExternalId().trim());
-        o.setTitle(request.getTitle());
-        o.setUrl(request.getUrl());
-        o.setActorEmail(request.getActorEmail() == null ? null : request.getActorEmail().trim().toLowerCase(Locale.ROOT));
-        o.setActorLogin(request.getActorLogin() == null ? null : request.getActorLogin().trim());
-        o.setOccurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : clock.instant());
-        o.setSpendUnitId(attribution(account).resolve(o.getActorEmail(), o.getActorLogin(), explicit));
+        // A re-post updates what it sends and leaves the rest alone.
+        if (fresh || request.getTitle() != null) {
+            o.setTitle(request.getTitle());
+        }
+        if (fresh || request.getUrl() != null) {
+            o.setUrl(request.getUrl());
+        }
+        if (fresh || request.getActorEmail() != null) {
+            o.setActorEmail(request.getActorEmail() == null ? null : request.getActorEmail().trim().toLowerCase(Locale.ROOT));
+        }
+        if (fresh || request.getActorLogin() != null) {
+            o.setActorLogin(request.getActorLogin() == null ? null : request.getActorLogin().trim());
+        }
+        if (fresh || request.getOccurredAt() != null) {
+            o.setOccurredAt(request.getOccurredAt() != null ? request.getOccurredAt() : clock.instant());
+        }
+        UUID fallback = explicit != null ? explicit : o.getSpendUnitId();
+        o.setSpendUnitId(attribution(account).resolve(o.getActorEmail(), o.getActorLogin(), fallback));
         return toDto(outcomeRepository.save(o), unitName(account, o.getSpendUnitId()));
     }
 
@@ -289,20 +305,25 @@ public class OutcomeServiceImpl implements OutcomeService {
             }
         }
         Map<String, BigDecimal> spendByUnit = new HashMap<>();
-        for (SpendAllocationReportDto.Row r : allocation.getRows()) {
-            spendByUnit.put(r.getUnitId(), r.getSpendCents());
+        Map<String, BigDecimal> estimateByUnit = new HashMap<>();
+        for (SpendAllocationReportDto.AllocationRow r : allocation.getRows()) {
+            spendByUnit.put(r.getUnitId(), r.getTotalCents());   // metered only: one basis for every row
+            if (r.getPersonEstimateCents() != null) {
+                estimateByUnit.put(r.getUnitId(), r.getPersonEstimateCents());
+            }
         }
-        List<SpendOutcomeReportDto.Row> rows = new ArrayList<>();
+        List<SpendOutcomeReportDto.OutcomeRow> rows = new ArrayList<>();
         for (SpendUnit u : units) {
             long[] c = counts.getOrDefault(u.getId(), new long[3]);
             long n = c[0] + c[1] + c[2];
             BigDecimal spend = spendByUnit.getOrDefault(u.getId().toString(), BigDecimal.ZERO);
-            rows.add(SpendOutcomeReportDto.Row.builder()
+            rows.add(SpendOutcomeReportDto.OutcomeRow.builder()
                     .unitId(u.getId().toString()).name(u.getName()).type(u.getType())
                     .parentId(u.getParentId() == null ? null : u.getParentId().toString())
                     .prsMerged(c[0]).issuesDone(c[1]).custom(c[2]).outcomes(n)
                     .spendCents(spend)
-                    .costPerOutcomeCents(n == 0 ? null : spend.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP))
+                    .personEstimateCents(estimateByUnit.get(u.getId().toString()))
+                    .costPerOutcomeCents(n == 0 || spend.signum() == 0 ? null : spend.divide(BigDecimal.valueOf(n), 2, RoundingMode.HALF_UP))
                     .build());
         }
         BigDecimal totalSpend = allocation.getTotalMeteredCents();
@@ -310,7 +331,7 @@ public class OutcomeServiceImpl implements OutcomeService {
                 .from(start).to(end).rows(rows)
                 .totalOutcomes(total).unattributedOutcomes(unattributed)
                 .totalSpendCents(totalSpend)
-                .costPerOutcomeCents(total == 0 ? null : totalSpend.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP))
+                .costPerOutcomeCents(total == 0 || totalSpend.signum() == 0 ? null : totalSpend.divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP))
                 .build();
     }
 
@@ -347,6 +368,11 @@ public class OutcomeServiceImpl implements OutcomeService {
             }
             return fallback;
         }
+    }
+
+    static String normaliseLinearScope(String raw) {
+        List<String> teams = com.tansoflow.tansocore.integration.spend.LinearOutcomePuller.teams(raw);
+        return teams.isEmpty() ? "*" : String.join(", ", teams);
     }
 
     // ─── plumbing ───
