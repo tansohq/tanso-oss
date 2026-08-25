@@ -4001,7 +4001,7 @@ export interface components {
             meta?: unknown[];
             success?: boolean;
         };
-        Row: {
+        ReconcileRow: {
             /** @enum {string} */
             provider?: "ANTHROPIC" | "OPENAI";
             meteredCents?: number;
@@ -4020,7 +4020,7 @@ export interface components {
             from?: string;
             /** Format: date */
             to?: string;
-            rows?: components["schemas"]["Row"][];
+            rows?: components["schemas"]["ReconcileRow"][];
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendOutcomeReportDto: {
@@ -4030,12 +4030,33 @@ export interface components {
             meta?: unknown[];
             success?: boolean;
         };
+        OutcomeRow: {
+            unitId?: string;
+            name?: string;
+            /** @enum {string} */
+            type?: "TEAM" | "PERSON" | "PROJECT";
+            parentId?: string;
+            /** Format: int64 */
+            prsMerged?: number;
+            /** Format: int64 */
+            issuesDone?: number;
+            /** Format: int64 */
+            custom?: number;
+            /** Format: int64 */
+            outcomes?: number;
+            /** @description Metered spend allocated to the unit and its descendants — the price-book figure, same basis for every row. */
+            spendCents?: number;
+            /** @description PERSON units only: the vendor's own Claude Code estimate. Shown beside, never inside, spendCents. */
+            personEstimateCents?: number;
+            /** @description spendCents / outcomes; null when the unit shipped nothing or has no metered spend to divide. */
+            costPerOutcomeCents?: number;
+        };
         SpendOutcomeReportDto: {
             /** Format: date */
             from?: string;
             /** Format: date */
             to?: string;
-            rows?: components["schemas"]["Row"][];
+            rows?: components["schemas"]["OutcomeRow"][];
             /** Format: int64 */
             totalOutcomes?: number;
             /** Format: int64 */
@@ -4043,6 +4064,21 @@ export interface components {
             totalSpendCents?: number;
             /** @description Total spend over total outcomes; null when there are no outcomes. */
             costPerOutcomeCents?: number;
+        };
+        AllocationRow: {
+            unitId?: string;
+            name?: string;
+            /** @enum {string} */
+            type?: "TEAM" | "PERSON" | "PROJECT";
+            parentId?: string;
+            /** @description Metered cents matched directly to this unit's rules. */
+            ownCents?: number;
+            /** @description Own cents plus every descendant's own cents. */
+            totalCents?: number;
+            /** @description PERSON units only: the vendor's own per-person estimate (Claude Code). Not rolled up into parents — the same traffic already reaches the team through its key rules. */
+            personEstimateCents?: number;
+            /** @description What budgets are measured against: totalCents plus personEstimateCents. */
+            spendCents?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendAllocationReportDto: {
@@ -4057,7 +4093,7 @@ export interface components {
             from?: string;
             /** Format: date */
             to?: string;
-            rows?: components["schemas"]["Row"][];
+            rows?: components["schemas"]["AllocationRow"][];
             /** @description Metered cents no rule claimed. Always sums with the rows' own cents to totalMeteredCents. */
             unattributedCents?: number;
             totalMeteredCents?: number;

@@ -149,6 +149,10 @@
             "description": "Plan operations for client applications"
         },
         {
+            "name": "Outcomes (Client API)",
+            "description": "Record shipped work from CI with the tenant API key"
+        },
+        {
             "name": "Stripe Data",
             "description": "Operations for managing Stripe integration and keys"
         },
@@ -3254,6 +3258,43 @@
                 "security": [
                     {
                         "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/client/outcomes": {
+            "post": {
+                "tags": [
+                    "Outcomes (Client API)"
+                ],
+                "summary": "Record that something shipped",
+                "description": "Same contract as the console route: same externalId again updates the outcome. Tenant sk_ key only.",
+                "operationId": "record_1",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OutcomeRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseOutcomeDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "ApiKey": []
                     }
                 ]
             }
@@ -12076,7 +12117,7 @@
                     }
                 }
             },
-            "Row": {
+            "ReconcileRow": {
                 "type": "object",
                 "properties": {
                     "provider": {
@@ -12126,7 +12167,7 @@
                     "rows": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/Row"
+                            "$ref": "#/components/schemas/ReconcileRow"
                         }
                     }
                 }
@@ -12151,6 +12192,56 @@
                     }
                 }
             },
+            "OutcomeRow": {
+                "type": "object",
+                "properties": {
+                    "unitId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "TEAM",
+                            "PERSON",
+                            "PROJECT"
+                        ]
+                    },
+                    "parentId": {
+                        "type": "string"
+                    },
+                    "prsMerged": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "issuesDone": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "custom": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outcomes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "spendCents": {
+                        "type": "number",
+                        "description": "Metered spend allocated to the unit and its descendants \u2014 the price-book figure, same basis for every row."
+                    },
+                    "personEstimateCents": {
+                        "type": "number",
+                        "description": "PERSON units only: the vendor's own Claude Code estimate. Shown beside, never inside, spendCents."
+                    },
+                    "costPerOutcomeCents": {
+                        "type": "number",
+                        "description": "spendCents / outcomes; null when the unit shipped nothing or has no metered spend to divide."
+                    }
+                }
+            },
             "SpendOutcomeReportDto": {
                 "type": "object",
                 "properties": {
@@ -12165,7 +12256,7 @@
                     "rows": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/Row"
+                            "$ref": "#/components/schemas/OutcomeRow"
                         }
                     },
                     "totalOutcomes": {
@@ -12182,6 +12273,44 @@
                     "costPerOutcomeCents": {
                         "type": "number",
                         "description": "Total spend over total outcomes; null when there are no outcomes."
+                    }
+                }
+            },
+            "AllocationRow": {
+                "type": "object",
+                "properties": {
+                    "unitId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "TEAM",
+                            "PERSON",
+                            "PROJECT"
+                        ]
+                    },
+                    "parentId": {
+                        "type": "string"
+                    },
+                    "ownCents": {
+                        "type": "number",
+                        "description": "Metered cents matched directly to this unit's rules."
+                    },
+                    "totalCents": {
+                        "type": "number",
+                        "description": "Own cents plus every descendant's own cents."
+                    },
+                    "personEstimateCents": {
+                        "type": "number",
+                        "description": "PERSON units only: the vendor's own per-person estimate (Claude Code). Not rolled up into parents \u2014 the same traffic already reaches the team through its key rules."
+                    },
+                    "spendCents": {
+                        "type": "number",
+                        "description": "What budgets are measured against: totalCents plus personEstimateCents."
                     }
                 }
             },
@@ -12219,7 +12348,7 @@
                     "rows": {
                         "type": "array",
                         "items": {
-                            "$ref": "#/components/schemas/Row"
+                            "$ref": "#/components/schemas/AllocationRow"
                         }
                     },
                     "unattributedCents": {
