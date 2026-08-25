@@ -17,27 +17,12 @@
  */
 package com.tansoflow.tansocore.model.spend;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
-import com.tansoflow.tansocore.model.spend.type.VendorProvider;
-import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
-import java.time.Instant;
-
 @Getter
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class VendorConnectionDto {
-    private String id;
-    private VendorProvider provider;
-    private String label;
-    @Schema(description = "Last four characters of the admin key. The key itself is never returned.")
-    private String keyHint;
-    private VendorConnectionStatus status;
-    @Schema(description = "Why the last probe or sync failed; null while healthy.")
-    private String lastError;
-    private Instant lastSyncedAt;
-    private Instant createdAt;
+public class VendorProbeResultDto {
+    private boolean ok;
+    private String message;
 }

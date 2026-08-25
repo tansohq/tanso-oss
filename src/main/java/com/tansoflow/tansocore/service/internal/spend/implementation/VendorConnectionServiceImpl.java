@@ -85,6 +85,8 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
                 .provider(connection.getProvider())
                 .label(connection.getLabel())
                 .keyHint(connection.getKeyHint())
+                .status(connection.getStatus())
+                .lastError(connection.getLastError())
                 .lastSyncedAt(connection.getLastSyncedAt())
                 .createdAt(connection.getCreatedAt())
                 .build();

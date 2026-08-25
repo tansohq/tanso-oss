@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.entity;
 
+import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.model.spend.type.VendorProvider;
 import com.tansoflow.tansocore.util.EncryptedStringConverter;
 import jakarta.persistence.Column;
@@ -81,6 +82,14 @@ public class VendorConnection {
     @Size(max = 8)
     @Column(name = "key_hint", length = 8)
     private String keyHint;
+
+    @NotNull
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private VendorConnectionStatus status = VendorConnectionStatus.ACTIVE;
+
+    @Column(name = "last_error", length = Integer.MAX_VALUE)
+    private String lastError;
 
     @Column(name = "last_synced_at")
     private Instant lastSyncedAt;

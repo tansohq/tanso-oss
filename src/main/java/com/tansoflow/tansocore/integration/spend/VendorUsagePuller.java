@@ -15,29 +15,24 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.integration.spend;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.model.spend.type.VendorProvider;
-import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Getter;
 
-import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 
-@Getter
-@Builder
-@JsonInclude(JsonInclude.Include.NON_NULL)
-public class VendorConnectionDto {
-    private String id;
-    private VendorProvider provider;
-    private String label;
-    @Schema(description = "Last four characters of the admin key. The key itself is never returned.")
-    private String keyHint;
-    private VendorConnectionStatus status;
-    @Schema(description = "Why the last probe or sync failed; null while healthy.")
-    private String lastError;
-    private Instant lastSyncedAt;
-    private Instant createdAt;
+/**
+ * Reads an organisation's usage and cost out of a vendor's admin API. One
+ * implementation per {@link VendorProvider}. Pullers are stateless; the
+ * admin key comes in per call.
+ */
+public interface VendorUsagePuller {
+    VendorProvider provider();
+
+    /** Cheapest possible call that proves the key works. Throws {@link VendorApiException} otherwise. */
+    void probe(String adminKey);
+
+    /** Every row for days in [from, toExclusive). Callers keep windows to 31 days. */
+    List<UsageBucketRecord> pull(String adminKey, LocalDate from, LocalDate toExclusive);
 }

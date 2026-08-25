@@ -11,6 +11,9 @@ app:
   modules:
     build:
       enabled: ${APP_MODULES_BUILD_ENABLED:true}   # internal AI spend (Spend section, /api/v1/spend/**)
+  spend:
+    anthropic-base-url: ${APP_SPEND_ANTHROPIC_BASE_URL:https://api.anthropic.com}
+    openai-base-url: ${APP_SPEND_OPENAI_BASE_URL:https://api.openai.com}
   telemetry:
     enabled: ${TANSO_TELEMETRY_ENABLED:true}
     endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping
@@ -97,6 +100,8 @@ jobs:
     cron: 0 0 2 * * *
   subscriptionCycle:
     cron: 0 0 6 * * *
+  vendorUsageSync:
+    cron: 0 15 * * * *   # hourly; vendor reports lag 5–60 min, so each run re-pulls the last 3 days
   backgroundJobsWithFixedDelay:
     reconciliationDelay: 30000
 

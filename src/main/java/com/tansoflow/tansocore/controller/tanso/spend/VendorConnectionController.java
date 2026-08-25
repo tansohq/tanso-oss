@@ -20,8 +20,11 @@ package com.tansoflow.tansocore.controller.tanso.spend;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.spend.VendorConnectionDto;
+import com.tansoflow.tansocore.model.spend.VendorProbeResultDto;
+import com.tansoflow.tansocore.model.spend.VendorSyncResultDto;
 import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
+import com.tansoflow.tansocore.service.internal.spend.VendorSyncService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,8 +41,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -55,6 +61,7 @@ import java.util.List;
         description = "Vendor admin credentials Tanso pulls the operator's internal AI usage and cost from")
 public class VendorConnectionController {
     private final VendorConnectionService vendorConnectionService;
+    private final VendorSyncService vendorSyncService;
 
     @GetMapping
     @Operation(summary = "List connected vendor accounts (hints only)", security = @SecurityRequirement(name = "Bearer"))
@@ -73,6 +80,30 @@ public class VendorConnectionController {
         VendorConnectionDto created = vendorConnectionService.create(userContext.getAccountId(), request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.<VendorConnectionDto>builder().data(created).success(true).build());
+    }
+
+    @PostMapping("/{connectionId}/probe")
+    @Operation(summary = "Check the stored key against the vendor",
+            description = "One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<VendorProbeResultDto>> probe(
+            @AuthenticationPrincipal UserContext userContext, @PathVariable String connectionId) {
+        VendorProbeResultDto result = vendorSyncService.probe(userContext.getAccountId(), connectionId);
+        return ResponseEntity.ok(ApiResponse.<VendorProbeResultDto>builder().data(result).success(true).build());
+    }
+
+    @PostMapping("/{connectionId}/sync")
+    @Operation(summary = "Pull usage and cost for a window",
+            description = "Rewrites [from, to) from the vendor's reports. Defaults to the last 30 days. "
+                    + "Runs synchronously; a 30-day window is a handful of requests.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<VendorSyncResultDto>> sync(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String connectionId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        VendorSyncResultDto result = vendorSyncService.sync(userContext.getAccountId(), connectionId, from, to);
+        return ResponseEntity.ok(ApiResponse.<VendorSyncResultDto>builder().data(result).success(true).build());
     }
 
     @DeleteMapping("/{connectionId}")

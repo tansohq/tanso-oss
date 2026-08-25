@@ -1,0 +1,3 @@
+{"object":"page","data":[{"object":"bucket","start_time":1787184000,"end_time":1787270400,"results":[
+ {"object":"organization.costs.result","amount":{"value":0.0432,"currency":"usd"},"line_item":"gpt-4o-mini, input","project_id":"proj_1","organization_id":"org_1"}]}],
+ "has_more":false,"next_page":null}

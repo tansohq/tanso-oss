@@ -51,6 +51,14 @@ public class ModelPricing {
     @Column(name = "output_cost_per_million", precision = 18, scale = 6, nullable = false)
     private BigDecimal outputCostPerMillion;
 
+    /** Price of a cache-read input token. Null means unknown — estimates then fall back to the input rate. */
+    @Column(name = "cache_read_cost_per_million", precision = 18, scale = 6)
+    private BigDecimal cacheReadCostPerMillion;
+
+    /** Price of a cache-write (creation) input token. Null means unknown. */
+    @Column(name = "cache_write_cost_per_million", precision = 18, scale = 6)
+    private BigDecimal cacheWriteCostPerMillion;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
