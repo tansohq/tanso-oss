@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { Plus, Trash2 } from "lucide-react"
+import { Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
 
 import { DataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
@@ -15,24 +15,25 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { toast } from "@/components/ui/toast"
+import { providerLabel } from "@/features/spend/format"
 import {
   useCreateVendorConnection,
   useDeleteVendorConnection,
+  useProbeVendorConnection,
+  useSyncVendorConnection,
 } from "@/features/spend/mutations"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 import type { VendorConnectionDto } from "@/features/spend/types"
 import { VendorConnectionForm } from "@/features/spend/vendor-connection-form"
 
-const providerLabel: Record<string, string> = {
-  ANTHROPIC: "Anthropic",
-  OPENAI: "OpenAI",
-}
-
 export default function SpendConnectionsPage() {
   const connections = useVendorConnections()
   const create = useCreateVendorConnection()
   const remove = useDeleteVendorConnection()
+  const probe = useProbeVendorConnection()
+  const sync = useSyncVendorConnection()
   const [open, setOpen] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
   const columns: ColumnDef<VendorConnectionDto>[] = [
     {
@@ -55,6 +56,21 @@ export default function SpendConnectionsPage() {
       ),
     },
     {
+      accessorKey: "status",
+      header: "Status",
+      cell: ({ row }) =>
+        row.original.status === "ERROR" ? (
+          <span
+            className="text-destructive"
+            title={row.original.lastError ?? undefined}
+          >
+            Error — {row.original.lastError}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">OK</span>
+        ),
+    },
+    {
       accessorKey: "lastSyncedAt",
       header: "Last synced",
       cell: ({ row }) =>
@@ -67,33 +83,89 @@ export default function SpendConnectionsPage() {
     {
       id: "actions",
       header: "",
-      cell: ({ row }) => (
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Disconnect"
-          disabled={remove.isPending}
-          onClick={(event) => {
-            event.stopPropagation()
-            if (
-              !window.confirm(
-                `Disconnect ${row.original.label}? Tanso forgets the key.`
-              )
-            )
-              return
-            remove.mutate(row.original.id ?? "", {
-              onSuccess: () => toast.add({ title: "Disconnected" }),
-              onError: (error) =>
-                toast.add({
-                  title: "Disconnect failed",
-                  description: error.message,
-                }),
-            })
-          }}
-        >
-          <Trash2 />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const id = row.original.id ?? ""
+        const busy = busyId === id
+        return (
+          <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={(event) => {
+                event.stopPropagation()
+                setBusyId(id)
+                probe.mutate(id, {
+                  onSuccess: (result) =>
+                    toast.add({
+                      title: result.ok ? "Key accepted" : "Key rejected",
+                      description: result.message,
+                    }),
+                  onError: (error) =>
+                    toast.add({
+                      title: "Check failed",
+                      description: error.message,
+                    }),
+                  onSettled: () => setBusyId(null),
+                })
+              }}
+            >
+              <ShieldCheck data-icon="inline-start" />
+              Check key
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={(event) => {
+                event.stopPropagation()
+                setBusyId(id)
+                sync.mutate(id, {
+                  onSuccess: (result) =>
+                    toast.add({
+                      title: "Synced",
+                      description: `${result.rowsWritten} rows for ${result.from} → ${result.to}`,
+                    }),
+                  onError: (error) =>
+                    toast.add({
+                      title: "Sync failed",
+                      description: error.message,
+                    }),
+                  onSettled: () => setBusyId(null),
+                })
+              }}
+            >
+              <RefreshCw data-icon="inline-start" />
+              Sync now
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Disconnect"
+              disabled={busy || remove.isPending}
+              onClick={(event) => {
+                event.stopPropagation()
+                if (
+                  !window.confirm(
+                    `Disconnect ${row.original.label}? Tanso forgets the key.`
+                  )
+                )
+                  return
+                remove.mutate(id, {
+                  onSuccess: () => toast.add({ title: "Disconnected" }),
+                  onError: (error) =>
+                    toast.add({
+                      title: "Disconnect failed",
+                      description: error.message,
+                    }),
+                })
+              }}
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        )
+      },
     },
   ]
 
@@ -106,7 +178,8 @@ export default function SpendConnectionsPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             Admin credentials Tanso pulls your organisation&apos;s AI usage and
-            cost from.
+            cost from. Synced hourly; &ldquo;Sync now&rdquo; pulls the last 30
+            days.
           </p>
         </div>
         <Button onClick={() => setOpen(true)}>
@@ -141,7 +214,10 @@ export default function SpendConnectionsPage() {
                 create.mutate(input, {
                   onSuccess: () => {
                     setOpen(false)
-                    toast.add({ title: "Vendor connected" })
+                    toast.add({
+                      title: "Vendor connected",
+                      description: "Check the key, then sync.",
+                    })
                   },
                   onError: (error) =>
                     toast.add({

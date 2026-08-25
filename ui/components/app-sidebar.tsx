@@ -11,6 +11,7 @@ import {
   Puzzle,
   ReceiptText,
   Repeat,
+  Scale,
   Settings,
   Users,
   Wallet,
@@ -46,6 +47,8 @@ const customersNav = [
 const usageNav = [{ title: "Events", href: "/events", icon: Activity }]
 
 const spendNav = [
+  { title: "Usage", href: "/spend/usage", icon: Gauge },
+  { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
   { title: "Connections", href: "/spend/connections", icon: Wallet },
 ]
 
