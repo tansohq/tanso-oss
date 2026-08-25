@@ -1,0 +1,72 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-1"
+      author: tanso
+      comment: >
+        Build side, first table. The serve side answers what it costs to serve
+        each customer; the build side answers what the operator's own AI spend
+        is, starting from the vendor's admin API rather than a proxy in the
+        request path. vendor_connections holds one admin credential per
+        connected org. admin_key is written through EncryptedStringConverter
+        (enc:v1 ciphertext under APP_SECRETS_KEY) — an Anthropic admin key is
+        full org admin with no read-only scope, so it must never sit in the
+        clear. key_hint keeps the last four characters for the console.
+        sync_cursor and last_synced_at are for the phase-1 usage pull.
+      changes:
+        - createTable:
+            tableName: vendor_connections
+            columns:
+              - column:
+                  name: vendor_connection_id
+                  type: UUID
+                  defaultValueComputed: gen_random_uuid()
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: account_id
+                  type: UUID
+                  constraints:
+                    nullable: false
+              - column:
+                  name: provider
+                  type: VARCHAR(32)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: label
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: admin_key
+                  type: TEXT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: key_hint
+                  type: VARCHAR(8)
+              - column:
+                  name: last_synced_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: sync_cursor
+                  type: TEXT
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: modified_at
+                  type: TIMESTAMP WITH TIME ZONE
+              - column:
+                  name: deleted_at
+                  type: TIMESTAMP WITH TIME ZONE
+        - createIndex:
+            tableName: vendor_connections
+            indexName: idx_vendor_connections_account
+            columns:
+              - column:
+                  name: account_id

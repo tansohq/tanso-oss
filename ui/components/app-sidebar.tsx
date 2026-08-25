@@ -13,6 +13,7 @@ import {
   Repeat,
   Settings,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import {
@@ -42,6 +43,10 @@ const customersNav = [
 ]
 
 const usageNav = [{ title: "Events", href: "/events", icon: Activity }]
+
+const spendNav = [
+  { title: "Connections", href: "/spend/connections", icon: Wallet },
+]
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -137,6 +142,24 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        <SidebarGroup>
+          <SidebarGroupLabel>Spend</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {spendNav.map((item) => (
+                <SidebarMenuItem key={item.href}>
+                  <SidebarMenuButton
+                    render={<Link href={item.href} />}
+                    isActive={isActive(item.href)}
+                  >
+                    <item.icon />
+                    {item.title}
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -157,7 +180,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
         {email && (
-          <div className="truncate px-2 pb-1 text-xs text-muted-foreground">{email}</div>
+          <div className="truncate px-2 pb-1 text-xs text-muted-foreground">
+            {email}
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>
