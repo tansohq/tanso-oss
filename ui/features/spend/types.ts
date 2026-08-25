@@ -98,6 +98,7 @@ export interface SpendUnitDto {
   type: SpendUnitType
   name: string
   email?: string
+  githubLogin?: string
   parentId?: string
   createdAt?: string
 }
@@ -162,4 +163,57 @@ export interface SpendSettingsDto {
   personLevelEnabled: boolean
   workerNotice?: string | null
   slackConfigured: boolean
+}
+
+// ---- phase 3: outcomes
+export type OutcomeSource = "GITHUB" | "LINEAR" | "MANUAL"
+export type OutcomeKind = "PR_MERGED" | "ISSUE_DONE" | "CUSTOM"
+
+export interface OutcomeSourceDto {
+  id: string
+  source: OutcomeSource
+  label: string
+  scope: string
+  defaultSpendUnitId?: string | null
+  status: "ACTIVE" | "ERROR"
+  lastError?: string | null
+  lastSyncedAt?: string | null
+  createdAt?: string
+}
+
+export interface OutcomeDto {
+  id: string
+  source: OutcomeSource
+  kind: OutcomeKind
+  externalId: string
+  title?: string | null
+  url?: string | null
+  actorEmail?: string | null
+  actorLogin?: string | null
+  spendUnitId?: string | null
+  unitName?: string | null
+  occurredAt: string
+}
+
+export interface SpendOutcomeRowDto {
+  unitId: string
+  name: string
+  type: SpendUnitType
+  parentId?: string | null
+  prsMerged: number
+  issuesDone: number
+  custom: number
+  outcomes: number
+  spendCents: number
+  costPerOutcomeCents?: number | null
+}
+
+export interface SpendOutcomeReportDto {
+  from: string
+  to: string
+  rows: SpendOutcomeRowDto[]
+  totalOutcomes: number
+  unattributedOutcomes: number
+  totalSpendCents: number
+  costPerOutcomeCents?: number | null
 }

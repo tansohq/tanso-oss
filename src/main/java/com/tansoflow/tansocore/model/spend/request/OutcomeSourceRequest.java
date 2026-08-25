@@ -17,26 +17,28 @@
  */
 package com.tansoflow.tansocore.model.spend.request;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
+import lombok.ToString;
 
 @Data
-public class SpendUnitRequest {
+public class OutcomeSourceRequest {
     @NotNull
-    private SpendUnitType type;
+    private OutcomeSource source;
     @NotBlank
-    @Size(max = 120)
-    private String name;
-    @Size(max = 255)
-    @Schema(description = "For PERSON units: the address Claude Code reports them under.")
-    private String email;
-    @Size(max = 120)
-    @Schema(description = "For PERSON units: their GitHub login, so merged pull requests attribute to them.")
-    private String githubLogin;
-    @Schema(description = "Unit this one rolls up into (a team for a person, a project for a team). Optional.")
-    private String parentId;
+    @Size(max = 100)
+    private String label;
+    @NotBlank
+    @ToString.Exclude
+    @Schema(description = "GitHub token with read access to the repos, or a Linear API key. Stored encrypted; never returned.")
+    private String token;
+    @NotBlank
+    @Schema(description = "GitHub: comma-separated owner/repo. Linear: comma-separated team keys, or * for all.")
+    private String scope;
+    @Schema(description = "Unit an outcome lands on when no person matches its author.")
+    private String defaultSpendUnitId;
 }

@@ -17,8 +17,11 @@
  */
 package com.tansoflow.tansocore.entity;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
+import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
+import com.tansoflow.tansocore.util.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -34,37 +37,49 @@ import org.hibernate.annotations.SQLRestriction;
 import java.time.Instant;
 import java.util.UUID;
 
-/** A person, team or project internal AI spend is allocated to. A unit may sit under a parent. */
+/** A system Tanso pulls shipped work from: a GitHub token over some repos, a Linear key over some teams. */
 @Getter
 @Setter
 @Entity
-@Table(name = "spend_units")
+@Table(name = "outcome_sources")
 @SQLRestriction("deleted_at IS NULL")
-public class SpendUnit {
+public class OutcomeSourceConnection {
     @Id
     @GeneratedValue
-    @Column(name = "spend_unit_id", nullable = false, updatable = false)
+    @Column(name = "outcome_source_id", nullable = false, updatable = false)
     private UUID id;
 
     @Column(name = "account_id", nullable = false, updatable = false)
     private UUID accountId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false, length = 16)
-    private SpendUnitType type;
+    @Column(name = "source", nullable = false, length = 16, updatable = false)
+    private OutcomeSource source;
 
-    @Column(name = "name", nullable = false, length = 120)
-    private String name;
+    @Column(name = "label", nullable = false, length = 100)
+    private String label;
 
-    @Column(name = "email", length = 255)
-    private String email;
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "token", nullable = false, length = Integer.MAX_VALUE)
+    private String token;
 
-    /** Pull request authors are GitHub logins, not emails. */
-    @Column(name = "github_login", length = 120)
-    private String githubLogin;
+    /** GitHub: comma-separated "owner/repo" list. Linear: comma-separated team keys, or "*" for all. */
+    @Column(name = "scope", nullable = false, length = Integer.MAX_VALUE)
+    private String scope;
 
-    @Column(name = "parent_id")
-    private UUID parentId;
+    /** Where an outcome lands when no person matches its actor. */
+    @Column(name = "default_spend_unit_id")
+    private UUID defaultSpendUnitId;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 16)
+    private VendorConnectionStatus status = VendorConnectionStatus.ACTIVE;
+
+    @Column(name = "last_error", length = Integer.MAX_VALUE)
+    private String lastError;
+
+    @Column(name = "last_synced_at")
+    private Instant lastSyncedAt;
 
     @Setter(AccessLevel.NONE)
     @CreationTimestamp

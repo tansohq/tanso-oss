@@ -17,7 +17,8 @@
  */
 package com.tansoflow.tansocore.model.spend;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -25,12 +26,16 @@ import java.time.Instant;
 
 @Getter
 @Builder
-public class SpendUnitDto {
+public class OutcomeDto {
     private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
-    private Instant createdAt;
+    private OutcomeSource source;
+    private OutcomeKind kind;
+    private String externalId;
+    private String title;
+    private String url;
+    private String actorEmail;
+    private String actorLogin;
+    private String spendUnitId;
+    private String unitName;
+    private Instant occurredAt;
 }

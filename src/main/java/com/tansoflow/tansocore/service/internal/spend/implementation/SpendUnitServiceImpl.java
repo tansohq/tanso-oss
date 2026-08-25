@@ -142,6 +142,8 @@ public class SpendUnitServiceImpl implements SpendUnitService {
         unit.setName(request.getName().trim());
         String email = request.getEmail() == null || request.getEmail().isBlank() ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
         unit.setEmail(email);
+        String login = request.getGithubLogin() == null || request.getGithubLogin().isBlank() ? null : request.getGithubLogin().trim().replaceFirst("^@", "");
+        unit.setGithubLogin(login);
         if (request.getParentId() == null || request.getParentId().isBlank()) {
             unit.setParentId(null);
         } else {
@@ -168,7 +170,7 @@ public class SpendUnitServiceImpl implements SpendUnitService {
 
     static SpendUnitDto toDto(SpendUnit u) {
         return SpendUnitDto.builder()
-                .id(u.getId().toString()).type(u.getType()).name(u.getName()).email(u.getEmail())
+                .id(u.getId().toString()).type(u.getType()).name(u.getName()).email(u.getEmail()).githubLogin(u.getGithubLogin())
                 .parentId(u.getParentId() == null ? null : u.getParentId().toString())
                 .createdAt(u.getCreatedAt()).build();
     }

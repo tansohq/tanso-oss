@@ -17,26 +17,35 @@
  */
 package com.tansoflow.tansocore.model.spend.request;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.time.Instant;
+
+/** What a CI job or script posts when something ships. */
 @Data
-public class SpendUnitRequest {
+public class OutcomeRequest {
     @NotNull
-    private SpendUnitType type;
+    private OutcomeKind kind;
     @NotBlank
-    @Size(max = 120)
-    private String name;
     @Size(max = 255)
-    @Schema(description = "For PERSON units: the address Claude Code reports them under.")
-    private String email;
-    @Size(max = 120)
-    @Schema(description = "For PERSON units: their GitHub login, so merged pull requests attribute to them.")
-    private String githubLogin;
-    @Schema(description = "Unit this one rolls up into (a team for a person, a project for a team). Optional.")
-    private String parentId;
+    @Schema(description = "Stable id in your system, e.g. a PR URL or ticket key. Posting the same id again updates the outcome.")
+    private String externalId;
+    @Size(max = 500)
+    private String title;
+    @Size(max = 1000)
+    private String url;
+    @Size(max = 255)
+    @Schema(description = "Who did it, for attribution to a person (needs person level on).")
+    private String actorEmail;
+    @Size(max = 255)
+    private String actorLogin;
+    @Schema(description = "Unit to attribute to when no person matches. Optional.")
+    private String spendUnitId;
+    @Schema(description = "When it shipped. Default: now.")
+    private Instant occurredAt;
 }

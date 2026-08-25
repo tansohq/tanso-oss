@@ -285,6 +285,16 @@ It works from the vendor's admin API, not a proxy in your request path:
    in the request path, so a "Block" budget cannot stop a request — its alert
    says so; enforce at your gateway or revoke the key.
 
+6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
+   (merged pull requests per repo) or Linear (completed issues per team), or
+   have any CI job post one: `POST /api/v1/spend/outcomes` with a kind
+   (`PR_MERGED`, `ISSUE_DONE`, `CUSTOM`), a stable `externalId`, and who did
+   it. An outcome lands on the person whose email or GitHub login matches
+   (person level on), else on the source's default unit. The report divides
+   a unit's spend (with descendants) by its outcomes (with descendants):
+   cost per merged PR, per team, per month. Pulled hourly for the last three
+   days; re-pulls upsert.
+
 Person-level attribution is **off by default**. Attributing spend to a named
 employee is a monitoring capability (in Germany a works council can veto it);
 the switch under Spend settings will not turn on until you have written down
@@ -305,10 +315,13 @@ report, so "vendor − invoice" carries the seats.
 API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,allocation}`,
 `/api/v1/spend/invoices`, `/api/v1/spend/units` and `/api/v1/spend/units/{id}/budget`,
 `/api/v1/spend/rules`, `/api/v1/spend/alerts` (+ `/{id}/ack`),
-`POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings` (console JWT only).
-`APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at
-a gateway or proxy instead of the vendor. Next: the join to merged PRs and
-closed issues, so spend rolls up to shipped work.
+`POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
+`/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
+`/api/v1/spend/reports/outcomes` (console JWT only).
+`APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
+`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor. Next:
+feature-level P&L — a project's build cost next to the serve-side revenue of
+the feature it shipped.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
@@ -335,6 +348,7 @@ supply them via environment variables. The common ones:
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
+| `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

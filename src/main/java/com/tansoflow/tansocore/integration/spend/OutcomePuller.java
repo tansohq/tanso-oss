@@ -15,22 +15,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.integration.spend;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
-import lombok.Builder;
-import lombok.Getter;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
 
 import java.time.Instant;
+import java.util.List;
 
-@Getter
-@Builder
-public class SpendUnitDto {
-    private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
-    private Instant createdAt;
+/** Reads shipped work out of an engineering system. Stateless; token and scope come in per call. */
+public interface OutcomePuller {
+    OutcomeSource source();
+
+    /** Cheapest call that proves the token works for the scope. Throws {@link com.tansoflow.tansocore.model.exception.VendorApiException} otherwise. */
+    void probe(String token, String scope);
+
+    /** Outcomes that completed in [from, to). */
+    List<OutcomeRecord> pull(String token, String scope, Instant from, Instant to);
 }

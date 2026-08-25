@@ -17,7 +17,8 @@
  */
 package com.tansoflow.tansocore.entity;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -29,48 +30,59 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.UUID;
 
-/** A person, team or project internal AI spend is allocated to. A unit may sit under a parent. */
+/** One unit of shipped work. Unique per (account, source, external id) so re-pulls upsert. */
 @Getter
 @Setter
 @Entity
-@Table(name = "spend_units")
-@SQLRestriction("deleted_at IS NULL")
-public class SpendUnit {
+@Table(name = "outcomes")
+public class Outcome {
     @Id
     @GeneratedValue
-    @Column(name = "spend_unit_id", nullable = false, updatable = false)
+    @Column(name = "outcome_id", nullable = false, updatable = false)
     private UUID id;
 
     @Column(name = "account_id", nullable = false, updatable = false)
     private UUID accountId;
 
+    @Column(name = "outcome_source_id")
+    private UUID sourceConnectionId;
+
     @Enumerated(EnumType.STRING)
-    @Column(name = "type", nullable = false, length = 16)
-    private SpendUnitType type;
+    @Column(name = "source", nullable = false, length = 16)
+    private OutcomeSource source;
 
-    @Column(name = "name", nullable = false, length = 120)
-    private String name;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kind", nullable = false, length = 16)
+    private OutcomeKind kind;
 
-    @Column(name = "email", length = 255)
-    private String email;
+    @Column(name = "external_id", nullable = false, length = 255)
+    private String externalId;
 
-    /** Pull request authors are GitHub logins, not emails. */
-    @Column(name = "github_login", length = 120)
-    private String githubLogin;
+    @Column(name = "title", length = 500)
+    private String title;
 
-    @Column(name = "parent_id")
-    private UUID parentId;
+    @Column(name = "url", length = 1000)
+    private String url;
+
+    @Column(name = "actor_email", length = 255)
+    private String actorEmail;
+
+    @Column(name = "actor_login", length = 255)
+    private String actorLogin;
+
+    /** Resolved at write time: the person whose email/login matched, else the source's default unit. */
+    @Column(name = "spend_unit_id")
+    private UUID spendUnitId;
+
+    @Column(name = "occurred_at", nullable = false)
+    private Instant occurredAt;
 
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
-
-    @Column(name = "deleted_at")
-    private Instant deletedAt;
 }

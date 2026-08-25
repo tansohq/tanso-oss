@@ -17,7 +17,9 @@
  */
 package com.tansoflow.tansocore.model.spend;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
+import com.tansoflow.tansocore.model.spend.type.OutcomeSource;
+import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -25,12 +27,15 @@ import java.time.Instant;
 
 @Getter
 @Builder
-public class SpendUnitDto {
+public class OutcomeSourceDto {
     private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
+    private OutcomeSource source;
+    private String label;
+    @Schema(description = "GitHub: owner/repo list. Linear: team keys or *.")
+    private String scope;
+    private String defaultSpendUnitId;
+    private VendorConnectionStatus status;
+    private String lastError;
+    private Instant lastSyncedAt;
     private Instant createdAt;
 }

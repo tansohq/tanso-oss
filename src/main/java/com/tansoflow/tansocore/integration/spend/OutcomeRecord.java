@@ -15,22 +15,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.integration.spend;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
-import lombok.Builder;
-import lombok.Getter;
+import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
 
 import java.time.Instant;
 
-@Getter
-@Builder
-public class SpendUnitDto {
-    private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
-    private Instant createdAt;
+/** One shipped thing a puller found. externalId must be stable across pulls. */
+public record OutcomeRecord(OutcomeKind kind, String externalId, String title, String url,
+                            String actorEmail, String actorLogin, Instant occurredAt) {
 }

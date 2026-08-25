@@ -3,6 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { apiFetch, apiUpload } from "@/lib/api/client"
 import type { VendorConnectionInput } from "./schemas"
 import type {
+  OutcomeDto,
+  OutcomeKind,
+  OutcomeSource,
+  OutcomeSourceDto,
   AttributionMatchKind,
   BudgetMode,
   SpendAlertDto,
@@ -128,6 +132,7 @@ export interface SpendUnitInput {
   type: SpendUnitType
   name: string
   email?: string
+  githubLogin?: string
   parentId?: string
 }
 
@@ -290,5 +295,90 @@ export function useUpdateSpendSettings() {
       queryClient.invalidateQueries({ queryKey: ["spend-usage"] })
       queryClient.invalidateQueries({ queryKey: ["spend-allocation"] })
     },
+  })
+}
+
+// ---- phase 3: outcomes
+export interface OutcomeSourceInput {
+  source: OutcomeSource
+  label: string
+  token: string
+  scope: string
+  defaultSpendUnitId?: string
+}
+
+function invalidateOutcomes(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["outcome-sources"] })
+  queryClient.invalidateQueries({ queryKey: ["outcomes"] })
+  queryClient.invalidateQueries({ queryKey: ["outcome-report"] })
+}
+
+export function useCreateOutcomeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: OutcomeSourceInput) =>
+      apiFetch<OutcomeSourceDto>("/api/v1/spend/outcome-sources", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => invalidateOutcomes(queryClient),
+  })
+}
+
+export function useDeleteOutcomeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`/api/v1/spend/outcome-sources/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => invalidateOutcomes(queryClient),
+  })
+}
+
+export function useProbeOutcomeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<VendorProbeResultDto>(
+        `/api/v1/spend/outcome-sources/${id}/probe`,
+        { method: "POST" }
+      ),
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: ["outcome-sources"] }),
+  })
+}
+
+export function useSyncOutcomeSource() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<VendorSyncResultDto>(
+        `/api/v1/spend/outcome-sources/${id}/sync`,
+        { method: "POST" }
+      ),
+    onSettled: () => invalidateOutcomes(queryClient),
+  })
+}
+
+export interface OutcomeInput {
+  kind: OutcomeKind
+  externalId: string
+  title?: string
+  url?: string
+  actorEmail?: string
+  actorLogin?: string
+  spendUnitId?: string
+}
+
+export function useRecordOutcome() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: OutcomeInput) =>
+      apiFetch<OutcomeDto>("/api/v1/spend/outcomes", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => invalidateOutcomes(queryClient),
   })
 }

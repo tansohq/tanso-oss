@@ -7,6 +7,7 @@ import {
   Bell,
   Coins,
   Gauge,
+  GitMerge,
   LogOut,
   Package,
   Puzzle,
@@ -51,6 +52,7 @@ const spendNav = [
   { title: "Usage", href: "/spend/usage", icon: Gauge },
   { title: "Teams", href: "/spend/teams", icon: Users },
   { title: "Alerts", href: "/spend/alerts", icon: Bell },
+  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
   { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
   { title: "Connections", href: "/spend/connections", icon: Wallet },
 ]

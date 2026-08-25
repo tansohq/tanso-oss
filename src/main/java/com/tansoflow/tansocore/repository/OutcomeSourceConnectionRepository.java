@@ -15,22 +15,19 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.repository;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
-import lombok.Builder;
-import lombok.Getter;
+import com.tansoflow.tansocore.entity.OutcomeSourceConnection;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-@Getter
-@Builder
-public class SpendUnitDto {
-    private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
-    private Instant createdAt;
+@Repository
+public interface OutcomeSourceConnectionRepository extends JpaRepository<OutcomeSourceConnection, UUID> {
+    List<OutcomeSourceConnection> findAllByAccountIdOrderByCreatedAtAsc(UUID accountId);
+
+    Optional<OutcomeSourceConnection> findByIdAndAccountId(UUID id, UUID accountId);
 }

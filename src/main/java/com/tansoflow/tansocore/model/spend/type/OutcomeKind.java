@@ -15,22 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.model.spend.type;
 
-import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
-import lombok.Builder;
-import lombok.Getter;
-
-import java.time.Instant;
-
-@Getter
-@Builder
-public class SpendUnitDto {
-    private String id;
-    private SpendUnitType type;
-    private String name;
-    private String email;
-    private String githubLogin;
-    private String parentId;
-    private Instant createdAt;
+/** What kind of shipped work an outcome is. */
+public enum OutcomeKind {
+    PR_MERGED,
+    ISSUE_DONE,
+    CUSTOM
 }

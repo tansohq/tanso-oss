@@ -41,6 +41,7 @@ export function UnitForm({
   const [type, setType] = useState<SpendUnitType>(existing?.type ?? "TEAM")
   const [name, setName] = useState(existing?.name ?? "")
   const [email, setEmail] = useState(existing?.email ?? "")
+  const [githubLogin, setGithubLogin] = useState(existing?.githubLogin ?? "")
   const [parentId, setParentId] = useState<string | null>(
     existing?.parentId ?? null
   )
@@ -72,6 +73,7 @@ export function UnitForm({
           type,
           name: name.trim(),
           email: email.trim() || undefined,
+          githubLogin: githubLogin.trim() || undefined,
           parentId: parentId ?? undefined,
         }
         const opts = {
@@ -131,6 +133,20 @@ export function UnitForm({
             <p className="text-xs text-muted-foreground">
               The address Claude Code reports them under. Add an actor rule with
               it to attribute their spend.
+            </p>
+          </Field>
+        )}
+        {type === "PERSON" && (
+          <Field>
+            <FieldLabel htmlFor="unit-github">GitHub login</FieldLabel>
+            <Input
+              id="unit-github"
+              value={githubLogin}
+              onChange={(e) => setGithubLogin(e.target.value)}
+              placeholder="alice"
+            />
+            <p className="text-xs text-muted-foreground">
+              Merged pull requests by this login count as their outcomes.
             </p>
           </Field>
         )}
