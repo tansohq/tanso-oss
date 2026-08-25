@@ -29,6 +29,7 @@ import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.repository.AccountApiKeyRepository;
 import com.tansoflow.tansocore.repository.ApiKeySpendRecordRepository;
 import com.tansoflow.tansocore.repository.CustomerRepository;
+import com.tansoflow.tansocore.util.BudgetWindow;
 import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +38,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -249,40 +249,16 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
     }
 
     /**
-     * Start of the window {@code now} falls in. Windows tile forward from
-     * budget_started_at, so a budget set mid-month resets on that day of the
-     * month rather than on the 1st.
+     * Per-key budgets tile forward from budget_started_at (see
+     * {@link BudgetWindow#tiling}), so a budget set mid-month resets on that
+     * day of the month rather than on the 1st.
      */
     private Instant windowStart(AccountApiKey key, Instant now) {
-        Instant anchor = key.getBudgetStartedAt();
-        BudgetPeriod period = key.getBudgetPeriod();
-        if (anchor == null || period == null || period == BudgetPeriod.TOTAL) {
-            return anchor != null ? anchor : Instant.EPOCH;
-        }
-        Duration length = periodLength(period);
-        long elapsed = Duration.between(anchor, now).toSeconds();
-        if (elapsed < 0) {
-            return anchor;
-        }
-        long windowsPassed = elapsed / length.toSeconds();
-        return anchor.plusSeconds(windowsPassed * length.toSeconds());
+        return BudgetWindow.tiling(key.getBudgetStartedAt(), key.getBudgetPeriod(), now).start();
     }
 
     private Instant resetsAt(AccountApiKey key, Instant windowStart) {
-        BudgetPeriod period = key.getBudgetPeriod();
-        if (period == null || period == BudgetPeriod.TOTAL) {
-            return null;
-        }
-        return windowStart.plus(periodLength(period));
-    }
-
-    private Duration periodLength(BudgetPeriod period) {
-        return switch (period) {
-            case DAY -> Duration.ofDays(1);
-            case WEEK -> Duration.ofDays(7);
-            case MONTH -> Duration.ofDays(30);
-            case TOTAL -> Duration.ZERO;
-        };
+        return BudgetWindow.tiling(key.getBudgetStartedAt(), key.getBudgetPeriod(), windowStart).resetsAt();
     }
 
     private AccountApiKey requireCustomerKey(String accountId, String customerReferenceId, String keyId) {
