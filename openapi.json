@@ -25,6 +25,10 @@
             "description": "Public endpoints for ingesting data from Stripe webhooks"
         },
         {
+            "name": "Spend \u2014 Vendor Connections",
+            "description": "Vendor admin credentials Tanso pulls the operator's internal AI usage and cost from"
+        },
+        {
             "name": "Client Billing",
             "description": "Billing operations for client applications"
         },
@@ -727,6 +731,67 @@
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/spend/connections": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "List connected vendor accounts (hints only)",
+                "operationId": "list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListVendorConnectionDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Connect a vendor account",
+                "description": "The admin key is stored encrypted and never returned; only its last four characters are.",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateVendorConnectionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorConnectionDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
             }
         },
         "/api/v1/monetization/subscriptions": {
@@ -5679,6 +5744,42 @@
                 }
             }
         },
+        "/api/v1/spend/connections/{connectionId}": {
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Disconnect a vendor account",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/monetization/subscriptions/{subscriptionUuid}/scheduled-changes": {
             "delete": {
                 "tags": [
@@ -6388,6 +6489,84 @@
                     "imported": {
                         "type": "integer",
                         "format": "int32"
+                    }
+                }
+            },
+            "CreateVendorConnectionRequest": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "How this org shows up in the console, e.g. \"Anthropic \u2014 engineering org\"",
+                        "maxLength": 100,
+                        "minLength": 0
+                    },
+                    "adminKey": {
+                        "type": "string",
+                        "description": "Vendor admin key. Stored encrypted; never returned.",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "adminKey",
+                    "label",
+                    "provider"
+                ]
+            },
+            "ApiResponseVendorConnectionDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorConnectionDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorConnectionDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "keyHint": {
+                        "type": "string",
+                        "description": "Last four characters of the admin key. The key itself is never returned."
+                    },
+                    "lastSyncedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 }
             },
@@ -9530,6 +9709,29 @@
                     "createdAt": {
                         "type": "string",
                         "format": "date-time"
+                    }
+                }
+            },
+            "ApiResponseListVendorConnectionDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/VendorConnectionDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
                     }
                 }
             },

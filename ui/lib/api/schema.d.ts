@@ -142,6 +142,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List connected vendor accounts (hints only) */
+        get: operations["list"];
+        put?: never;
+        /**
+         * Connect a vendor account
+         * @description The admin key is stored encrypted and never returned; only its last four characters are.
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/subscriptions": {
         parameters: {
             query?: never;
@@ -1454,6 +1475,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/connections/{connectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect a vendor account */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/subscriptions/{subscriptionUuid}/scheduled-changes": {
         parameters: {
             query?: never;
@@ -1748,6 +1786,34 @@ export interface components {
             totalRows?: number;
             /** Format: int32 */
             imported?: number;
+        };
+        CreateVendorConnectionRequest: {
+            /** @enum {string} */
+            provider: "ANTHROPIC" | "OPENAI";
+            /** @description How this org shows up in the console, e.g. "Anthropic — engineering org" */
+            label: string;
+            /** @description Vendor admin key. Stored encrypted; never returned. */
+            adminKey: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorConnectionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorConnectionDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorConnectionDto: {
+            id?: string;
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            label?: string;
+            /** @description Last four characters of the admin key. The key itself is never returned. */
+            keyHint?: string;
+            /** Format: date-time */
+            lastSyncedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
         };
         SubscriptionRequest: {
             planId: string;
@@ -3085,6 +3151,14 @@ export interface components {
             createdAt?: string;
         };
         /** @description Generic API response wrapper */
+        ApiResponseListVendorConnectionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorConnectionDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
         ApiResponseListSubscriptionDto: {
             /** @description Response data */
             data?: components["schemas"]["SubscriptionDto"][];
@@ -3982,6 +4056,50 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseCsvImportResult"];
+                };
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListVendorConnectionDto"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVendorConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorConnectionDto"];
                 };
             };
         };
@@ -6410,6 +6528,28 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
             };
             cookie?: never;
         };
