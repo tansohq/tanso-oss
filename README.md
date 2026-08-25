@@ -250,13 +250,30 @@ The engine has two halves. The **serve side** — everything above — answers w
 it costs to serve each customer. The **build side** answers what your own AI
 spend is: the Anthropic and OpenAI bills for your engineers and agents.
 
-Today it is the door: **Spend → Connections** in the console stores a vendor
-admin key (Anthropic `sk-ant-admin01-…`, OpenAI admin key) encrypted at rest and
-shows only its last four characters. Tanso does not call the vendor yet —
-"Last synced: Never" is expected until the usage pull ships. What comes next,
-in order: the usage/cost pull and usage-vs-invoice reconcile, allocation to
-teams and people with daily + monthly budgets, and the join to merged PRs and
-closed issues.
+It works from the vendor's admin API, not a proxy in your request path:
+
+1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`)
+   or an OpenAI admin key. It is encrypted at rest and only its last four
+   characters are ever shown. **Check key** makes one call to prove it works;
+   **Sync now** pulls the last 30 days. An hourly job re-pulls the last three
+   days after that (vendor reports lag by up to an hour).
+2. **Spend → Usage**: tokens and cost by model, by day, and by person, two
+   ways — what the price book (`model_pricing`) says the tokens should cost
+   and what the vendor's own cost report says. Anthropic reports people only
+   for Claude Code; OpenAI only for user-scoped keys.
+3. **Spend → Reconcile**: per vendor and period, metered vs vendor-reported
+   vs invoiced, with the two variances. Import the bill as a CSV with a header
+   row — `description, amount` (dollars), optional `kind` (TOKEN, SEAT, TOOL,
+   OTHER), `model`, `quantity`. An invoice only counts toward a window it sits
+   entirely inside.
+
+Pulled data lands in `vendor_usage_buckets` in the vendor's own dimensions
+(model, workspace/project, key, actor); a window is rewritten on every pull.
+API: `/api/v1/spend/connections`, `/api/v1/spend/reports/usage`,
+`/api/v1/spend/reports/reconcile`, `/api/v1/spend/invoices` (console JWT only).
+`APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at
+a gateway or proxy instead of the vendor. Next: allocation to teams and people
+with daily + monthly budgets, then the join to merged PRs and closed issues.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
@@ -282,6 +299,7 @@ supply them via environment variables. The common ones:
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
+| `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.
@@ -445,6 +463,11 @@ The price book feeds three places:
   denomination for paywall and top-up screens.
 
 ### Quote, then record
+
+> The figures below assume a weight of 8 credits/unit for `claude-opus-4` on
+> this feature and a price of $0.10/credit have been published (Credits →
+> Weights, Credits → Pricing). On a fresh seed both are unset, so you will see
+> `weight 1`, `weightMatch NONE`, and no `pricePerCredit`.
 
 Quote the cost before doing billable work, then record it:
 
