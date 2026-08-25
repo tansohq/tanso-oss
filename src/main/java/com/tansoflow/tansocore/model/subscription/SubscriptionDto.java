@@ -62,6 +62,9 @@ public class SubscriptionDto {
     @Schema(description = "Timestamp when the subscription was cancelled")
     private Instant cancelledAt;
 
+    @Schema(description = "When the subscription was created", example = "2026-08-21T12:00:00Z")
+    private Instant createdAt;
+
     @Schema(description = "Billing anchor day of the month", example = "1")
     private Short billingAnchorDay;
 

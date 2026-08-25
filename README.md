@@ -273,7 +273,7 @@ so you can audit it in under a minute. The exact payload:
 ```json
 {
   "instance_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
-  "version": "0.8.8",
+  "version": "0.9.0",
   "accounts": 2,
   "customers": 10,
   "plans": 3,
@@ -316,7 +316,21 @@ just your team's agents, but your customers' buying agents:
   it. No payment method? The API returns **402** with a checkout URL and a
   checkout session id the agent can poll (`GET /checkout-sessions/{id}`) —
   no dead-ending at a browser redirect. Agent charges respect the account's
-  spend cap.
+  spend cap and the calling key's own budget — credit top-ups and paid
+  subscriptions alike.
+- **Bound**: give one key a budget and it cannot spend past it, on usage or on
+  money. `PUT /api/v1/client/customers/{ref}/keys/{keyId}/budget` sets
+  `creditLimit` and `amountLimit` independently over a rolling `DAY`/`WEEK`/
+  `MONTH`/`TOTAL` window; either may be left unlimited. The budget bounds the
+  **key**, not the pool, so one runaway agent cannot drain the balance its
+  siblings draw on. Breaching returns **403** with
+  `"code": "budget_exceeded"` and the limit, spend, remainder, and reset time,
+  so an agent can back off instead of retrying blindly. Only the tenant may
+  set or clear a budget — a customer key can read its own (to pre-flight) but
+  never raise it. A budget also carries a warning mark (80% by default, 0 to
+  disable): once a key passes that share of its tightest limit, the budget
+  reports `alerting`, `percentUsed`, and when it crossed, so an agent can slow
+  down rather than discover the ceiling by being refused.
 - **Use**: entitlement checks return credit quotes with estimated cost;
   `GET /customers/{ref}/usage` is the burndown API — per-feature projections
   and credit depletion dates. Errors carry stable `code` fields, and mutating
@@ -325,7 +339,7 @@ just your team's agents, but your customers' buying agents:
 Tanso Core also ships an [MCP](https://modelcontextprotocol.io) server so
 agents can operate over MCP instead of REST — including a curated
 customer-facing tool set (list plans, credit prices, entitlement pre-flight,
-usage forecast, subscribe, buy credits) that works with customer-scoped keys
+usage forecast, remaining budget, subscribe, buy credits) that works with customer-scoped keys
 using the same authenticated, account-scoped access as any other client.
 There's no separate, weaker path for agents.
 

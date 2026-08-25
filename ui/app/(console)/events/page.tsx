@@ -270,6 +270,7 @@ function GroupedEvents() {
                     tickLine={false}
                     axisLine={false}
                     width={140}
+                    tickFormatter={truncateTick}
                   />
                   <ChartTooltip content={<ChartTooltipContent />} />
                   <ChartLegend content={<ChartLegendContent />} />
@@ -316,6 +317,21 @@ function GroupedEvents() {
     </div>
   )
 }
+
+/**
+ * Group labels are user data — model names, customer references, feature keys —
+ * so they can be longer than the axis. Recharts does not clip them, it just
+ * draws them past the edge of the chart, which turned
+ * "claude-sonnet-4-20250514" into "ude-sonnet-4-20250514": a different model
+ * name that reads as real. Truncating keeps the overflow visible as an
+ * ellipsis; the tooltip still carries the full label.
+ */
+const TICK_MAX = 18
+function truncateTick(value: string) {
+  const label = String(value ?? "")
+  return label.length > TICK_MAX ? `${label.slice(0, TICK_MAX - 1)}\u2026` : label
+}
+
 
 export default function EventsPage() {
   return (

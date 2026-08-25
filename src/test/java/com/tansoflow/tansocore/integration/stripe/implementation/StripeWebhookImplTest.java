@@ -127,6 +127,90 @@ class StripeWebhookImplTest {
     @Mock
     private CustomerService customerService;
 
+    @Mock
+    private com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
+
+    @Mock
+    private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
+
+    // Regression: a hosted checkout completes in a browser, so the webhook is the
+    // only place the money can be charged back to the key that opened it. The
+    // security context is gone by then, which is why the key and amount ride on
+    // the checkout_sessions row.
+    // Found by /qa on 2026-08-21
+    // Report: .gstack/qa-reports/qa-report-tanso-oss-2026-08-21.md
+    @Test
+    void subscriptionCheckoutCompletionChargesTheKeyThatOpenedIt() throws Exception {
+        UUID acct = UUID.randomUUID();
+        UUID keyId = UUID.randomUUID();
+        com.tansoflow.tansocore.entity.CheckoutSession record = new com.tansoflow.tansocore.entity.CheckoutSession();
+        record.setAccountId(acct);
+        record.setApiKeyId(keyId);
+        record.setAmount(new BigDecimal("9.00"));
+        record.setPurpose(com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_SUBSCRIPTION);
+        when(checkoutSessionRepository.findByStripeSessionId("cs_sub_1")).thenReturn(Optional.of(record));
+
+        com.stripe.model.checkout.Session session = new com.stripe.model.checkout.Session();
+        session.setId("cs_sub_1");
+        session.setMode("subscription");
+
+        stripeWebhook.handleSessionsComplete(session);
+
+        verify(keyBudgetService).recordSpend(eq(acct), eq(keyId),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(new BigDecimal("9.00")), eq("cs_sub_1"), eq("checkout_cs_sub_1"));
+        assertEquals(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED, record.getStatus());
+    }
+
+    @Test
+    void creditTopupCheckoutCompletionChargesTheKeyThatOpenedIt() throws Exception {
+        UUID acct = UUID.randomUUID();
+        UUID keyId = UUID.randomUUID();
+        com.tansoflow.tansocore.entity.CheckoutSession record = new com.tansoflow.tansocore.entity.CheckoutSession();
+        record.setAccountId(acct);
+        record.setApiKeyId(keyId);
+        record.setAmount(new BigDecimal("1.00"));
+        record.setCredits(new BigDecimal("100"));
+        record.setCreditPoolId(UUID.randomUUID());
+        record.setPurpose(com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_CREDIT_TOPUP);
+        when(checkoutSessionRepository.findByStripeSessionId("cs_top_1")).thenReturn(Optional.of(record));
+
+        com.stripe.model.checkout.Session session = new com.stripe.model.checkout.Session();
+        session.setId("cs_top_1");
+        session.setMode("payment");
+
+        stripeWebhook.handleSessionsComplete(session);
+
+        verify(keyBudgetService).recordSpend(eq(acct), eq(keyId),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(new BigDecimal("1.00")), eq("cs_top_1"), eq("checkout_cs_top_1"));
+    }
+
+    // A checkout opened from the console or a tenant key has no ck_ actor. The
+    // ledger call still fires; KeyBudgetService is what no-ops on a null key, so
+    // the webhook must not start guarding it itself and silently diverge.
+    @Test
+    void aCheckoutWithNoOwningKeyStillCompletesCleanly() throws Exception {
+        UUID acct = UUID.randomUUID();
+        com.tansoflow.tansocore.entity.CheckoutSession record = new com.tansoflow.tansocore.entity.CheckoutSession();
+        record.setAccountId(acct);
+        record.setApiKeyId(null);
+        record.setAmount(null);
+        record.setPurpose(com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_SUBSCRIPTION);
+        when(checkoutSessionRepository.findByStripeSessionId("cs_sub_2")).thenReturn(Optional.of(record));
+
+        com.stripe.model.checkout.Session session = new com.stripe.model.checkout.Session();
+        session.setId("cs_sub_2");
+        session.setMode("subscription");
+
+        stripeWebhook.handleSessionsComplete(session);
+
+        verify(keyBudgetService).recordSpend(eq(acct), eq(null),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(null), eq("cs_sub_2"), eq("checkout_cs_sub_2"));
+        assertEquals(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED, record.getStatus());
+    }
+
     private Account account;
     private Customer customer;
     private Plan plan;

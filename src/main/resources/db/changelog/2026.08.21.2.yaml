@@ -1,0 +1,22 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260821-2"
+      author: tanso
+      comment: >
+        Spend alerts. A budget was silent until it blocked, so an agent's first
+        signal that it was near its ceiling was a hard rejection. The threshold
+        is a percentage of whichever axis is closest to its limit, and the
+        crossing is stamped once per window so the API can answer "am I close?"
+        rather than only "were you refused?". Null threshold means no alerting;
+        80 is the default for budgets created from here on, and existing rows
+        stay null so nothing starts alerting retroactively.
+      changes:
+        - addColumn:
+            tableName: account_api_keys
+            columns:
+              - column:
+                  name: budget_alert_threshold
+                  type: INT
+              - column:
+                  name: budget_alert_at
+                  type: TIMESTAMP WITH TIME ZONE

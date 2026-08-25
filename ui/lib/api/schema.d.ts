@@ -4,6 +4,28 @@
  */
 
 export interface paths {
+    "/api/v1/tanso/customers/{customerId}/keys/{keyId}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read one key's spend budget */
+        get: operations["getBudget"];
+        /**
+         * Set one key's spend budget
+         * @description Credits and money are capped independently over a rolling window; omit an axis to leave it unlimited.
+         */
+        put: operations["setBudget"];
+        post?: never;
+        /** Clear one key's spend budget */
+        delete: operations["clearBudget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/v1/login": {
         parameters: {
             query?: never;
@@ -58,6 +80,44 @@ export interface paths {
          * @description Receives and processes webhook events from Stripe for a specific account
          */
         post: operations["postIngest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanso/customers/{customerId}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a customer's API keys (hints only) */
+        get: operations["listKeys"];
+        put?: never;
+        /**
+         * Issue a customer-scoped API key
+         * @description The plaintext key is returned exactly once. Scopes: 'read' and 'purchase'.
+         */
+        post: operations["createKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanso/customers/{customerId}/keys/{keyId}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rotate one key */
+        post: operations["rotateKey"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1360,6 +1420,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tanso/customers/{customerId}/keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a key */
+        delete: operations["revokeKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tanso/csv-import/{id}": {
         parameters: {
             query?: never;
@@ -1475,6 +1552,94 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @description Set this key's spend budget. Omit an axis to leave it unlimited. */
+        UpdateKeyBudgetRequest: {
+            /**
+             * @description Window the budget is measured over
+             * @example MONTH
+             * @enum {string}
+             */
+            period: "DAY" | "WEEK" | "MONTH" | "TOTAL";
+            /**
+             * @description Credits this key may consume per window. Omit or null for unlimited.
+             * @example 50000
+             */
+            creditLimit?: number;
+            /**
+             * @description Money this key may spend on top-ups per window. Omit or null for unlimited.
+             * @example 500
+             */
+            amountLimit?: number;
+            /**
+             * Format: int32
+             * @description Percent of the tightest limit at which this key starts reporting itself near its ceiling. 1-99, or null to never alert. Defaults to 80 when a budget is first set.
+             * @example 80
+             */
+            alertThreshold?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseKeyBudgetDto: {
+            /** @description Response data */
+            data?: components["schemas"]["KeyBudgetDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        Error: {
+            /** @description Stable machine-readable code; branch on this, not on message */
+            code?: string;
+            message?: string;
+            detail?: string;
+        };
+        /** @description What this API key may spend, and what it has spent in the current window */
+        KeyBudgetDto: {
+            /** Format: uuid */
+            keyId?: string;
+            /**
+             * @description Rolling window the budget is measured over. Null when no budget is set.
+             * @enum {string}
+             */
+            period?: "DAY" | "WEEK" | "MONTH" | "TOTAL";
+            /** @description Credits this key may consume per window. Null means unlimited. */
+            creditLimit?: number;
+            /** @description Credits consumed by this key in the current window */
+            creditsSpent?: number;
+            /** @description Credits still available to this key. Null when the credit budget is unlimited. */
+            creditsRemaining?: number;
+            /** @description Money this key may spend on top-ups per window. Null means unlimited. */
+            amountLimit?: number;
+            /** @description Money spent by this key in the current window */
+            amountSpent?: number;
+            /** @description Money still available to this key. Null when the spend budget is unlimited. */
+            amountRemaining?: number;
+            /**
+             * Format: date-time
+             * @description Start of the current window
+             */
+            windowStart?: string;
+            /**
+             * Format: date-time
+             * @description When the current window rolls over. Null for a TOTAL budget, which never resets.
+             */
+            resetsAt?: string;
+            /**
+             * Format: int32
+             * @description How far through the tightest limit this key is, 0-100. Null when nothing is capped.
+             */
+            percentUsed?: number;
+            /**
+             * Format: int32
+             * @description Percent of the tightest limit at which this key reports itself near its ceiling. Null means it never does.
+             */
+            alertThreshold?: number;
+            /** @description True once the threshold has been crossed in the current window */
+            alerting?: boolean;
+            /**
+             * Format: date-time
+             * @description When the threshold was crossed in this window, or null if it has not been
+             */
+            alertingSince?: string;
+        };
         UsernameAndPasswordRequest: {
             username?: string;
             password?: string;
@@ -1486,12 +1651,6 @@ export interface components {
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
-        };
-        Error: {
-            /** @description Stable machine-readable code; branch on this, not on message */
-            code?: string;
-            message?: string;
-            detail?: string;
         };
         /** @description Response containing the JWT authentication token */
         JwtResponse: {
@@ -1541,6 +1700,40 @@ export interface components {
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
+        };
+        CreateCustomerApiKeyRequest: {
+            /** @description Key scopes: 'read' and/or 'purchase'. Defaults to ['read']. */
+            scopes?: string[];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerApiKeyDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerApiKeyDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        CustomerApiKeyDto: {
+            id?: string;
+            customerReferenceId?: string;
+            /** @description Plaintext key. Returned exactly once, at creation or rotation; never retrievable again. */
+            apiKey?: string;
+            keyHint?: string;
+            scopes?: string[];
+            active?: boolean;
+            /** Format: date-time */
+            expiresAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            /**
+             * @description Window this key's budget is measured over, or null when it has no budget
+             * @enum {string}
+             */
+            budgetPeriod?: "DAY" | "WEEK" | "MONTH" | "TOTAL";
+            /** @description Credits this key may consume per window. Null means unlimited. */
+            budgetCredits?: number;
+            /** @description Money this key may spend per window. Null means unlimited. */
+            budgetAmount?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseCsvImportResult: {
@@ -1772,6 +1965,12 @@ export interface components {
              */
             cancelledAt?: string;
             /**
+             * Format: date-time
+             * @description When the subscription was created
+             * @example 2026-08-21T12:00:00Z
+             */
+            createdAt?: string;
+            /**
              * Format: int32
              * @description Billing anchor day of the month
              * @example 1
@@ -1968,6 +2167,14 @@ export interface components {
             email: string;
             phoneNumber?: string;
             address?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         /** @description One weight entry in a tariff publish */
         Entry: {
@@ -2852,6 +3059,14 @@ export interface components {
             lastOccurredAt?: string;
         };
         /** @description Generic API response wrapper */
+        ApiResponseListCustomerApiKeyDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerApiKeyDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
         ApiResponseListCsvUploadInfo: {
             /** @description Response data */
             data?: components["schemas"]["CsvUploadInfo"][];
@@ -3056,14 +3271,6 @@ export interface components {
             email?: string;
             /** @description Timestamp when the customer was created */
             createdAt?: string;
-        };
-        /** @description Generic API response wrapper */
-        ApiResponseCustomerDto: {
-            /** @description Response data */
-            data?: components["schemas"]["CustomerDto"];
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseMapStringBigDecimal: {
@@ -3498,6 +3705,79 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseKeyBudgetDto"];
+                };
+            };
+        };
+    };
+    setBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKeyBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseKeyBudgetDto"];
+                };
+            };
+        };
+    };
+    clearBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -3585,6 +3865,77 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    listKeys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCustomerApiKeyDto"];
+                };
+            };
+        };
+    };
+    createKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerApiKeyDto"];
+                };
+            };
+        };
+    };
+    rotateKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerApiKeyDto"];
+                };
             };
         };
     };
@@ -4089,7 +4440,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponseCustomerDto"];
                 };
             };
             /** @description Access Denied. */
@@ -6015,6 +6366,29 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    revokeKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerId: string;
+                keyId: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

@@ -49,6 +49,10 @@
             "description": "Customer management operations"
         },
         {
+            "name": "Customer API Keys (Admin)",
+            "description": "Issue, rotate, revoke, and budget a customer's API keys from the console"
+        },
+        {
             "name": "Client Credit",
             "description": "Credit pool operations for client applications"
         },
@@ -142,6 +146,285 @@
         }
     ],
     "paths": {
+        "/api/v1/tanso/customers/{customerId}/keys/{keyId}/budget": {
+            "get": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Read one key's spend budget",
+                "operationId": "getBudget",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Set one key's spend budget",
+                "description": "Credits and money are capped independently over a rolling window; omit an axis to leave it unlimited.",
+                "operationId": "setBudget",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateKeyBudgetRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Clear one key's spend budget",
+                "operationId": "clearBudget",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/budget": {
+            "get": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Read one key's spend budget",
+                "description": "Limits, spend so far in the current window, and when the window resets. A customer key may read its own budget so an agent can decide whether to spend before it gets rejected.",
+                "operationId": "getBudget_1",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Set one key's spend budget",
+                "description": "Bounds what a single agent or team member may consume. Credits and money are capped independently over a rolling window; omit an axis to leave it unlimited. Deliberately NOT opened to ROLE_CUSTOMER \u2014 a key must not raise its own ceiling. Changing the period restarts the window.",
+                "operationId": "setBudget_1",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/UpdateKeyBudgetRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseKeyBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Customer API Keys"
+                ],
+                "summary": "Clear one key's spend budget",
+                "operationId": "clearBudget_1",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/public/v1/login": {
             "post": {
                 "tags": [
@@ -262,6 +545,130 @@
                         "description": "Bad request or invalid signature"
                     }
                 }
+            }
+        },
+        "/api/v1/tanso/customers/{customerId}/keys": {
+            "get": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "List a customer's API keys (hints only)",
+                "operationId": "listKeys",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListCustomerApiKeyDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Issue a customer-scoped API key",
+                "description": "The plaintext key is returned exactly once. Scopes: 'read' and 'purchase'.",
+                "operationId": "createKey",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateCustomerApiKeyRequest"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCustomerApiKeyDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/tanso/customers/{customerId}/keys/{keyId}/rotate": {
+            "post": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Rotate one key",
+                "operationId": "rotateKey",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCustomerApiKeyDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
             }
         },
         "/api/v1/tanso/csv-import": {
@@ -870,7 +1277,7 @@
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                    "$ref": "#/components/schemas/ApiResponseCustomerDto"
                                 }
                             }
                         }
@@ -2072,7 +2479,7 @@
                     "Customer API Keys"
                 ],
                 "summary": "List a customer's API keys (hints only)",
-                "operationId": "listKeys",
+                "operationId": "listKeys_1",
                 "parameters": [
                     {
                         "name": "customerReferenceId",
@@ -2107,7 +2514,7 @@
                 ],
                 "summary": "Create a customer-scoped API key",
                 "description": "Issues a ck_ key pinned to this customer. The plaintext key is returned exactly once. Scopes: 'read' (balances, entitlements, usage) and 'purchase' (actions that spend money). Defaults to read-only when no scopes are given.",
-                "operationId": "createKey",
+                "operationId": "createKey_1",
                 "parameters": [
                     {
                         "name": "customerReferenceId",
@@ -2153,7 +2560,7 @@
                 ],
                 "summary": "Rotate one key",
                 "description": "Deactivates this key only and issues a replacement with the same scopes. Sibling keys are untouched.",
-                "operationId": "rotateKey",
+                "operationId": "rotateKey_1",
                 "parameters": [
                     {
                         "name": "customerReferenceId",
@@ -5196,6 +5603,50 @@
                 ]
             }
         },
+        "/api/v1/tanso/customers/{customerId}/keys/{keyId}": {
+            "delete": {
+                "tags": [
+                    "Customer API Keys (Admin)"
+                ],
+                "summary": "Revoke a key",
+                "operationId": "revokeKey",
+                "parameters": [
+                    {
+                        "name": "customerId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "keyId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/tanso/csv-import/{id}": {
             "delete": {
                 "tags": [
@@ -5503,7 +5954,7 @@
                     "Customer API Keys"
                 ],
                 "summary": "Revoke a key",
-                "operationId": "revokeKey",
+                "operationId": "revokeKey_1",
                 "parameters": [
                     {
                         "name": "customerReferenceId",
@@ -5544,6 +5995,150 @@
     },
     "components": {
         "schemas": {
+            "UpdateKeyBudgetRequest": {
+                "type": "object",
+                "description": "Set this key's spend budget. Omit an axis to leave it unlimited.",
+                "properties": {
+                    "period": {
+                        "type": "string",
+                        "description": "Window the budget is measured over",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ],
+                        "example": "MONTH"
+                    },
+                    "creditLimit": {
+                        "type": "number",
+                        "description": "Credits this key may consume per window. Omit or null for unlimited.",
+                        "example": 50000
+                    },
+                    "amountLimit": {
+                        "type": "number",
+                        "description": "Money this key may spend on top-ups per window. Omit or null for unlimited.",
+                        "example": 500.0
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Percent of the tightest limit at which this key starts reporting itself near its ceiling. 1-99, or null to never alert. Defaults to 80 when a budget is first set.",
+                        "example": 80
+                    }
+                },
+                "required": [
+                    "period"
+                ]
+            },
+            "ApiResponseKeyBudgetDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/KeyBudgetDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Error": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Stable machine-readable code; branch on this, not on message"
+                    },
+                    "message": {
+                        "type": "string"
+                    },
+                    "detail": {
+                        "type": "string"
+                    }
+                }
+            },
+            "KeyBudgetDto": {
+                "type": "object",
+                "description": "What this API key may spend, and what it has spent in the current window",
+                "properties": {
+                    "keyId": {
+                        "type": "string",
+                        "format": "uuid"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Rolling window the budget is measured over. Null when no budget is set.",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ]
+                    },
+                    "creditLimit": {
+                        "type": "number",
+                        "description": "Credits this key may consume per window. Null means unlimited."
+                    },
+                    "creditsSpent": {
+                        "type": "number",
+                        "description": "Credits consumed by this key in the current window"
+                    },
+                    "creditsRemaining": {
+                        "type": "number",
+                        "description": "Credits still available to this key. Null when the credit budget is unlimited."
+                    },
+                    "amountLimit": {
+                        "type": "number",
+                        "description": "Money this key may spend on top-ups per window. Null means unlimited."
+                    },
+                    "amountSpent": {
+                        "type": "number",
+                        "description": "Money spent by this key in the current window"
+                    },
+                    "amountRemaining": {
+                        "type": "number",
+                        "description": "Money still available to this key. Null when the spend budget is unlimited."
+                    },
+                    "windowStart": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "Start of the current window"
+                    },
+                    "resetsAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the current window rolls over. Null for a TOTAL budget, which never resets."
+                    },
+                    "percentUsed": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "How far through the tightest limit this key is, 0-100. Null when nothing is capped."
+                    },
+                    "alertThreshold": {
+                        "type": "integer",
+                        "format": "int32",
+                        "description": "Percent of the tightest limit at which this key reports itself near its ceiling. Null means it never does."
+                    },
+                    "alerting": {
+                        "type": "boolean",
+                        "description": "True once the threshold has been crossed in the current window"
+                    },
+                    "alertingSince": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the threshold was crossed in this window, or null if it has not been"
+                    }
+                }
+            },
             "UsernameAndPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -5572,21 +6167,6 @@
                     },
                     "success": {
                         "type": "boolean"
-                    }
-                }
-            },
-            "Error": {
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Stable machine-readable code; branch on this, not on message"
-                    },
-                    "message": {
-                        "type": "string"
-                    },
-                    "detail": {
-                        "type": "string"
                     }
                 }
             },
@@ -5690,6 +6270,91 @@
                     },
                     "success": {
                         "type": "boolean"
+                    }
+                }
+            },
+            "CreateCustomerApiKeyRequest": {
+                "type": "object",
+                "properties": {
+                    "scopes": {
+                        "type": "array",
+                        "description": "Key scopes: 'read' and/or 'purchase'. Defaults to ['read'].",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "ApiResponseCustomerApiKeyDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CustomerApiKeyDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CustomerApiKeyDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "customerReferenceId": {
+                        "type": "string"
+                    },
+                    "apiKey": {
+                        "type": "string",
+                        "description": "Plaintext key. Returned exactly once, at creation or rotation; never retrievable again."
+                    },
+                    "keyHint": {
+                        "type": "string"
+                    },
+                    "scopes": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "active": {
+                        "type": "boolean"
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "budgetPeriod": {
+                        "type": "string",
+                        "description": "Window this key's budget is measured over, or null when it has no budget",
+                        "enum": [
+                            "DAY",
+                            "WEEK",
+                            "MONTH",
+                            "TOTAL"
+                        ]
+                    },
+                    "budgetCredits": {
+                        "type": "number",
+                        "description": "Credits this key may consume per window. Null means unlimited."
+                    },
+                    "budgetAmount": {
+                        "type": "number",
+                        "description": "Money this key may spend per window. Null means unlimited."
                     }
                 }
             },
@@ -6039,6 +6704,12 @@
                         "format": "date-time",
                         "description": "Timestamp when the subscription was cancelled"
                     },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the subscription was created",
+                        "example": "2026-08-21T12:00:00Z"
+                    },
                     "billingAnchorDay": {
                         "type": "integer",
                         "format": "int32",
@@ -6367,6 +7038,26 @@
                 "required": [
                     "email"
                 ]
+            },
+            "ApiResponseCustomerDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CustomerDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
             },
             "Entry": {
                 "type": "object",
@@ -7923,73 +8614,6 @@
                     "paymentMethodId"
                 ]
             },
-            "CreateCustomerApiKeyRequest": {
-                "type": "object",
-                "properties": {
-                    "scopes": {
-                        "type": "array",
-                        "description": "Key scopes: 'read' and/or 'purchase'. Defaults to ['read'].",
-                        "items": {
-                            "type": "string"
-                        }
-                    }
-                }
-            },
-            "ApiResponseCustomerApiKeyDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/CustomerApiKeyDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "CustomerApiKeyDto": {
-                "type": "object",
-                "properties": {
-                    "id": {
-                        "type": "string"
-                    },
-                    "customerReferenceId": {
-                        "type": "string"
-                    },
-                    "apiKey": {
-                        "type": "string",
-                        "description": "Plaintext key. Returned exactly once, at creation or rotation; never retrievable again."
-                    },
-                    "keyHint": {
-                        "type": "string"
-                    },
-                    "scopes": {
-                        "type": "array",
-                        "items": {
-                            "type": "string"
-                        }
-                    },
-                    "active": {
-                        "type": "boolean"
-                    },
-                    "expiresAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    },
-                    "createdAt": {
-                        "type": "string",
-                        "format": "date-time"
-                    }
-                }
-            },
             "CreditPurchaseRequest": {
                 "type": "object",
                 "properties": {
@@ -8840,6 +9464,29 @@
                     }
                 }
             },
+            "ApiResponseListCustomerApiKeyDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/CustomerApiKeyDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "ApiResponseListCsvUploadInfo": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -9276,26 +9923,6 @@
                     "createdAt": {
                         "type": "string",
                         "description": "Timestamp when the customer was created"
-                    }
-                }
-            },
-            "ApiResponseCustomerDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/CustomerDto",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
                     }
                 }
             },
@@ -9954,29 +10581,6 @@
                         "items": {
                             "$ref": "#/components/schemas/FeatureUsage"
                         }
-                    }
-                }
-            },
-            "ApiResponseListCustomerApiKeyDto": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "type": "array",
-                        "description": "Response data",
-                        "items": {
-                            "$ref": "#/components/schemas/CustomerApiKeyDto"
-                        }
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error"
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
                     }
                 }
             },

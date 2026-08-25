@@ -38,4 +38,16 @@ public class CustomerApiKeyDto {
     private Boolean active;
     private Instant expiresAt;
     private Instant createdAt;
+
+    // Budget summary, so a list of keys shows which ones are capped without a
+    // round trip per key. Null period means no budget; a null limit on either
+    // axis means that axis is unlimited.
+    @Schema(description = "Window this key's budget is measured over, or null when it has no budget")
+    private com.tansoflow.tansocore.model.apikey.type.BudgetPeriod budgetPeriod;
+
+    @Schema(description = "Credits this key may consume per window. Null means unlimited.")
+    private java.math.BigDecimal budgetCredits;
+
+    @Schema(description = "Money this key may spend per window. Null means unlimited.")
+    private java.math.BigDecimal budgetAmount;
 }

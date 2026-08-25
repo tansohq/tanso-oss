@@ -1140,4 +1140,44 @@ class CreditServiceImplTest {
         verify(creditPoolRepository).findById(pool1.getId());
         verify(creditPoolRepository).findById(pool2.getId());
     }
+
+    // Regression: CreditPool is the only entity with a pre-initialised @Version,
+    // which makes Spring Data merge instead of persist. Merge returns the managed
+    // copy, so mapping the local instance handed the caller "id": null and left
+    // them unable to grant into the pool they had just created.
+    // Found by /qa on 2026-08-21
+    // Report: .gstack/qa-reports/qa-report-tanso-oss-2026-08-21.md
+    @Test
+    void createCreditPoolReturnsTheIdOfThePoolItJustCreated() {
+        UUID accountId = UUID.randomUUID();
+        Account acct = new Account();
+        acct.setId(accountId);
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(acct));
+        when(creditPoolRepository.existsByAccountIdAndNameAndDeletedAtIsNull(eq(accountId), any()))
+                .thenReturn(false);
+
+        UUID assignedId = UUID.randomUUID();
+        // Merge semantics: the argument stays id-less, the returned copy carries it.
+        when(creditPoolRepository.saveAndFlush(any(CreditPool.class))).thenAnswer(inv -> {
+            CreditPool managed = new CreditPool();
+            managed.setId(assignedId);
+            managed.setName(((CreditPool) inv.getArgument(0)).getName());
+            managed.setDenomination(((CreditPool) inv.getArgument(0)).getDenomination());
+            return managed;
+        });
+
+        com.tansoflow.tansocore.model.credit.request.CreateCreditPoolRequest request =
+                new com.tansoflow.tansocore.model.credit.request.CreateCreditPoolRequest();
+        request.setName("Pool");
+        request.setDenomination("credits");
+
+        creditService.createCreditPool(request, accountId.toString());
+
+        // The pool handed to the mapper must be the one that knows its id —
+        // mapping the pre-merge instance is what produced "id": null.
+        org.mockito.ArgumentCaptor<CreditPool> mapped =
+                org.mockito.ArgumentCaptor.forClass(CreditPool.class);
+        verify(creditMapper).creditPoolToDto(mapped.capture());
+        assertEquals(assignedId, mapped.getValue().getId());
+    }
 }

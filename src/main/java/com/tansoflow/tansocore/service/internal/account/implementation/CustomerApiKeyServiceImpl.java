@@ -166,6 +166,9 @@ public class CustomerApiKeyServiceImpl implements CustomerApiKeyService {
                 .active(key.getIsActive())
                 .expiresAt(key.getExpiresAt())
                 .createdAt(key.getCreatedAt())
+                .budgetPeriod(key.getBudgetPeriod())
+                .budgetCredits(key.getBudgetCredits())
+                .budgetAmount(key.getBudgetAmount())
                 .build();
     }
 }

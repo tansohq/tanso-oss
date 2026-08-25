@@ -87,6 +87,14 @@ public class CheckoutSession {
     @Column(name = "checkout_url")
     private String checkoutUrl;
 
+    // The ck_ key that opened this checkout, and what it will be charged.
+    // Recorded against that key's budget when the webhook completes the session.
+    @Column(name = "api_key_id")
+    private UUID apiKeyId;
+
+    @Column(name = "amount", precision = 18, scale = 2)
+    private BigDecimal amount;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

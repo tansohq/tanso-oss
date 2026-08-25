@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query"
 
 import { apiFetch } from "@/lib/api/client"
+import { newestFirst } from "@/lib/newest-first"
 import type {
   CustomerBulkResponse,
   SubscriptionDto,
@@ -11,6 +12,7 @@ export function useSubscriptions() {
   return useQuery({
     queryKey: ["subscriptions"],
     queryFn: () => apiFetch<SubscriptionDto[]>("/api/v1/monetization/subscriptions"),
+    select: newestFirst,
   })
 }
 

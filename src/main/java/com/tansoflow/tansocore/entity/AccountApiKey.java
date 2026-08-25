@@ -18,6 +18,8 @@
 package com.tansoflow.tansocore.entity;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -99,5 +101,31 @@ public class AccountApiKey {
 
     @Column(name = "archived_at")
     private Instant archivedAt;
+
+    // ─── Per-key spend budget ─── null on either axis means unlimited.
+
+    @Column(name = "budget_credits", precision = 18, scale = 4)
+    private java.math.BigDecimal budgetCredits;
+
+    @Column(name = "budget_amount", precision = 18, scale = 2)
+    private java.math.BigDecimal budgetAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "budget_period", length = 16)
+    private com.tansoflow.tansocore.model.apikey.type.BudgetPeriod budgetPeriod;
+
+    @Column(name = "budget_started_at")
+    private Instant budgetStartedAt;
+
+    // Percent of the closest limit at which this key starts reporting itself as
+    // near its ceiling. Null means it never does.
+    @Column(name = "budget_alert_threshold")
+    private Integer budgetAlertThreshold;
+
+    // When the threshold was crossed. Compared against the current window, so a
+    // stamp from a previous window reads as "not alerting" without a job to
+    // clear it.
+    @Column(name = "budget_alert_at")
+    private Instant budgetAlertAt;
 
 }

@@ -15,16 +15,17 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.controller.client;
+package com.tansoflow.tansocore.controller.tanso.account;
 
-import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
+import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
 import com.tansoflow.tansocore.model.apikey.KeyBudgetDto;
 import com.tansoflow.tansocore.model.apikey.request.CreateCustomerApiKeyRequest;
 import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
+import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -33,7 +34,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -48,93 +48,97 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * Tenant-facing management of customer-scoped (ck_) API keys. Deliberately
- * NOT opened to ROLE_CUSTOMER: a customer key must not mint or revoke keys.
+ * Console-facing management of a customer's API keys and their spend budgets.
+ *
+ * The equivalent client endpoints sit on the /api/v1/client/** chain, which
+ * only authenticates API keys — a console JWT cannot reach them at all. So the
+ * operator had no way to issue a customer key or cap what it spends without
+ * dropping to curl with a tenant key. This is the admin mirror; it takes the
+ * internal customer id the console already holds and delegates to the same
+ * services the client endpoints use.
  */
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/v1/client/customers/{customerReferenceId}/keys")
-@PreAuthorize("hasRole('CLIENT')")
-@Tag(name = "Customer API Keys", description = "Issue and manage customer-scoped API keys for end-customer agents")
-public class CustomerApiKeyClientController {
+@RequestMapping("/api/v1/tanso/customers/{customerId}/keys")
+@PreAuthorize("hasRole('TANSO_UI')")
+@Tag(name = "Customer API Keys (Admin)",
+        description = "Issue, rotate, revoke, and budget a customer's API keys from the console")
+public class CustomerApiKeyAdminController {
 
     private final CustomerApiKeyService customerApiKeyService;
     private final KeyBudgetService keyBudgetService;
-    private final CustomerAccessGuard customerAccessGuard;
-
-    @PostMapping
-    @Operation(summary = "Create a customer-scoped API key",
-            description = "Issues a ck_ key pinned to this customer. The plaintext key is returned exactly once. "
-                    + "Scopes: 'read' (balances, entitlements, usage) and 'purchase' (actions that spend money). "
-                    + "Defaults to read-only when no scopes are given.",
-            security = @SecurityRequirement(name = "Bearer"))
-    public ResponseEntity<ApiResponse<CustomerApiKeyDto>> createKey(
-            @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
-            @Valid @RequestBody(required = false) CreateCustomerApiKeyRequest request) {
-        List<String> scopes = request != null ? request.getScopes() : null;
-        CustomerApiKeyDto created = customerApiKeyService.createKey(
-                userContext.getAccountId(), customerReferenceId, scopes);
-        return ResponseEntity.status(HttpStatus.CREATED).body(
-                ApiResponse.<CustomerApiKeyDto>builder().data(created).success(true).build());
-    }
+    private final CustomerService customerService;
 
     @GetMapping
     @Operation(summary = "List a customer's API keys (hints only)", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<List<CustomerApiKeyDto>>> listKeys(
             @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId) {
+            @PathVariable String customerId) {
         List<CustomerApiKeyDto> keys = customerApiKeyService.listKeys(
-                userContext.getAccountId(), customerReferenceId);
+                userContext.getAccountId(), referenceOf(userContext, customerId));
         return ResponseEntity.ok(ApiResponse.<List<CustomerApiKeyDto>>builder().data(keys).success(true).build());
     }
 
+    @PostMapping
+    @Operation(summary = "Issue a customer-scoped API key",
+            description = "The plaintext key is returned exactly once. Scopes: 'read' and 'purchase'.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<CustomerApiKeyDto>> createKey(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String customerId,
+            @Valid @RequestBody(required = false) CreateCustomerApiKeyRequest request) {
+        CustomerApiKeyDto created = customerApiKeyService.createKey(
+                userContext.getAccountId(), referenceOf(userContext, customerId),
+                request != null ? request.getScopes() : null);
+        return ResponseEntity.status(HttpStatus.CREATED).body(
+                ApiResponse.<CustomerApiKeyDto>builder().data(created).success(true).build());
+    }
+
     @PostMapping("/{keyId}/rotate")
-    @Operation(summary = "Rotate one key",
-            description = "Deactivates this key only and issues a replacement with the same scopes. "
-                    + "Sibling keys are untouched.", security = @SecurityRequirement(name = "Bearer"))
+    @Operation(summary = "Rotate one key", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<CustomerApiKeyDto>> rotateKey(
             @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
+            @PathVariable String customerId,
             @PathVariable String keyId) {
         CustomerApiKeyDto rotated = customerApiKeyService.rotateKey(
-                userContext.getAccountId(), customerReferenceId, keyId);
+                userContext.getAccountId(), referenceOf(userContext, customerId), keyId);
         return ResponseEntity.ok(ApiResponse.<CustomerApiKeyDto>builder().data(rotated).success(true).build());
     }
 
+    @DeleteMapping("/{keyId}")
+    @Operation(summary = "Revoke a key", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<Void>> revokeKey(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String customerId,
+            @PathVariable String keyId) {
+        customerApiKeyService.revokeKey(
+                userContext.getAccountId(), referenceOf(userContext, customerId), keyId);
+        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
+    }
+
     @GetMapping("/{keyId}/budget")
-    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
-    @Operation(summary = "Read one key's spend budget",
-            description = "Limits, spend so far in the current window, and when the window resets. "
-                    + "A customer key may read its own budget so an agent can decide whether to "
-                    + "spend before it gets rejected.",
-            security = @SecurityRequirement(name = "Bearer"))
+    @Operation(summary = "Read one key's spend budget", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<KeyBudgetDto>> getBudget(
             @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
+            @PathVariable String customerId,
             @PathVariable String keyId) {
-        String ref = customerAccessGuard.resolveCustomerRef(userContext, customerReferenceId);
-        if (userContext.isCustomerScoped() && !keyId.equals(String.valueOf(userContext.getApiKeyId()))) {
-            throw new AccessDeniedException("A customer key may only read its own budget");
-        }
-        KeyBudgetDto budget = keyBudgetService.getBudget(userContext.getAccountId(), ref, keyId);
+        KeyBudgetDto budget = keyBudgetService.getBudget(
+                userContext.getAccountId(), referenceOf(userContext, customerId), keyId);
         return ResponseEntity.ok(ApiResponse.<KeyBudgetDto>builder().data(budget).success(true).build());
     }
 
     @PutMapping("/{keyId}/budget")
     @Operation(summary = "Set one key's spend budget",
-            description = "Bounds what a single agent or team member may consume. Credits and money "
-                    + "are capped independently over a rolling window; omit an axis to leave it "
-                    + "unlimited. Deliberately NOT opened to ROLE_CUSTOMER — a key must not raise "
-                    + "its own ceiling. Changing the period restarts the window.",
+            description = "Credits and money are capped independently over a rolling window; "
+                    + "omit an axis to leave it unlimited.",
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<KeyBudgetDto>> setBudget(
             @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
+            @PathVariable String customerId,
             @PathVariable String keyId,
             @Valid @RequestBody UpdateKeyBudgetRequest request) {
         KeyBudgetDto budget = keyBudgetService.setBudget(
-                userContext.getAccountId(), customerReferenceId, keyId, request);
+                userContext.getAccountId(), referenceOf(userContext, customerId), keyId, request);
         return ResponseEntity.ok(ApiResponse.<KeyBudgetDto>builder().data(budget).success(true).build());
     }
 
@@ -142,19 +146,28 @@ public class CustomerApiKeyClientController {
     @Operation(summary = "Clear one key's spend budget", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<Void>> clearBudget(
             @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
+            @PathVariable String customerId,
             @PathVariable String keyId) {
-        keyBudgetService.clearBudget(userContext.getAccountId(), customerReferenceId, keyId);
+        keyBudgetService.clearBudget(
+                userContext.getAccountId(), referenceOf(userContext, customerId), keyId);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
     }
 
-    @DeleteMapping("/{keyId}")
-    @Operation(summary = "Revoke a key", security = @SecurityRequirement(name = "Bearer"))
-    public ResponseEntity<ApiResponse<Void>> revokeKey(
-            @AuthenticationPrincipal UserContext userContext,
-            @PathVariable String customerReferenceId,
-            @PathVariable String keyId) {
-        customerApiKeyService.revokeKey(userContext.getAccountId(), customerReferenceId, keyId);
-        return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
+    /**
+     * The console works in internal customer ids; the services key off the
+     * customer's reference. Resolving through validateAndRetrieveCustomer also
+     * enforces that the customer belongs to the caller's account.
+     */
+    private String referenceOf(UserContext userContext, String customerId) {
+        Customer customer = customerService.validateAndRetrieveCustomer(customerId, userContext.getAccountId());
+        String reference = customer.getExternalClientCustomerId();
+        if (reference == null || reference.isBlank()) {
+            // A customer-scoped key is pinned to its customer by reference, so
+            // there is nothing to pin it to yet. Say that, rather than failing
+            // later in a lookup with a message about a customer that "isn't found".
+            throw new IllegalArgumentException(
+                    "This customer has no Reference ID. Add one before issuing customer-scoped keys.");
+        }
+        return reference;
     }
 }

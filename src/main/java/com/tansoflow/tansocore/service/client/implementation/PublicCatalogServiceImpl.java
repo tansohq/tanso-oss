@@ -105,9 +105,9 @@ public class PublicCatalogServiceImpl implements PublicCatalogService {
         }
 
         catalog.put("governance", Map.of(
-                "per_key_limits", false,
+                "per_key_limits", true,
                 "budget_controls", settings.getAgentMaxTopupAmount() != null,
-                "spend_alerts", false,
+                "spend_alerts", true,
                 "burndown_api", true));
         catalog.put("integration", Map.of(
                 "api_docs_url", baseUrl + "/swagger-ui.html",

@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.controller.exception;
 
 import com.tansoflow.tansocore.model.exception.AuthenticationException;
+import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.model.exception.IdempotencyConflictException;
 import com.tansoflow.tansocore.model.exception.RateLimitExceededException;
@@ -86,6 +87,15 @@ public class GlobalExceptionHandlerController {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.INSUFFICIENT_CREDITS));
     }
 
+    @ExceptionHandler(BudgetExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleBudgetExceededException(BudgetExceededException exception) {
+        String errorId = assignErrorId();
+        log.info("Key budget exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.BUDGET_EXCEEDED));
+    }
+
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ApiResponse<Void>> handleIdempotencyConflictException(IdempotencyConflictException exception) {
         String errorId = assignErrorId();
@@ -118,6 +128,31 @@ public class GlobalExceptionHandlerController {
         log.warn("Resource not found [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.NOT_FOUND));
+    }
+
+    // An unrouted path is the caller's mistake, not ours. Falling through to the
+    // generic handler returned 500 internal_error, which tells an agent branching
+    // on error.code to retry a URL that will never exist.
+    @ExceptionHandler({
+            org.springframework.web.servlet.resource.NoResourceFoundException.class,
+            org.springframework.web.servlet.NoHandlerFoundException.class})
+    public ResponseEntity<ApiResponse<Void>> handleNoRoute(Exception exception) {
+        String errorId = assignErrorId();
+        log.info("No route [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(processErrorMessage("No endpoint at this path", errorId, ErrorCode.NOT_FOUND));
+    }
+
+    // Wrong verb on a real path is also the caller's mistake. Same reasoning.
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException exception) {
+        String errorId = assignErrorId();
+        log.info("Method not allowed [errorId={}]: {}", errorId, exception.getMessage());
+
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED)
+                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.NOT_FOUND));
     }
 
     @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
