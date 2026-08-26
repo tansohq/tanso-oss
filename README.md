@@ -314,6 +314,14 @@ It works from the vendor's admin API, not a proxy in your request path:
    measures the budget on its price book, LiteLLM enforces against its own
    model map — the card shows both figures so the drift is visible.
 
+6. **Spend → Savings**: what prompt caching is worth — per model, the
+   input-side cost as billed against the same tokens with no cache (cache-read
+   share, cache writes, $ saved; models without cache rates read as zero and
+   say so) — and a **route simulator**: pick a model's traffic, a target from
+   the price book and optionally a workspace, and see the same tokens at the
+   target's rates with the caveats spelled out (tokenizer drift, no cache
+   rates, quality not modelled). Advice only; Tanso never routes.
+
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
 <img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
@@ -362,7 +370,9 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `/api/v1/spend/rules`, `/api/v1/spend/alerts` (+ `/{id}/ack`),
 `POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
-`/api/v1/spend/reports/outcomes` (console JWT only).
+`/api/v1/spend/reports/outcomes`, `/api/v1/spend/reports/savings`,
+`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`
+(console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
 `_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
 LiteLLM connection carries its own proxy URL. Next:

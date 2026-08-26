@@ -277,6 +277,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What if this traffic had gone to another model
+         * @description The matched tokens re-priced at the target model's rates. Advice only — Tanso never routes.
+         */
+        post: operations["simulate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/outcomes": {
         parameters: {
             query?: never;
@@ -1340,6 +1360,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What prompt caching is worth
+         * @description Per model: the input-side cost as billed against the same tokens with no cache. Defaults to the last 30 days.
+         */
+        get: operations["savings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/reports/reconcile": {
         parameters: {
             query?: never;
@@ -1372,6 +1412,26 @@ export interface paths {
          * @description [from, to). Spend (unit + descendants) over outcomes (unit + descendants).
          */
         get: operations["report"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/reports/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The price book
+         * @description Every model with a price, for the simulator's target list.
+         */
+        get: operations["models"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2476,6 +2536,59 @@ export interface components {
             matchValue?: string;
             /** Format: int32 */
             priority?: number;
+        };
+        SpendRouteSimulationRequest: {
+            /**
+             * Format: date
+             * @description Inclusive; default 30 days back.
+             */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive; default tomorrow.
+             */
+            to?: string;
+            /** @description The model whose traffic to re-price, as it appears on the usage report. */
+            fromModel: string;
+            /** @description A model in the price book. */
+            toModel: string;
+            /** @description Only traffic from this vendor workspace / project / team id. Null = all. */
+            workspaceId?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendRouteSimulationDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendRouteSimulationDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendRouteSimulationDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            fromModel?: string;
+            toModel?: string;
+            workspaceId?: string;
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /** Format: int64 */
+            requests?: number;
+            /** @description What the matched traffic cost by the price book. */
+            currentCents?: number;
+            /** @description The same tokens at the target model's rates. */
+            simulatedCents?: number;
+            /** @description simulated − current; negative is a saving. */
+            deltaCents?: number;
+            /** @description Things the number does not know: quality, latency, token-count drift between tokenizers, missing cache rates. */
+            caveats?: string[];
         };
         OutcomeRequest: {
             /** @enum {string} */
@@ -4164,6 +4277,50 @@ export interface components {
             meteredCostCents?: number;
         };
         /** @description Generic API response wrapper */
+        ApiResponseSpendSavingsReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendSavingsReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SavingsRow: {
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
+            model?: string;
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /** @description cacheRead / (uncached + cacheRead + cacheWrite), 0–1. */
+            cacheShare?: number;
+            /** @description Input-side cost as billed: uncached at the input rate, cache reads and writes at their rates. */
+            inputCostCents?: number;
+            /** @description The same input tokens with no cache: everything at the input rate. */
+            noCacheCostCents?: number;
+            /** @description noCacheCostCents − inputCostCents. Negative when cache writes cost more than the reads saved. */
+            savedCents?: number;
+            priced?: boolean;
+            /** @description False when the price book has no cache rates for the model — the row then assumes cache tokens cost the input rate, i.e. zero saving. */
+            cacheRatesKnown?: boolean;
+        };
+        SpendSavingsReportDto: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive.
+             */
+            to?: string;
+            totals?: components["schemas"]["SavingsRow"];
+            byModel?: components["schemas"]["SavingsRow"][];
+            unpricedModels?: string[];
+        };
+        /** @description Generic API response wrapper */
         ApiResponseSpendReconcileReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendReconcileReportDto"];
@@ -4241,6 +4398,22 @@ export interface components {
             totalSpendCents?: number;
             /** @description Total spend over total outcomes; null when there are no outcomes. */
             costPerOutcomeCents?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListPriceBookModelDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PriceBookModelDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PriceBookModelDto: {
+            provider?: string;
+            model?: string;
+            inputCostPerMillion?: number;
+            outputCostPerMillion?: number;
+            cacheReadCostPerMillion?: number;
+            cacheWriteCostPerMillion?: number;
         };
         AllocationRow: {
             unitId?: string;
@@ -5531,6 +5704,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendAttributionRuleDto"];
+                };
+            };
+        };
+    };
+    simulate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendRouteSimulationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendRouteSimulationDto"];
                 };
             };
         };
@@ -7625,6 +7822,29 @@ export interface operations {
             };
         };
     };
+    savings: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendSavingsReportDto"];
+                };
+            };
+        };
+    };
     reconcile: {
         parameters: {
             query?: {
@@ -7671,6 +7891,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendOutcomeReportDto"];
+                };
+            };
+        };
+    };
+    models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListPriceBookModelDto"];
                 };
             };
         };

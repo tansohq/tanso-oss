@@ -21,6 +21,7 @@ import type {
   VendorProvider,
   VendorSyncResultDto,
   SpendDigestDto,
+  SpendRouteSimulationDto,
 } from "./types"
 
 export function useCreateVendorConnection() {
@@ -325,6 +326,24 @@ export function useClearSpendBudgetBump() {
       }),
     onSuccess: (_d, unitId) =>
       queryClient.invalidateQueries({ queryKey: ["spend-budget", unitId] }),
+  })
+}
+
+export interface RouteSimulationInput {
+  from: string
+  to: string
+  fromModel: string
+  toModel: string
+  workspaceId?: string
+}
+
+export function useSimulateRoute() {
+  return useMutation({
+    mutationFn: (input: RouteSimulationInput) =>
+      apiFetch<SpendRouteSimulationDto>("/api/v1/spend/reports/simulate", {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
   })
 }
 

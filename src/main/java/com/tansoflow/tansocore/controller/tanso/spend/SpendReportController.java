@@ -34,6 +34,15 @@ import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import com.tansoflow.tansocore.model.spend.PriceBookModelDto;
+import com.tansoflow.tansocore.model.spend.SpendRouteSimulationDto;
+import com.tansoflow.tansocore.model.spend.SpendSavingsReportDto;
+import com.tansoflow.tansocore.model.spend.request.SpendRouteSimulationRequest;
+import com.tansoflow.tansocore.service.internal.spend.SpendSavingsService;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -49,6 +58,7 @@ import java.time.LocalDate;
 @Tag(name = "Spend — Reports", description = "Internal AI usage and the three-way reconcile (price book vs vendor report vs invoice)")
 public class SpendReportController {
     private final SpendReportService spendReportService;
+    private final SpendSavingsService spendSavingsService;
     private final SpendAllocationService spendAllocationService;
 
     @GetMapping("/usage")
@@ -79,6 +89,30 @@ public class SpendReportController {
         return ResponseEntity.ok(ApiResponse.<SpendAllocationReportDto>builder().data(report).success(true).build());
     }
 
+    @GetMapping("/savings")
+    @Operation(summary = "What prompt caching is worth", description = "Per model: the input-side cost as billed against the same tokens with no cache. Defaults to the last 30 days.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendSavingsReportDto>> savings(
+            @AuthenticationPrincipal UserContext userContext,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ok(spendSavingsService.savings(userContext.getAccountId(), from, to));
+    }
+
+    @PostMapping("/simulate")
+    @Operation(summary = "What if this traffic had gone to another model", description = "The matched tokens re-priced at the target model's rates. Advice only — Tanso never routes.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendRouteSimulationDto>> simulate(
+            @AuthenticationPrincipal UserContext userContext, @Valid @RequestBody SpendRouteSimulationRequest request) {
+        return ok(spendSavingsService.simulate(userContext.getAccountId(), request));
+    }
+
+    @GetMapping("/models")
+    @Operation(summary = "The price book", description = "Every model with a price, for the simulator's target list.", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<List<PriceBookModelDto>>> models(@AuthenticationPrincipal UserContext userContext) {
+        return ok(spendSavingsService.models());
+    }
+
     @GetMapping("/reconcile")
     @Operation(summary = "Reconcile a period per vendor",
             description = "[from, to] inclusive. Defaults to the last full calendar month. Metered = price book × tokens; "
@@ -92,5 +126,9 @@ public class SpendReportController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         SpendReconcileReportDto report = spendReportService.reconcile(userContext.getAccountId(), from, to);
         return ResponseEntity.ok(ApiResponse.<SpendReconcileReportDto>builder().data(report).success(true).build());
+    }
+
+    private static <T> ResponseEntity<ApiResponse<T>> ok(T data) {
+        return ResponseEntity.ok(ApiResponse.<T>builder().data(data).success(true).build());
     }
 }

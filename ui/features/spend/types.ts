@@ -269,3 +269,54 @@ export interface SpendOutcomeReportDto {
   totalSpendCents: number
   costPerOutcomeCents?: number | null
 }
+
+// ---- phase 7: savings + route simulator
+
+export interface SavingsRow {
+  provider?: VendorProvider
+  model?: string | null
+  uncachedInputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  outputTokens: number
+  cacheShare: number
+  inputCostCents: number
+  noCacheCostCents: number
+  savedCents: number
+  priced: boolean
+  cacheRatesKnown: boolean
+}
+
+export interface SpendSavingsReportDto {
+  from: string
+  to: string
+  totals: SavingsRow
+  byModel: SavingsRow[]
+  unpricedModels: string[]
+}
+
+export interface SpendRouteSimulationDto {
+  from: string
+  to: string
+  fromModel: string
+  toModel: string
+  workspaceId?: string | null
+  uncachedInputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  outputTokens: number
+  requests?: number | null
+  currentCents: number
+  simulatedCents: number
+  deltaCents: number
+  caveats: string[]
+}
+
+export interface PriceBookModelDto {
+  provider: string
+  model: string
+  inputCostPerMillion: number
+  outputCostPerMillion: number
+  cacheReadCostPerMillion?: number | null
+  cacheWriteCostPerMillion?: number | null
+}

@@ -16,6 +16,8 @@ import type {
   VendorConnectionDto,
   VendorInvoiceDto,
   SpendDigestDto,
+  SpendSavingsReportDto,
+  PriceBookModelDto,
 } from "./types"
 
 /** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the routes 404. */
@@ -118,6 +120,25 @@ export function useSpendDigest() {
   return useQuery({
     queryKey: ["spend-digest"],
     queryFn: () => apiFetch<SpendDigestDto>("/api/v1/spend/digest"),
+  })
+}
+
+export function useSpendSavings(from: string, to: string) {
+  return useQuery({
+    queryKey: ["spend-savings", from, to],
+    queryFn: () =>
+      apiFetch<SpendSavingsReportDto>(
+        `/api/v1/spend/reports/savings${queryString({ from, to })}`
+      ),
+    enabled: !!from && !!to,
+  })
+}
+
+export function usePriceBookModels() {
+  return useQuery({
+    queryKey: ["spend-models"],
+    queryFn: () =>
+      apiFetch<PriceBookModelDto[]>("/api/v1/spend/reports/models"),
   })
 }
 

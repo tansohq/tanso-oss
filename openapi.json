@@ -1264,6 +1264,43 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/simulate": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "What if this traffic had gone to another model",
+                "description": "The matched tokens re-priced at the target model's rates. Advice only \u2014 Tanso never routes.",
+                "operationId": "simulate",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendRouteSimulationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendRouteSimulationDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/outcomes": {
             "get": {
                 "tags": [
@@ -5136,6 +5173,53 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/savings": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "What prompt caching is worth",
+                "description": "Per model: the input-side cost as billed against the same tokens with no cache. Defaults to the last 30 days.",
+                "operationId": "savings",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendSavingsReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/reports/reconcile": {
             "get": {
                 "tags": [
@@ -5222,6 +5306,33 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseSpendOutcomeReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/reports/models": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "The price book",
+                "description": "Every model with a price, for the simulator's target list.",
+                "operationId": "models",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListPriceBookModelDto"
                                 }
                             }
                         }
@@ -8428,6 +8539,120 @@
                     "priority": {
                         "type": "integer",
                         "format": "int32"
+                    }
+                }
+            },
+            "SpendRouteSimulationRequest": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive; default 30 days back."
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive; default tomorrow."
+                    },
+                    "fromModel": {
+                        "type": "string",
+                        "description": "The model whose traffic to re-price, as it appears on the usage report.",
+                        "minLength": 1
+                    },
+                    "toModel": {
+                        "type": "string",
+                        "description": "A model in the price book.",
+                        "minLength": 1
+                    },
+                    "workspaceId": {
+                        "type": "string",
+                        "description": "Only traffic from this vendor workspace / project / team id. Null = all."
+                    }
+                },
+                "required": [
+                    "fromModel",
+                    "toModel"
+                ]
+            },
+            "ApiResponseSpendRouteSimulationDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendRouteSimulationDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendRouteSimulationDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "fromModel": {
+                        "type": "string"
+                    },
+                    "toModel": {
+                        "type": "string"
+                    },
+                    "workspaceId": {
+                        "type": "string"
+                    },
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "requests": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "currentCents": {
+                        "type": "number",
+                        "description": "What the matched traffic cost by the price book."
+                    },
+                    "simulatedCents": {
+                        "type": "number",
+                        "description": "The same tokens at the target model's rates."
+                    },
+                    "deltaCents": {
+                        "type": "number",
+                        "description": "simulated \u2212 current; negative is a saving."
+                    },
+                    "caveats": {
+                        "type": "array",
+                        "description": "Things the number does not know: quality, latency, token-count drift between tokenizers, missing cache rates.",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -12499,6 +12724,112 @@
                     }
                 }
             },
+            "ApiResponseSpendSavingsReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendSavingsReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SavingsRow": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT",
+                            "LITELLM"
+                        ]
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheShare": {
+                        "type": "number",
+                        "description": "cacheRead / (uncached + cacheRead + cacheWrite), 0\u20131."
+                    },
+                    "inputCostCents": {
+                        "type": "number",
+                        "description": "Input-side cost as billed: uncached at the input rate, cache reads and writes at their rates."
+                    },
+                    "noCacheCostCents": {
+                        "type": "number",
+                        "description": "The same input tokens with no cache: everything at the input rate."
+                    },
+                    "savedCents": {
+                        "type": "number",
+                        "description": "noCacheCostCents \u2212 inputCostCents. Negative when cache writes cost more than the reads saved."
+                    },
+                    "priced": {
+                        "type": "boolean"
+                    },
+                    "cacheRatesKnown": {
+                        "type": "boolean",
+                        "description": "False when the price book has no cache rates for the model \u2014 the row then assumes cache tokens cost the input rate, i.e. zero saving."
+                    }
+                }
+            },
+            "SpendSavingsReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive."
+                    },
+                    "totals": {
+                        "$ref": "#/components/schemas/SavingsRow"
+                    },
+                    "byModel": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SavingsRow"
+                        }
+                    },
+                    "unpricedModels": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
             "ApiResponseSpendReconcileReportDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -12687,6 +13018,52 @@
                     "costPerOutcomeCents": {
                         "type": "number",
                         "description": "Total spend over total outcomes; null when there are no outcomes."
+                    }
+                }
+            },
+            "ApiResponseListPriceBookModelDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/PriceBookModelDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PriceBookModelDto": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string"
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "inputCostPerMillion": {
+                        "type": "number"
+                    },
+                    "outputCostPerMillion": {
+                        "type": "number"
+                    },
+                    "cacheReadCostPerMillion": {
+                        "type": "number"
+                    },
+                    "cacheWriteCostPerMillion": {
+                        "type": "number"
                     }
                 }
             },
