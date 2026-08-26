@@ -115,7 +115,7 @@ export default function SpendReconcilePage() {
 
       {isBuildSideOff(report.error) ? (
         <p className="text-sm text-muted-foreground">
-          The build side is switched off on this install
+          Internal spend is switched off on this install
           (APP_MODULES_BUILD_ENABLED=false).
         </p>
       ) : report.error ? (

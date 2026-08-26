@@ -221,7 +221,7 @@ export default function SpendConnectionsPage() {
         </Alert>
       ) : isBuildSideOff(connections.error) ? (
         <p className="text-sm text-muted-foreground">
-          The build side is switched off on this install
+          Internal spend is switched off on this install
           (APP_MODULES_BUILD_ENABLED=false).
         </p>
       ) : (

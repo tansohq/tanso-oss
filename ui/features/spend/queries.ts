@@ -21,7 +21,7 @@ import type {
   SpendPnlReportDto,
 } from "./types"
 
-/** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the server says so with a code, so a wrong API URL is not mistaken for it. */
+/** True when internal spend is switched off (APP_MODULES_BUILD_ENABLED=false): the server says so with a code, so a wrong API URL is not mistaken for it. */
 export function isBuildSideOff(error: unknown): boolean {
   return isModuleOff(error)
 }
