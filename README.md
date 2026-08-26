@@ -293,7 +293,16 @@ It works from the vendor's admin API, not a proxy in your request path:
    **spike** when a unit has spent at least $5 today and more than twice its
    trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
-   Slack incoming webhook if one is stored under Spend settings. Tanso is not
+   Slack incoming webhook, a generic webhook (JSON, `X-Tanso-Event`, and
+   `X-Tanso-Signature: sha256=HMAC(secret, body)` when a secret is set) and
+   the alert emails, whichever are stored under Spend settings. A
+   **projected** alert fires once a month when the month-to-date pace lands
+   above the ceiling (never in the first fifth of the month). A **temporary
+   bump** lifts a unit's monthly ceiling until a date — launch week — without
+   touching the standing number; it drops off on its own and is re-pushed to
+   the gateway both ways. A **weekly digest** (Monday 08:00 UTC, opt-in) sends
+   last week's spend per unit against the week before, with budget standing,
+   to the same channels; preview or send it from Spend → Alerts. Tanso is not
    in the request path, so on its own a "Block" budget cannot stop a request —
    its alert says so. **Gateway mode**: connect a LiteLLM proxy and add a
    LiteLLM rule to the unit (its team id, key or user); a Block budget is then
@@ -385,6 +394,7 @@ supply them via environment variables. The common ones:
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
+| `APP_SPEND_ALERT_FROM` | Sender for alert emails and the weekly digest, via Resend (`APP_RESEND_API_KEY`); default `Tanso <alerts@your-domain.com>` |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

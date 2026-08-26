@@ -15,15 +15,13 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.service.internal.spend;
 
-public enum ExternalApiKeyType {
-    STRIPE_API_KEY,
+import com.tansoflow.tansocore.model.spend.SpendDigestDto;
 
-    // Stripe webhook signing secret type
-    WEBHOOK_SECRET_SIGNING,
-    // Slack incoming webhook URL for spend alerts
-    SLACK_SPEND_WEBHOOK,
-    SPEND_WEBHOOK,
-    SPEND_WEBHOOK_SECRET,
+public interface SpendDigestService {
+    SpendDigestDto build(String accountId);
+
+    /** Builds and posts the digest to every configured channel. Returns what was sent. */
+    SpendDigestDto send(String accountId);
 }

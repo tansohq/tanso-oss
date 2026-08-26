@@ -20,12 +20,13 @@ package com.tansoflow.tansocore.service.internal.spend.implementation;
 import com.tansoflow.tansocore.entity.SpendAlert;
 import com.tansoflow.tansocore.entity.SpendBudget;
 import com.tansoflow.tansocore.entity.SpendUnit;
-import com.tansoflow.tansocore.integration.spend.SlackNotifier;
+import com.tansoflow.tansocore.integration.spend.SpendNotifier;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.spend.SpendAlertDto;
 import com.tansoflow.tansocore.model.spend.SpendAllocationReportDto;
 import com.tansoflow.tansocore.model.spend.SpendBudgetDto;
+import com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest;
 import com.tansoflow.tansocore.model.spend.request.SpendBudgetRequest;
 import com.tansoflow.tansocore.model.spend.type.BudgetMode;
 import com.tansoflow.tansocore.model.spend.type.SpendAlertKind;
@@ -75,7 +76,7 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     private final SpendAlertRepository alertRepository;
     private final SpendUnitRepository unitRepository;
     private final SpendAllocationService allocationService;
-    private final SlackNotifier slackNotifier;
+    private final SpendNotifier notifier;
     private final GatewayEnforcementService gatewayEnforcement;
     private final Clock clock;
 
@@ -134,6 +135,44 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
 
     @Override
     @Transactional
+    public SpendBudgetDto bump(String accountId, String unitId, SpendBudgetBumpRequest request) {
+        UUID account = UUID.fromString(accountId);
+        SpendUnit unit = requireUnit(account, unitId);
+        SpendBudget budget = budgetRepository.findBySpendUnitIdAndAccountId(unit.getId(), account)
+                .orElseThrow(() -> new ResourceNotFoundException("No budget on " + unit.getName() + " to bump — set a monthly ceiling first"));
+        Instant now = clock.instant();
+        if (budget.getMonthlyCents() == null || budget.getMonthlyCents().signum() <= 0) {
+            throw new IllegalArgumentException("A bump lifts the monthly ceiling; set one first");
+        }
+        if (request.getMonthlyCents().compareTo(budget.getMonthlyCents()) <= 0) {
+            throw new IllegalArgumentException("A bump must be above the standing ceiling of " + dollars(budget.getMonthlyCents()) + " — lower the budget instead");
+        }
+        if (!request.getExpiresAt().isAfter(now)) {
+            throw new IllegalArgumentException("The bump's expiry is already in the past");
+        }
+        budget.setBumpMonthlyCents(request.getMonthlyCents());
+        budget.setBumpExpiresAt(request.getExpiresAt());
+        budget.setBumpReason(request.getReason() == null || request.getReason().isBlank() ? null : request.getReason().trim());
+        gatewayEnforcement.apply(budget);
+        return toDto(budgetRepository.save(budget), account);
+    }
+
+    @Override
+    @Transactional
+    public SpendBudgetDto clearBump(String accountId, String unitId) {
+        UUID account = UUID.fromString(accountId);
+        SpendUnit unit = requireUnit(account, unitId);
+        SpendBudget budget = budgetRepository.findBySpendUnitIdAndAccountId(unit.getId(), account)
+                .orElseThrow(() -> new ResourceNotFoundException("No budget on " + unit.getName()));
+        budget.setBumpMonthlyCents(null);
+        budget.setBumpExpiresAt(null);
+        budget.setBumpReason(null);
+        gatewayEnforcement.apply(budget);
+        return toDto(budgetRepository.save(budget), account);
+    }
+
+    @Override
+    @Transactional
     public List<SpendAlertDto> evaluate(String accountId) {
         UUID account = UUID.fromString(accountId);
         List<SpendBudget> budgets = budgetRepository.findAllByAccountId(account);
@@ -154,6 +193,14 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
 
         List<SpendAlertDto> fired = new ArrayList<>();
         for (SpendBudget budget : budgets) {
+            if (budget.getBumpMonthlyCents() != null && !budget.bumpActive(now)) {
+                // The bump ran out: drop it and put the standing ceiling back at the gateway.
+                budget.setBumpMonthlyCents(null);
+                budget.setBumpExpiresAt(null);
+                budget.setBumpReason(null);
+                gatewayEnforcement.apply(budget);
+                budgetRepository.save(budget);
+            }
             String unitKey = budget.getSpendUnitId().toString();
             String name = names.getOrDefault(budget.getSpendUnitId(), unitKey);
             BigDecimal spentToday = daySpend.getOrDefault(unitKey, BigDecimal.ZERO);
@@ -161,8 +208,10 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
             if (budget.getDailyCents() != null && budget.getDailyCents().signum() > 0) {
                 fired.addAll(check(budget, name, BudgetPeriod.DAY, day.start(), spentToday, budget.getDailyCents(), BudgetMode.ALERT));
             }
-            if (budget.getMonthlyCents() != null && budget.getMonthlyCents().signum() > 0) {
-                fired.addAll(check(budget, name, BudgetPeriod.MONTH, month.start(), spentMonth, budget.getMonthlyCents(), budget.getMonthlyMode()));
+            BigDecimal monthlyLimit = budget.effectiveMonthlyCents(now);
+            if (monthlyLimit != null && monthlyLimit.signum() > 0) {
+                fired.addAll(check(budget, name, BudgetPeriod.MONTH, month.start(), spentMonth, monthlyLimit, budget.getMonthlyMode()));
+                fired.addAll(project(budget, name, month, now, spentMonth, monthlyLimit));
             }
             BigDecimal weekMean = weekSpend.getOrDefault(unitKey, BigDecimal.ZERO).divide(BigDecimal.valueOf(7), 2, RoundingMode.HALF_UP);
             if (spentToday.compareTo(SPIKE_FLOOR_CENTS) >= 0 && spentToday.compareTo(weekMean.multiply(SPIKE_FACTOR)) > 0
@@ -194,6 +243,25 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         return fired;
     }
 
+    /**
+     * Straight-line pace: spent / share of the month elapsed. Fires once per month when the projection
+     * lands above the ceiling and the ceiling is not already breached, but never in the first fifth of
+     * the month, where one heavy day would project to anything.
+     */
+    private List<SpendAlertDto> project(SpendBudget budget, String name, BudgetWindow month, Instant now, BigDecimal spent, BigDecimal limit) {
+        long total = month.resetsAt().getEpochSecond() - month.start().getEpochSecond();
+        long elapsed = now.getEpochSecond() - month.start().getEpochSecond();
+        if (elapsed * 5 < total || spent.compareTo(limit) >= 0 || exists(budget, SpendAlertKind.PROJECTED, BudgetPeriod.MONTH, month.start())) {
+            return List.of();
+        }
+        BigDecimal projected = spent.multiply(BigDecimal.valueOf(total)).divide(BigDecimal.valueOf(elapsed), 2, RoundingMode.HALF_UP);
+        if (projected.compareTo(limit) <= 0) {
+            return List.of();
+        }
+        return List.of(fire(budget, SpendAlertKind.PROJECTED, BudgetPeriod.MONTH, month.start(), spent, limit,
+                name + " is on pace for " + dollars(projected) + " this month against a " + dollars(limit) + " budget (" + dollars(spent) + " so far).", name));
+    }
+
     private boolean exists(SpendBudget budget, SpendAlertKind kind, BudgetPeriod period, Instant windowStart) {
         return alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(budget.getSpendUnitId(), kind, period, windowStart);
     }
@@ -211,9 +279,10 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
         alert.setMessage(message);
         alert.setFiredAt(clock.instant());
         alert = alertRepository.save(alert);
-        slackNotifier.post(budget.getAccountId(), "[tanso] " + message);
+        SpendAlertDto dto = toDto(alert, unitName);
+        notifier.notify(budget.getAccountId(), "spend.alert", "[tanso] " + kind.name().toLowerCase() + ": " + unitName, message, null, dto);
         log.info("Spend alert {} for unit {}: {}", kind, budget.getSpendUnitId(), message);
-        return toDto(alert, unitName);
+        return dto;
     }
 
     @Override
@@ -270,6 +339,8 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
                 .alertThreshold(budget.getAlertThreshold()).monthlyMode(budget.getMonthlyMode())
                 .dailySpentCents(spentToday).monthlySpentCents(spentMonth)
                 .dailyResetsAt(day.resetsAt()).monthlyResetsAt(month.resetsAt())
+                .effectiveMonthlyCents(budget.effectiveMonthlyCents(now))
+                .bumpMonthlyCents(budget.getBumpMonthlyCents()).bumpExpiresAt(budget.getBumpExpiresAt()).bumpReason(budget.getBumpReason())
                 .enforcementTarget(budget.getEnforcementTarget()).enforcedAt(budget.getEnforcedAt()).enforcementError(budget.getEnforcementError())
                 .build();
     }

@@ -99,7 +99,7 @@ export interface SpendReconcileReportDto {
 // ---- phase 2: allocate + control
 export type SpendUnitType = "TEAM" | "PERSON" | "PROJECT"
 export type AttributionMatchKind = "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR"
-export type SpendAlertKind = "THRESHOLD" | "BREACH" | "SPIKE"
+export type SpendAlertKind = "THRESHOLD" | "BREACH" | "SPIKE" | "PROJECTED"
 export type BudgetMode = "ALERT" | "BLOCK"
 
 export interface SpendUnitDto {
@@ -151,6 +151,10 @@ export interface SpendBudgetDto {
   monthlySpentCents: number
   dailyResetsAt?: string
   monthlyResetsAt?: string
+  effectiveMonthlyCents?: number | null
+  bumpMonthlyCents?: number | null
+  bumpExpiresAt?: string | null
+  bumpReason?: string | null
   enforcementTarget?: string | null
   enforcedAt?: string | null
   enforcementError?: string | null
@@ -175,6 +179,30 @@ export interface SpendSettingsDto {
   personLevelEnabled: boolean
   workerNotice?: string | null
   slackConfigured: boolean
+  webhookConfigured: boolean
+  webhookSigned: boolean
+  alertEmails?: string | null
+  digestEnabled: boolean
+}
+
+export interface SpendDigestRow {
+  unitId: string
+  name: string
+  cents: number
+  previousCents: number
+  monthlySpentCents?: number | null
+  monthlyLimitCents?: number | null
+  bumpReason?: string | null
+}
+
+export interface SpendDigestDto {
+  from: string
+  to: string
+  totalCents: number
+  previousTotalCents: number
+  unattributedCents: number
+  alertsFired: number
+  rows: SpendDigestRow[]
 }
 
 // ---- phase 3: outcomes

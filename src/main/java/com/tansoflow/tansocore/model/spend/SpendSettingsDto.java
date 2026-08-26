@@ -30,4 +30,9 @@ public class SpendSettingsDto {
     private String workerNotice;
     @Schema(description = "A Slack incoming webhook is stored for alerts. The URL itself is never returned.")
     private boolean slackConfigured;
+    @Schema(description = "A generic webhook URL is stored. Never returned.")
+    private boolean webhookConfigured;
+    private boolean webhookSigned;
+    private String alertEmails;
+    private boolean digestEnabled;
 }

@@ -95,6 +95,13 @@ public class AccountSetting {
     @Column(name = "spend_worker_notice", length = Integer.MAX_VALUE)
     private String spendWorkerNotice;
 
+    /** Comma-separated recipients for spend alerts and the weekly digest. */
+    @Column(name = "spend_alert_emails", length = Integer.MAX_VALUE)
+    private String spendAlertEmails;
+
+    @Column(name = "spend_digest_enabled", nullable = false)
+    private boolean spendDigestEnabled = false;
+
     // Max money one agent-initiated purchase may move; null = uncapped
     @Column(name = "agent_max_topup_amount", precision = 18, scale = 2)
     private java.math.BigDecimal agentMaxTopupAmount;

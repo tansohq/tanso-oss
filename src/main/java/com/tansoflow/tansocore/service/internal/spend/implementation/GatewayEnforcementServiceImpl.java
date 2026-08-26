@@ -32,6 +32,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
@@ -58,7 +59,8 @@ public class GatewayEnforcementServiceImpl implements GatewayEnforcementService 
             budget.setEnforcementError(gateways.isEmpty() ? null : "No LiteLLM rule on this unit — add a rule naming its team, key or user");
             return;
         }
-        boolean block = budget.getMonthlyMode() == BudgetMode.BLOCK && budget.getMonthlyCents() != null && budget.getMonthlyCents().signum() > 0;
+        BigDecimal monthly = budget.effectiveMonthlyCents(clock.instant());
+        boolean block = budget.getMonthlyMode() == BudgetMode.BLOCK && monthly != null && monthly.signum() > 0;
         List<String> targets = new ArrayList<>();
         List<String> errors = new ArrayList<>();
         for (VendorConnection gateway : gateways) {
@@ -66,7 +68,7 @@ public class GatewayEnforcementServiceImpl implements GatewayEnforcementService 
                 try {
                     // A budget that is no longer Block clears the hard limit (max_budget null) rather than leaving a stale one.
                     String target = liteLlm.pushMonthlyBudget(gateway.getAdminKey(), gateway.getScope(), rule.getMatchKind(), rule.getMatchValue(),
-                            block ? budget.getMonthlyCents() : null);
+                            block ? monthly : null);
                     if (block) {
                         targets.add(target);
                     }

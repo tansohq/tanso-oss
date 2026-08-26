@@ -238,6 +238,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/units/{unitId}/budget/bump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift the monthly ceiling until a date
+         * @description The standing ceiling is untouched and applies again when the bump expires; a Block budget is re-pushed to the gateway both times.
+         */
+        post: operations["bump"];
+        /** End a bump early */
+        delete: operations["clearBump"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/rules": {
         parameters: {
             query?: never;
@@ -350,6 +371,26 @@ export interface paths {
          * @description CSV with a header row. Required columns: description, amount (major units, e.g. dollars). Optional: kind (TOKEN, SEAT, TOOL, OTHER), model, quantity. periodEnd is inclusive.
          */
         post: operations["importCsv_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/digest/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the weekly digest now
+         * @description To Slack, the webhook and the alert emails, whichever are configured. Monday 08:00 UTC otherwise, when enabled in settings.
+         */
+        post: operations["sendDigest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1359,6 +1400,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview the weekly digest
+         * @description Last seven full UTC days against the seven before, per unit, with budget standing.
+         */
+        get: operations["digest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/alerts": {
         parameters: {
             query?: never;
@@ -2183,6 +2244,12 @@ export interface components {
             dailyResetsAt?: string;
             /** Format: date-time */
             monthlyResetsAt?: string;
+            /** @description The monthly ceiling in force right now: the bump while it lasts, else monthlyCents. */
+            effectiveMonthlyCents?: number;
+            bumpMonthlyCents?: number;
+            /** Format: date-time */
+            bumpExpiresAt?: string;
+            bumpReason?: string;
             /** @description Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only. */
             enforcementTarget?: string;
             /** Format: date-time */
@@ -2195,6 +2262,14 @@ export interface components {
             workerNotice?: string;
             /** @description Slack incoming webhook URL (https://hooks.slack.com/services/…). Stored encrypted. Empty string removes it; null leaves it alone. */
             slackWebhookUrl?: string;
+            /** @description Generic webhook URL (https). Every alert and digest is POSTed as JSON with X-Tanso-Event. Stored encrypted. Empty string removes it; null leaves it alone. */
+            webhookUrl?: string;
+            /** @description Signing secret: requests carry X-Tanso-Signature: sha256=HMAC-SHA256(secret, body). Empty string removes it; null leaves it alone. */
+            webhookSecret?: string;
+            /** @description Comma-separated recipients for alerts and the digest. Empty string removes them; null leaves them alone. */
+            alertEmails?: string;
+            /** @description Send the weekly digest on Monday 08:00 UTC. */
+            digestEnabled?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendSettingsDto: {
@@ -2211,6 +2286,11 @@ export interface components {
             workerNotice?: string;
             /** @description A Slack incoming webhook is stored for alerts. The URL itself is never returned. */
             slackConfigured?: boolean;
+            /** @description A generic webhook URL is stored. Never returned. */
+            webhookConfigured?: boolean;
+            webhookSigned?: boolean;
+            alertEmails?: string;
+            digestEnabled?: boolean;
         };
         ReplaceVendorKeyRequest: {
             /** @description The new vendor admin key. Stored encrypted; never returned. */
@@ -2350,6 +2430,17 @@ export interface components {
             totalRows?: number;
             /** Format: int32 */
             imported?: number;
+        };
+        SpendBudgetBumpRequest: {
+            /** @description The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling. */
+            monthlyCents: number;
+            /**
+             * Format: date-time
+             * @description When the bump ends and the standing ceiling applies again.
+             */
+            expiresAt: string;
+            /** @description Why — shown on the budget and in the digest. */
+            reason?: string;
         };
         SpendAttributionRuleRequest: {
             spendUnitId: string;
@@ -2527,6 +2618,39 @@ export interface components {
             createdAt?: string;
             lines?: components["schemas"]["Line"][];
         };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendDigestDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendDigestDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        DigestRow: {
+            unitId?: string;
+            name?: string;
+            cents?: number;
+            previousCents?: number;
+            /** @description Month-to-date against the effective monthly ceiling; null when the unit has no monthly budget. */
+            monthlySpentCents?: number;
+            monthlyLimitCents?: number;
+            bumpReason?: string;
+        };
+        SpendDigestDto: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive.
+             */
+            to?: string;
+            totalCents?: number;
+            previousTotalCents?: number;
+            unattributedCents?: number;
+            /** Format: int32 */
+            alertsFired?: number;
+            rows?: components["schemas"]["DigestRow"][];
+        };
         CreateVendorConnectionRequest: {
             /** @enum {string} */
             provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
@@ -2550,7 +2674,7 @@ export interface components {
             spendUnitId?: string;
             unitName?: string;
             /** @enum {string} */
-            kind?: "THRESHOLD" | "BREACH" | "SPIKE";
+            kind?: "THRESHOLD" | "BREACH" | "SPIKE" | "PROJECTED";
             /** @enum {string} */
             period?: "DAY" | "WEEK" | "MONTH" | "TOTAL";
             /** Format: date-time */
@@ -5309,6 +5433,54 @@ export interface operations {
             };
         };
     };
+    bump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendBudgetBumpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
+    clearBump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
     listRules: {
         parameters: {
             query?: never;
@@ -5538,6 +5710,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVendorInvoiceDto"];
+                };
+            };
+        };
+    };
+    sendDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendDigestDto"];
                 };
             };
         };
@@ -7494,6 +7686,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendAllocationReportDto"];
+                };
+            };
+        };
+    };
+    digest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendDigestDto"];
                 };
             };
         };

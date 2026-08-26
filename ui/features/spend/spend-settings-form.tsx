@@ -26,6 +26,11 @@ export function SpendSettingsForm({
   const [notice, setNotice] = useState(settings.workerNotice ?? "")
   const [slack, setSlack] = useState("")
   const [clearSlack, setClearSlack] = useState(false)
+  const [emails, setEmails] = useState(settings.alertEmails ?? "")
+  const [digest, setDigest] = useState(settings.digestEnabled)
+  const [webhook, setWebhook] = useState("")
+  const [clearWebhook, setClearWebhook] = useState(false)
+  const [secret, setSecret] = useState("")
 
   return (
     <form
@@ -36,6 +41,10 @@ export function SpendSettingsForm({
             personLevelEnabled: personLevel,
             workerNotice: notice,
             slackWebhookUrl: clearSlack ? "" : slack.trim() || undefined,
+            alertEmails: emails,
+            digestEnabled: digest,
+            webhookUrl: clearWebhook ? "" : webhook.trim() || undefined,
+            webhookSecret: clearWebhook ? "" : secret.trim() || undefined,
           },
           {
             onSuccess: () => {
@@ -103,6 +112,73 @@ export function SpendSettingsForm({
                 onChange={(e) => setClearSlack(e.target.checked)}
               />
               Remove the stored webhook
+            </label>
+          )}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="settings-emails">Alert emails</FieldLabel>
+          <Input
+            id="settings-emails"
+            value={emails}
+            onChange={(e) => setEmails(e.target.value)}
+            placeholder="cto@acme.io, finance@acme.io"
+          />
+          <p className="text-xs text-muted-foreground">
+            Comma-separated. Every alert and the weekly digest go here. Needs a
+            Resend key on the server (APP_RESEND_API_KEY).
+          </p>
+        </Field>
+        <Field orientation="horizontal">
+          <FieldLabel htmlFor="settings-digest">
+            Weekly digest (Monday 08:00 UTC)
+          </FieldLabel>
+          <Switch
+            id="settings-digest"
+            checked={digest}
+            onCheckedChange={setDigest}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="settings-webhook">Webhook</FieldLabel>
+          <Input
+            id="settings-webhook"
+            type="url"
+            autoComplete="off"
+            value={webhook}
+            disabled={clearWebhook}
+            onChange={(e) => setWebhook(e.target.value)}
+            placeholder={
+              settings.webhookConfigured
+                ? "Configured — paste a new URL to replace"
+                : "https://ops.acme.io/hooks/tanso"
+            }
+          />
+          <Input
+            id="settings-webhook-secret"
+            type="password"
+            autoComplete="off"
+            value={secret}
+            disabled={clearWebhook}
+            onChange={(e) => setSecret(e.target.value)}
+            placeholder={
+              settings.webhookSigned
+                ? "Signing secret set — paste a new one to replace"
+                : "Signing secret (optional)"
+            }
+          />
+          <p className="text-xs text-muted-foreground">
+            Alerts and digests are POSTed as JSON with an X-Tanso-Event header;
+            with a secret, X-Tanso-Signature carries sha256=HMAC(secret, body).
+            Both stored encrypted; never shown again.
+          </p>
+          {settings.webhookConfigured && (
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={clearWebhook}
+                onChange={(e) => setClearWebhook(e.target.checked)}
+              />
+              Remove the stored webhook and secret
             </label>
           )}
         </Field>

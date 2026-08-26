@@ -17,6 +17,7 @@ app:
     github-base-url: ${APP_SPEND_GITHUB_BASE_URL:https://api.github.com}
     linear-base-url: ${APP_SPEND_LINEAR_BASE_URL:https://api.linear.app/graphql}
     cursor-base-url: ${APP_SPEND_CURSOR_BASE_URL:https://api.cursor.com}
+    alert-from: ${APP_SPEND_ALERT_FROM:Tanso <alerts@your-domain.com>}   # sender for alert emails and the weekly digest (Resend)
   telemetry:
     enabled: ${TANSO_TELEMETRY_ENABLED:true}
     endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping
@@ -108,7 +109,9 @@ jobs:
   spendBudget:
     cron: 0 30 * * * *   # hourly, after the sync; also runs after every manual sync
   outcomeSync:
-    cron: 0 45 * * * *   # hourly; re-pulls the last 3 days of merged PRs / done issues   # hourly; vendor reports lag 5–60 min, so each run re-pulls the last 3 days
+    cron: 0 45 * * * *   # hourly; re-pulls the last 3 days of merged PRs / done issues
+  spendDigest:
+    cron: 0 0 8 * * MON  # UTC; only accounts with the digest switched on   # hourly; vendor reports lag 5–60 min, so each run re-pulls the last 3 days
   backgroundJobsWithFixedDelay:
     reconciliationDelay: 30000
 

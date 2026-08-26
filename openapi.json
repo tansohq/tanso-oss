@@ -1123,6 +1123,87 @@
                 ]
             }
         },
+        "/api/v1/spend/units/{unitId}/budget/bump": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Lift the monthly ceiling until a date",
+                "description": "The standing ceiling is untouched and applies again when the bump expires; a Block budget is re-pushed to the gateway both times.",
+                "operationId": "bump",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendBudgetBumpRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "End a bump early",
+                "operationId": "clearBump",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/rules": {
             "get": {
                 "tags": [
@@ -1499,6 +1580,33 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseVendorInvoiceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/digest/send": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Send the weekly digest now",
+                "description": "To Slack, the webhook and the alert emails, whichever are configured. Monday 08:00 UTC otherwise, when enabled in settings.",
+                "operationId": "sendDigest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendDigestDto"
                                 }
                             }
                         }
@@ -5175,6 +5283,33 @@
                 ]
             }
         },
+        "/api/v1/spend/digest": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Preview the weekly digest",
+                "description": "Last seven full UTC days against the seven before, per unit, with budget standing.",
+                "operationId": "digest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendDigestDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/alerts": {
             "get": {
                 "tags": [
@@ -7728,6 +7863,20 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "effectiveMonthlyCents": {
+                        "type": "number",
+                        "description": "The monthly ceiling in force right now: the bump while it lasts, else monthlyCents."
+                    },
+                    "bumpMonthlyCents": {
+                        "type": "number"
+                    },
+                    "bumpExpiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "bumpReason": {
+                        "type": "string"
+                    },
                     "enforcementTarget": {
                         "type": "string",
                         "description": "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only."
@@ -7754,6 +7903,22 @@
                     "slackWebhookUrl": {
                         "type": "string",
                         "description": "Slack incoming webhook URL (https://hooks.slack.com/services/\u2026). Stored encrypted. Empty string removes it; null leaves it alone."
+                    },
+                    "webhookUrl": {
+                        "type": "string",
+                        "description": "Generic webhook URL (https). Every alert and digest is POSTed as JSON with X-Tanso-Event. Stored encrypted. Empty string removes it; null leaves it alone."
+                    },
+                    "webhookSecret": {
+                        "type": "string",
+                        "description": "Signing secret: requests carry X-Tanso-Signature: sha256=HMAC-SHA256(secret, body). Empty string removes it; null leaves it alone."
+                    },
+                    "alertEmails": {
+                        "type": "string",
+                        "description": "Comma-separated recipients for alerts and the digest. Empty string removes them; null leaves them alone."
+                    },
+                    "digestEnabled": {
+                        "type": "boolean",
+                        "description": "Send the weekly digest on Monday 08:00 UTC."
                     }
                 }
             },
@@ -7791,6 +7956,19 @@
                     "slackConfigured": {
                         "type": "boolean",
                         "description": "A Slack incoming webhook is stored for alerts. The URL itself is never returned."
+                    },
+                    "webhookConfigured": {
+                        "type": "boolean",
+                        "description": "A generic webhook URL is stored. Never returned."
+                    },
+                    "webhookSigned": {
+                        "type": "boolean"
+                    },
+                    "alertEmails": {
+                        "type": "string"
+                    },
+                    "digestEnabled": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -8126,6 +8304,28 @@
                         "format": "int32"
                     }
                 }
+            },
+            "SpendBudgetBumpRequest": {
+                "type": "object",
+                "properties": {
+                    "monthlyCents": {
+                        "type": "number",
+                        "description": "The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling."
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the bump ends and the standing ceiling applies again."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why \u2014 shown on the budget and in the digest."
+                    }
+                },
+                "required": [
+                    "expiresAt",
+                    "monthlyCents"
+                ]
             },
             "SpendAttributionRuleRequest": {
                 "type": "object",
@@ -8629,6 +8829,86 @@
                     }
                 }
             },
+            "ApiResponseSpendDigestDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendDigestDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "DigestRow": {
+                "type": "object",
+                "properties": {
+                    "unitId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "cents": {
+                        "type": "number"
+                    },
+                    "previousCents": {
+                        "type": "number"
+                    },
+                    "monthlySpentCents": {
+                        "type": "number",
+                        "description": "Month-to-date against the effective monthly ceiling; null when the unit has no monthly budget."
+                    },
+                    "monthlyLimitCents": {
+                        "type": "number"
+                    },
+                    "bumpReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "SpendDigestDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive."
+                    },
+                    "totalCents": {
+                        "type": "number"
+                    },
+                    "previousTotalCents": {
+                        "type": "number"
+                    },
+                    "unattributedCents": {
+                        "type": "number"
+                    },
+                    "alertsFired": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DigestRow"
+                        }
+                    }
+                }
+            },
             "CreateVendorConnectionRequest": {
                 "type": "object",
                 "properties": {
@@ -8706,7 +8986,8 @@
                         "enum": [
                             "THRESHOLD",
                             "BREACH",
-                            "SPIKE"
+                            "SPIKE",
+                            "PROJECTED"
                         ]
                     },
                     "period": {

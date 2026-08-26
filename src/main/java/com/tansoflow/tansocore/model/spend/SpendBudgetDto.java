@@ -38,6 +38,11 @@ public class SpendBudgetDto {
     private BigDecimal monthlySpentCents;
     private Instant dailyResetsAt;
     private Instant monthlyResetsAt;
+    @Schema(description = "The monthly ceiling in force right now: the bump while it lasts, else monthlyCents.")
+    private BigDecimal effectiveMonthlyCents;
+    private BigDecimal bumpMonthlyCents;
+    private Instant bumpExpiresAt;
+    private String bumpReason;
     @Schema(description = "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only.")
     private String enforcementTarget;
     private Instant enforcedAt;

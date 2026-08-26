@@ -20,6 +20,7 @@ import type {
   VendorProbeResultDto,
   VendorProvider,
   VendorSyncResultDto,
+  SpendDigestDto,
 } from "./types"
 
 export function useCreateVendorConnection() {
@@ -280,6 +281,58 @@ export interface SpendSettingsInput {
   personLevelEnabled?: boolean
   workerNotice?: string
   slackWebhookUrl?: string
+  webhookUrl?: string
+  webhookSecret?: string
+  alertEmails?: string
+  digestEnabled?: boolean
+}
+
+export interface SpendBudgetBumpInput {
+  unitId: string
+  monthlyCents: number
+  expiresAt: string
+  reason?: string
+}
+
+export function useBumpSpendBudget() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (input: SpendBudgetBumpInput) =>
+      apiFetch<SpendBudgetDto>(
+        `/api/v1/spend/units/${input.unitId}/budget/bump`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            monthlyCents: input.monthlyCents,
+            expiresAt: input.expiresAt,
+            reason: input.reason,
+          }),
+        }
+      ),
+    onSuccess: (_d, input) =>
+      queryClient.invalidateQueries({
+        queryKey: ["spend-budget", input.unitId],
+      }),
+  })
+}
+
+export function useClearSpendBudgetBump() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (unitId: string) =>
+      apiFetch<SpendBudgetDto>(`/api/v1/spend/units/${unitId}/budget/bump`, {
+        method: "DELETE",
+      }),
+    onSuccess: (_d, unitId) =>
+      queryClient.invalidateQueries({ queryKey: ["spend-budget", unitId] }),
+  })
+}
+
+export function useSendSpendDigest() {
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<SpendDigestDto>("/api/v1/spend/digest/send", { method: "POST" }),
+  })
 }
 
 export function useUpdateSpendSettings() {

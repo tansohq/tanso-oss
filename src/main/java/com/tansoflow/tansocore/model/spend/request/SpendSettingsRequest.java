@@ -28,4 +28,14 @@ public class SpendSettingsRequest {
     @ToString.Exclude
     @Schema(description = "Slack incoming webhook URL (https://hooks.slack.com/services/…). Stored encrypted. Empty string removes it; null leaves it alone.")
     private String slackWebhookUrl;
+    @ToString.Exclude
+    @Schema(description = "Generic webhook URL (https). Every alert and digest is POSTed as JSON with X-Tanso-Event. Stored encrypted. Empty string removes it; null leaves it alone.")
+    private String webhookUrl;
+    @ToString.Exclude
+    @Schema(description = "Signing secret: requests carry X-Tanso-Signature: sha256=HMAC-SHA256(secret, body). Empty string removes it; null leaves it alone.")
+    private String webhookSecret;
+    @Schema(description = "Comma-separated recipients for alerts and the digest. Empty string removes them; null leaves them alone.")
+    private String alertEmails;
+    @Schema(description = "Send the weekly digest on Monday 08:00 UTC.")
+    private Boolean digestEnabled;
 }

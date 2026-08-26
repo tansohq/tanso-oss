@@ -1,0 +1,24 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-9"
+      author: tanso
+      comment: >
+        Alerts to standard. Slack was the only place an alert could go; an
+        operator whose team lives in email, PagerDuty or a home-grown bot had
+        nothing. Alert emails and a weekly digest opt-in live on the account;
+        the generic webhook URL and its signing secret go to external_api_keys
+        (encrypted) like the Slack hook. A temporary bump lets a manager lift
+        a monthly ceiling until a date without editing the real number — the
+        bump is stored beside it and drops off on its own.
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column: { name: spend_alert_emails, type: TEXT }
+              - column: { name: spend_digest_enabled, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+        - addColumn:
+            tableName: spend_budgets
+            columns:
+              - column: { name: bump_monthly_cents, type: "NUMERIC(18, 2)" }
+              - column: { name: bump_expires_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: bump_reason, type: VARCHAR(255) }
