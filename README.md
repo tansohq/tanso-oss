@@ -336,6 +336,14 @@ It works from the vendor's admin API, not a proxy in your request path:
 
 <img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
 
+<img src=".github/assets/screenshots/spend-gateway-budget.png" alt="Spend → Teams — a Block budget enforced at LiteLLM, bumped for launch week, with the gateway's own count beside Tanso's" width="800" />
+
+<img src=".github/assets/screenshots/spend-digest.png" alt="Spend → Alerts — the weekly digest: last week per unit against the week before, month-to-date against the ceiling" width="800" />
+
+<img src=".github/assets/screenshots/spend-savings.png" alt="Spend → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
+
+<img src=".github/assets/screenshots/spend-pnl.png" alt="Spend → P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
+
 6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
    have any CI job post one: `POST /api/v1/client/outcomes` with the tenant
