@@ -34,6 +34,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { clearToken, getClaims } from "@/lib/auth"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
@@ -68,11 +69,17 @@ const internalSpendNav = [
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { isMobile, setOpenMobile } = useSidebar()
   const email = getClaims()?.email
   const vendorConnections = useVendorConnections()
   const buildSideOff = isBuildSideOff(vendorConnections.error)
   const portfolio = usePortfolio()
   const monetizationOff = isModuleOff(portfolio.error)
+
+  // On mobile the sidebar is a sheet; a tap on a link should close it.
+  function closeMobile() {
+    if (isMobile) setOpenMobile(false)
+  }
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href)
@@ -89,6 +96,7 @@ export function AppSidebar() {
         <SidebarMenuButton
           render={<Link href={item.href} />}
           isActive={isActive(item.href)}
+          onClick={closeMobile}
         >
           <item.icon />
           {item.title}
@@ -117,6 +125,7 @@ export function AppSidebar() {
                     <SidebarMenuButton
                       render={<Link href="/" />}
                       isActive={isActive("/")}
+                      onClick={closeMobile}
                     >
                       <Gauge />
                       Overview
@@ -153,6 +162,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               render={<Link href="/settings" />}
               isActive={isActive("/settings")}
+              onClick={closeMobile}
             >
               <Settings />
               Settings
