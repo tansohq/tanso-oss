@@ -33,6 +33,7 @@ public enum ErrorCode {
     RATE_LIMITED("rate_limited"),
     BUDGET_EXCEEDED("budget_exceeded"),
     VENDOR_ERROR("vendor_error"),
+    MODULE_DISABLED("module_disabled"),
     INTERNAL_ERROR("internal_error");
 
     private final String code;

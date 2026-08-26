@@ -21,9 +21,13 @@ import type {
   SpendPnlReportDto,
 } from "./types"
 
-/** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the routes 404. */
+/** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the server says so with a code, so a wrong API URL is not mistaken for it. */
 export function isBuildSideOff(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 404
+  return (
+    error instanceof ApiError &&
+    error.status === 404 &&
+    error.code === "module_disabled"
+  )
 }
 
 export function useVendorConnections() {
