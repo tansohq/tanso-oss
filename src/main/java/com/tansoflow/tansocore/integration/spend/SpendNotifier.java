@@ -133,7 +133,7 @@ public class SpendNotifier {
             return Outcome.NOT_CONFIGURED;
         }
         if (!resendConfigured) {
-            log.warn("Spend alert email skipped for account {}: {} recipient(s) configured but APP_RESEND_API_KEY is not set on the server", accountId, to.size());
+            log.warn("Spend alert email failed for account {}: {} recipient(s) configured but APP_RESEND_API_KEY is not set on the server", accountId, to.size());
             return Outcome.FAILED;
         }
         try {

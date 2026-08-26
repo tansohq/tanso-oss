@@ -386,7 +386,7 @@ supply them via environment variables. The common ones:
 | `JWT_SECRET` | Signing secret for UI session tokens |
 | `APP_SECRETS_KEY` | Encrypts stored integration credentials (Stripe keys, vendor admin keys) at rest. Required. Startup refuses a key that does not decrypt what is stored; to rotate, `DELETE FROM external_api_keys` and `UPDATE vendor_connections SET admin_key=''`, then reconnect |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe integration |
-| `APP_RESEND_API_KEY` | Transactional email via Resend — spend alerts and the weekly digest. Empty = email is skipped (logged per send) |
+| `APP_RESEND_API_KEY` | Transactional email via Resend — spend alerts and the weekly digest. Empty with recipients configured = the email leg reports FAILED on every send (logged with the reason) |
 | `OPENAI_API_KEY` | AI features (optional) |
 | `APP_WEBHOOK_ENDPOINT` | Public Stripe webhook URL |
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
