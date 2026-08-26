@@ -37,9 +37,11 @@ import {
 } from "@/components/ui/sidebar"
 import { clearToken, getClaims } from "@/lib/auth"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
+import { usePortfolio } from "@/features/analytics/queries"
+import { isModuleOff } from "@/lib/api/client"
 
-// Customer billing: the AI you sell. Plans, credits, margin per customer.
-const serveNav = [
+// Monetization: the AI you sell. Plans, credits, margin per customer.
+const monetizationNav = [
   { title: "Plans", href: "/plans", icon: Package },
   { title: "Features", href: "/features", icon: Puzzle },
   { title: "Customers", href: "/customers", icon: Users },
@@ -50,8 +52,9 @@ const serveNav = [
 ]
 
 // Internal spend: the AI you buy. Connections first, since nothing else here
-// shows anything until a vendor is connected.
-const buildNav = [
+// shows anything until a vendor is connected. P&L needs both halves, so it
+// is hidden when monetization is off.
+const internalSpendNav = [
   { title: "Connections", href: "/spend/connections", icon: Plug },
   { title: "Spend", href: "/spend/usage", icon: Wallet },
   { title: "Teams", href: "/spend/teams", icon: Users },
@@ -68,6 +71,8 @@ export function AppSidebar() {
   const email = getClaims()?.email
   const vendorConnections = useVendorConnections()
   const buildSideOff = isBuildSideOff(vendorConnections.error)
+  const portfolio = usePortfolio()
+  const monetizationOff = isModuleOff(portfolio.error)
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href)
@@ -78,7 +83,7 @@ export function AppSidebar() {
     router.replace("/login")
   }
 
-  function renderItems(items: typeof serveNav) {
+  function renderItems(items: typeof monetizationNav) {
     return items.map((item) => (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
@@ -103,34 +108,40 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  render={<Link href="/" />}
-                  isActive={isActive("/")}
-                >
-                  <Gauge />
-                  Overview
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Customer billing</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>{renderItems(serveNav)}</SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {!monetizationOff && (
+          <>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      render={<Link href="/" />}
+                      isActive={isActive("/")}
+                    >
+                      <Gauge />
+                      Overview
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>Monetization</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>{renderItems(monetizationNav)}</SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
         {!buildSideOff && (
           <>
-            <SidebarSeparator />
+            {!monetizationOff && <SidebarSeparator />}
             <SidebarGroup>
               <SidebarGroupLabel>Internal spend</SidebarGroupLabel>
               <SidebarGroupContent>
-                <SidebarMenu>{renderItems(buildNav)}</SidebarMenu>
+                <SidebarMenu>
+                  {renderItems(monetizationOff ? internalSpendNav.filter((i) => i.href !== "/spend/pnl") : internalSpendNav)}
+                </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </>

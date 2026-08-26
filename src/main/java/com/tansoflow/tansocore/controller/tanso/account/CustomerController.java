@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.account;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.mapper.account.CustomerMapper;
@@ -54,6 +55,7 @@ import java.util.List;
 @RequestMapping("/api/v1/monetization/customers")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Customer", description = "Customer management operations")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomerController {
     private final CustomerService customerService;
     private final CustomerMapper customerMapper;

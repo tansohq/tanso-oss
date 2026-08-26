@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.data;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.service.internal.data.CsvImportService;
@@ -46,6 +47,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/tanso/csv-import")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "CSV Import", description = "Import historic cost/usage data from CSV files for AI Insights")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CsvImportController {
 
     private final CsvImportService csvImportService;

@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.mapper.event.EventMapper;
@@ -52,6 +53,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/client/events")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Event", description = "Event ingestion for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class EventClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final EventService eventService;

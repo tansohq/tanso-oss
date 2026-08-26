@@ -253,9 +253,43 @@ psql "postgresql://dev_user:dev_pass@localhost:5432/core_db" \
 
 ---
 
+## Run one half
+
+Both halves ship in the same container and read the same store, and either
+one can be switched off. Nothing about the other half needs to be set up
+first.
+
+**Internal spend only** (what your teams spend on Anthropic, OpenAI, Cursor,
+Copilot, LiteLLM):
+
+```bash
+# deploy/.env
+APP_MODULES_MONETIZATION_ENABLED=false
+```
+
+Plans, customers, credits, invoices, the client API, Stripe and the billing
+jobs are off. Their routes answer `404` with `"code": "module_disabled"`, the
+console opens on Internal spend, and Stripe keys are never asked for. Then:
+`setup.sh` for a login, **Internal spend → Connections** to store one vendor
+admin key, **Sync now**, and Reconcile fills in. Turn monetization on later by
+flipping the flag; the store already has everything it needs.
+
+**Monetization only** (metering, credits, entitlements, billing, margin per
+customer):
+
+```bash
+# deploy/.env
+APP_MODULES_BUILD_ENABLED=false
+```
+
+The vendor connectors, spend reports and their hourly jobs are off and the
+console hides Internal spend.
+
+Feature P&L is the one report that needs both.
+
 ## Internal AI spend
 
-The engine has two halves. **Customer billing**, everything above, answers what
+The engine has two halves. **Monetization**, everything above, answers what
 it costs to serve each customer. **Internal spend** answers what your own AI
 costs: the Anthropic and OpenAI bills for your engineers and agents.
 
@@ -408,7 +442,7 @@ Jira as an outcome source.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
-Set `APP_MODULES_BUILD_ENABLED=false` to run a serve-side-only install.
+Each half runs on its own: `APP_MODULES_MONETIZATION_ENABLED=false` for internal spend only, `APP_MODULES_BUILD_ENABLED=false` for monetization only. See [Run one half](#run-one-half).
 
 ## Configuration
 
@@ -429,6 +463,7 @@ supply them via environment variables. The common ones:
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
+| `APP_MODULES_MONETIZATION_ENABLED` | Monetization — plans, features, customers, subscriptions, credits, invoices, the client API, Stripe and the billing jobs (`true` by default; `false` for an internal-spend-only install: those routes answer 404 `module_disabled` and the console shows Internal spend alone). |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Spend group |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where internal spend pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |

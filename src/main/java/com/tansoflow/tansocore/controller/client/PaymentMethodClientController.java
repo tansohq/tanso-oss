@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.stripe.exception.StripeException;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
@@ -51,6 +52,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/client/customers/{customerReferenceId}/payment-methods")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Payment Methods", description = "Save a payment method for programmatic purchases")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class PaymentMethodClientController {
 
     private final CustomerAccessGuard customerAccessGuard;

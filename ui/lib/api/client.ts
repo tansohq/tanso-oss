@@ -99,3 +99,8 @@ export function queryString(
     new URLSearchParams(entries.map(([k, v]) => [k, String(v)])).toString()
   )
 }
+
+/** True when the server says a whole half of the engine is switched off (APP_MODULES_*_ENABLED=false). A wrong API URL is a plain 404 without the code. */
+export function isModuleOff(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 404 && error.code === "module_disabled"
+}

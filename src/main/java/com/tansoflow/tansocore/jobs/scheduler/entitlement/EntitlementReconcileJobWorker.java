@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.jobs.scheduler.entitlement;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.repository.EntitlementReconcileJobRepository;
 import com.tansoflow.tansocore.service.internal.monetization.PlanFeatureRuleService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class EntitlementReconcileJobWorker {
 
     private final EntitlementReconcileJobRepository jobRepo;

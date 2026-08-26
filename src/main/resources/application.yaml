@@ -9,6 +9,8 @@ app:
   secrets:
     key: ${APP_SECRETS_KEY:}   # required; encrypts stored Stripe / vendor admin keys
   modules:
+    monetization:
+      enabled: ${APP_MODULES_MONETIZATION_ENABLED:true}   # monetization (plans, customers, credits, invoices, client API, Stripe)
     build:
       enabled: ${APP_MODULES_BUILD_ENABLED:true}   # internal AI spend (Spend section, /api/v1/spend/**)
   spend:

@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.publicapi;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.service.client.PublicCatalogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,6 +41,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RequestMapping("/public/v1/catalog")
 @Tag(name = "Public Catalog", description = "Machine-readable pricing for buying agents — no authentication")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class PublicCatalogController {
 
     private final PublicCatalogService publicCatalogService;

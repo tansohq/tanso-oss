@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Customer;
@@ -59,6 +60,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/customers")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Customer", description = "Customer management for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomerClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final CustomerService customerService;

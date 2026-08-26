@@ -1,6 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { isModuleOff } from "@/lib/api/client"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
 import { Badge } from "@/components/ui/badge"
@@ -47,7 +49,12 @@ function churnBadgeVariant(risk: string | undefined) {
 }
 
 export default function OverviewPage() {
+  const router = useRouter()
   const portfolio = usePortfolio()
+  const monetizationOff = isModuleOff(portfolio.error)
+  useEffect(() => {
+    if (monetizationOff) router.replace("/spend/usage")
+  }, [monetizationOff, router])
   const bridge = useRevenueBridge()
   const models = useModelsAnalytics()
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAnalyticsDto | null>(null)

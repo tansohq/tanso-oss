@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { apiFetch } from "@/lib/api/client"
+import { apiFetch, isModuleOff } from "@/lib/api/client"
 import type {
   AnalyticsResponseDto,
   ModelsAnalyticsResponseDto,
@@ -11,6 +11,7 @@ export function usePortfolio() {
   return useQuery({
     queryKey: ["analytics", "portfolio"],
     queryFn: () => apiFetch<AnalyticsResponseDto>("/api/v1/analytics/portfolio"),
+    retry: (count, error) => !isModuleOff(error) && count < 3,
   })
 }
 

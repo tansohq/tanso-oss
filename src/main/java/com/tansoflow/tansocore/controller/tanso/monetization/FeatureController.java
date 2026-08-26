@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.feature.FeatureDto;
 import com.tansoflow.tansocore.model.feature.request.FeatureRequest;
@@ -53,6 +54,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/monetization/features")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Feature", description = "Feature management operations")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class FeatureController {
     private final FeatureService featureService;
 

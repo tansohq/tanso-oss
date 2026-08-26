@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.analytics;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.analytics.AiInsightDto;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -44,6 +45,7 @@ import java.util.List;
 @RequestMapping("/api/v1/analytics/insights")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "AI Insights", description = "AI-powered analytics insights")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class AiInsightController {
 
     private final AiInsightService aiInsightService;

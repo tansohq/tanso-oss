@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -56,6 +57,7 @@ import java.util.UUID;
 @Tag(name = "Client Subscription",
         description = "Manage customer lifecycles. Supports Flat, Usage, and Hybrid models. " +
                 "Hybrid plans combine a base price with usage-based feature rules.")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class SubscriptionClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final SubscriptionService subscriptionService;

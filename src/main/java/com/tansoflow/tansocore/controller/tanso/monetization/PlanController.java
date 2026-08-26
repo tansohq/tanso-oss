@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.monetization.PlanFeatureLinkedDto;
 import com.tansoflow.tansocore.model.monetization.request.UuidListRequest;
@@ -58,6 +59,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/monetization/plans")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Plan", description = "Plan management operations")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class PlanController {
     private final PlanService planService;
     private final PlanRevenueService planRevenueService;

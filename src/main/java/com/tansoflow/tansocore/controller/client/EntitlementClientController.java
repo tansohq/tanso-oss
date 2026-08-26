@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.entitlement.api.EntitlementEvaluationRequest;
@@ -52,6 +53,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/entitlements")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Entitlement", description = "Entitlement checks for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class EntitlementClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final ClientEntitlementService clientEntitlementService;

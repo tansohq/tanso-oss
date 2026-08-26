@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.analytics;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.analytics.AnalyticsResponseDto;
 import com.tansoflow.tansocore.model.analytics.ModelsAnalyticsResponseDto;
@@ -45,6 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/analytics")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Analytics", description = "Portfolio analytics and margin reporting")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class AnalyticsController {
     private final AnalyticsService analyticsService;
 

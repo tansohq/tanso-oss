@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -57,6 +58,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/monetization/subscriptions")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Subscription", description = "Subscription management operations")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class SubscriptionController {
     private final SubscriptionService subscriptionService;
     private final AuditHelper auditHelper;

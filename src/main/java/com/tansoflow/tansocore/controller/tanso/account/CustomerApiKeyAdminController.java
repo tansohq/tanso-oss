@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.account;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
@@ -63,6 +64,7 @@ import java.util.List;
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Customer API Keys (Admin)",
         description = "Issue, rotate, revoke, and budget a customer's API keys from the console")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomerApiKeyAdminController {
 
     private final CustomerApiKeyService customerApiKeyService;

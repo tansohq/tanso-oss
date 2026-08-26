@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.data.stripe;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.integration.stripe.StripeImportService;
 import com.tansoflow.tansocore.model.data.stripe.request.StripeDiscoverRequest;
@@ -50,6 +51,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/data/stripe/import")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Stripe Import", description = "Operations for importing existing Stripe data into Tanso")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class StripeImportController {
     private final StripeImportService stripeImportService;
 
