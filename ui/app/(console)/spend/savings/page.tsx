@@ -292,9 +292,13 @@ export default function SpendSavingsPage() {
                 placeholder="claude-opus-4-1"
               />
               <datalist id="sim-models-seen">
-                {(data?.byModel ?? []).map((r) =>
-                  r.model ? <option key={r.model} value={r.model} /> : null
-                )}
+                {[
+                  ...new Set(
+                    (data?.byModel ?? []).flatMap((r) => (r.model ? [r.model] : []))
+                  ),
+                ].map((model) => (
+                  <option key={model} value={model} />
+                ))}
               </datalist>
             </div>
             <div className="grid gap-1">
