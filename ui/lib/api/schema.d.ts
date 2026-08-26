@@ -26,6 +26,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/connections/{connectionId}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the stored admin key
+         * @description Swaps the key in place — pulled usage stays attached to the connection — and clears the recorded error.
+         */
+        put: operations["replaceKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/v1/login": {
         parameters: {
             query?: never;
@@ -136,6 +156,88 @@ export interface paths {
         put?: never;
         /** Import CSV for AI Insights */
         post: operations["importCsv"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List imported vendor invoices */
+        get: operations["list"];
+        put?: never;
+        /**
+         * Import a vendor invoice from CSV
+         * @description CSV with a header row. Required columns: description, amount (major units, e.g. dollars). Optional: kind (TOKEN, SEAT, TOOL, OTHER), model, quantity. periodEnd is inclusive.
+         */
+        post: operations["importCsv_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List connected vendor accounts (hints only) */
+        get: operations["list_1"];
+        put?: never;
+        /**
+         * Connect a vendor account
+         * @description The admin key is stored encrypted and never returned; only its last four characters are.
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/connections/{connectionId}/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pull usage and cost for a window
+         * @description Rewrites [from, to) from the vendor's reports. Defaults to the last 30 days. Runs synchronously; a 30-day window is a handful of requests.
+         */
+        post: operations["sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/connections/{connectionId}/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check the stored key against the vendor
+         * @description One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.
+         */
+        post: operations["probe"];
         delete?: never;
         options?: never;
         head?: never;
@@ -967,6 +1069,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage and cost for a window
+         * @description [from, to). Defaults to the last 30 days.
+         */
+        get: operations["usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/reports/reconcile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Reconcile a period per vendor
+         * @description [from, to] inclusive. Defaults to the last full calendar month. Metered = price book × tokens; vendor = the vendor's cost report; invoiced = imported invoices that sit inside the window.
+         */
+        get: operations["reconcile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/subscriptions/scheduled-changes": {
         parameters: {
             query?: never;
@@ -1454,6 +1596,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/invoices/{invoiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an imported invoice */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/connections/{connectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Disconnect a vendor account */
+        delete: operations["delete_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/monetization/subscriptions/{subscriptionUuid}/scheduled-changes": {
         parameters: {
             query?: never;
@@ -1640,6 +1816,34 @@ export interface components {
              */
             alertingSince?: string;
         };
+        ReplaceVendorKeyRequest: {
+            /** @description The new vendor admin key. Stored encrypted; never returned. */
+            adminKey: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorConnectionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorConnectionDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorConnectionDto: {
+            id?: string;
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            label?: string;
+            /** @description Last four characters of the admin key. The key itself is never returned. */
+            keyHint?: string;
+            /** @enum {string} */
+            status?: "ACTIVE" | "ERROR";
+            /** @description Why the last probe or sync failed; null while healthy. */
+            lastError?: string;
+            /** Format: date-time */
+            lastSyncedAt?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
         UsernameAndPasswordRequest: {
             username?: string;
             password?: string;
@@ -1748,6 +1952,74 @@ export interface components {
             totalRows?: number;
             /** Format: int32 */
             imported?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorInvoiceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorInvoiceDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        Line: {
+            description?: string;
+            /** @enum {string} */
+            kind?: "TOKEN" | "SEAT" | "TOOL" | "OTHER";
+            model?: string;
+            quantity?: number;
+            amountCents?: number;
+        };
+        VendorInvoiceDto: {
+            id?: string;
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            /** Format: date */
+            periodStart?: string;
+            /** Format: date */
+            periodEnd?: string;
+            currency?: string;
+            totalCents?: number;
+            importedFrom?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            lines?: components["schemas"]["Line"][];
+        };
+        CreateVendorConnectionRequest: {
+            /** @enum {string} */
+            provider: "ANTHROPIC" | "OPENAI";
+            /** @description How this org shows up in the console, e.g. "Anthropic — engineering org" */
+            label: string;
+            /** @description Vendor admin key. Stored encrypted; never returned. */
+            adminKey: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorSyncResultDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorSyncResultDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorSyncResultDto: {
+            connectionId?: string;
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            /** Format: int32 */
+            rowsWritten?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseVendorProbeResultDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorProbeResultDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        VendorProbeResultDto: {
+            ok?: boolean;
+            message?: string;
         };
         SubscriptionRequest: {
             planId: string;
@@ -2840,6 +3112,8 @@ export interface components {
             provider: string;
             inputCostPerMillion: number;
             outputCostPerMillion: number;
+            cacheReadCostPerMillion?: number;
+            cacheWriteCostPerMillion?: number;
             /** Format: date-time */
             createdAt?: string;
             /** Format: date-time */
@@ -3083,6 +3357,135 @@ export interface components {
             headers?: string;
             /** Format: date-time */
             createdAt?: string;
+        };
+        ActorRow: {
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            /** @description Claude Code actor email or key name, or OpenAI user id. */
+            actor?: string;
+            /** Format: int64 */
+            totalTokens?: number;
+            /** Format: int64 */
+            sessions?: number;
+            /** @description The vendor's own estimate for this actor (Claude Code); null for OpenAI users. */
+            vendorCostCents?: number;
+            meteredCostCents?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendUsageReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendUsageReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        DayRow: {
+            /** Format: date */
+            date?: string;
+            /** Format: int64 */
+            totalTokens?: number;
+            meteredCostCents?: number;
+            vendorCostCents?: number;
+        };
+        ModelRow: {
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            model?: string;
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /**
+             * Format: int64
+             * @description Null when the vendor does not report request counts for this model.
+             */
+            requests?: number;
+            meteredCostCents?: number;
+            /** @description Cost-report rows the vendor attributed to this model; null when the vendor does not break cost down by model (OpenAI). */
+            vendorCostCents?: number;
+            priced?: boolean;
+            /** @description False when the price book has no cache rates for this model, so cached tokens were priced at the full input rate (an overestimate). */
+            cacheRatesKnown?: boolean;
+        };
+        SpendUsageReportDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            totals?: components["schemas"]["Totals"];
+            byModel?: components["schemas"]["ModelRow"][];
+            byDay?: components["schemas"]["DayRow"][];
+            byActor?: components["schemas"]["ActorRow"][];
+            /** @description Models seen in usage that the price book does not know; their metered cost is zero. */
+            unpricedModels?: string[];
+        };
+        Totals: {
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /**
+             * Format: int64
+             * @description Null when no vendor in the window reports request counts (Anthropic does not).
+             */
+            requests?: number;
+            /** @description What the vendors' cost reports say, in cents. */
+            vendorCostCents?: number;
+            /** @description What the price book says the tokens should cost, in cents. */
+            meteredCostCents?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendReconcileReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendReconcileReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        Row: {
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI";
+            meteredCents?: number;
+            /** @description True when some model was unpriced or a cache rate was missing, so metered is a floor or a ceiling, not a figure. */
+            meteredIsEstimate?: boolean;
+            vendorReportedCents?: number;
+            /** @description Sum of imported invoices whose period lies inside the window. Null when none. */
+            invoicedCents?: number;
+            /** Format: int32 */
+            invoiceCount?: number;
+            meteredVsVendorCents?: number;
+            vendorVsInvoiceCents?: number;
+        };
+        SpendReconcileReportDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            rows?: components["schemas"]["Row"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListVendorInvoiceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorInvoiceDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListVendorConnectionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["VendorConnectionDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseListSubscriptionDto: {
@@ -3778,6 +4181,32 @@ export interface operations {
             };
         };
     };
+    replaceKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceVendorKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorConnectionDto"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -3982,6 +4411,151 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseCsvImportResult"];
+                };
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListVendorInvoiceDto"];
+                };
+            };
+        };
+    };
+    importCsv_1: {
+        parameters: {
+            query: {
+                provider: "ANTHROPIC" | "OPENAI";
+                periodStart: string;
+                periodEnd: string;
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorInvoiceDto"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListVendorConnectionDto"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVendorConnectionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorConnectionDto"];
+                };
+            };
+        };
+    };
+    sync: {
+        parameters: {
+            query?: {
+                /** @description First day to pull, inclusive (UTC). Default: 30 days before `to`. */
+                from?: string;
+                /** @description Day to stop at, exclusive (UTC). Default: tomorrow. Windows over 31 days are pulled in 31-day chunks. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorSyncResultDto"];
+                };
+            };
+        };
+    };
+    probe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVendorProbeResultDto"];
                 };
             };
         };
@@ -5707,6 +6281,56 @@ export interface operations {
             };
         };
     };
+    usage: {
+        parameters: {
+            query?: {
+                /** @description First day, inclusive (UTC). Default: 30 days before `to`. */
+                from?: string;
+                /** @description Day to stop at, EXCLUSIVE (UTC). Default: tomorrow. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendUsageReportDto"];
+                };
+            };
+        };
+    };
+    reconcile: {
+        parameters: {
+            query?: {
+                /** @description First day of the period, inclusive. Default: first day of last month. */
+                from?: string;
+                /** @description Last day of the period, INCLUSIVE — invoices are dated, not timestamped. Default: last day of last month. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendReconcileReportDto"];
+                };
+            };
+        };
+    };
     getScheduledChanges: {
         parameters: {
             query?: never;
@@ -6410,6 +7034,50 @@ export interface operations {
             header?: never;
             path: {
                 id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    delete_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connectionId: string;
             };
             cookie?: never;
         };

@@ -1,0 +1,5 @@
+{"data":[{"starting_at":"2026-08-20T00:00:00Z","ending_at":"2026-08-21T00:00:00Z","results":[
+ {"account_id":null,"api_key_id":"apikey_01","cache_creation":{"ephemeral_1h_input_tokens":1000,"ephemeral_5m_input_tokens":500},"cache_read_input_tokens":200,"context_window":null,"inference_geo":null,"model":"claude-sonnet-4-5","output_tokens":500,"server_tool_use":{"web_search_requests":0},"service_account_id":null,"service_tier":"standard","uncached_input_tokens":1500,"workspace_id":"wrkspc_01"},
+ {"account_id":null,"api_key_id":"apikey_02","cache_creation":{"ephemeral_1h_input_tokens":0,"ephemeral_5m_input_tokens":0},"cache_read_input_tokens":0,"context_window":null,"inference_geo":null,"model":"claude-opus-4","output_tokens":50,"server_tool_use":{"web_search_requests":0},"service_account_id":null,"service_tier":"batch","uncached_input_tokens":100,"workspace_id":null}]},
+ {"starting_at":"2026-08-21T00:00:00Z","ending_at":"2026-08-22T00:00:00Z","results":[]}],
+ "has_more":false,"next_page":null}

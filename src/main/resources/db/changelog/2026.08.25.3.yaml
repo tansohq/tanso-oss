@@ -1,0 +1,25 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-3"
+      author: tanso
+      comment: >
+        Cache rates for the seeded price book. Without them every cached token
+        is priced at the full input rate and the metered figure overstates the
+        bill by the cache discount — Anthropic charges cache reads at 10% of
+        input and 5-minute cache writes at 125%; OpenAI charges cached input at
+        50% on the gpt-4o family and has no write charge. Models whose cache
+        pricing is not published here stay null and are reported as estimates.
+      changes:
+        - sql:
+            sql: >
+              UPDATE model_pricing
+                 SET cache_read_cost_per_million = input_cost_per_million * 0.10,
+                     cache_write_cost_per_million = input_cost_per_million * 1.25
+               WHERE provider = 'anthropic'
+                 AND cache_read_cost_per_million IS NULL;
+              UPDATE model_pricing
+                 SET cache_read_cost_per_million = input_cost_per_million * 0.50,
+                     cache_write_cost_per_million = 0
+               WHERE provider = 'openai'
+                 AND model IN ('gpt-4o', 'gpt-4o-mini')
+                 AND cache_read_cost_per_million IS NULL;

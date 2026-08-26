@@ -25,6 +25,10 @@
             "description": "Public endpoints for ingesting data from Stripe webhooks"
         },
         {
+            "name": "Spend \u2014 Vendor Connections",
+            "description": "Vendor admin credentials Tanso pulls the operator's internal AI usage and cost from"
+        },
+        {
             "name": "Client Billing",
             "description": "Billing operations for client applications"
         },
@@ -113,12 +117,20 @@
             "description": "Issue and manage customer-scoped API keys for end-customer agents"
         },
         {
+            "name": "Spend \u2014 Vendor Invoices",
+            "description": "The vendor's bill as finance sees it, imported from CSV, for reconciliation"
+        },
+        {
             "name": "Client Customer",
             "description": "Customer management for client applications"
         },
         {
             "name": "Monetization Rules",
             "description": "Operations for managing monetization rules (linking plans and features)"
+        },
+        {
+            "name": "Spend \u2014 Reports",
+            "description": "Internal AI usage and the three-way reconcile (price book vs vendor report vs invoice)"
         },
         {
             "name": "Client Plan",
@@ -273,6 +285,53 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/connections/{connectionId}/key": {
+            "put": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Replace the stored admin key",
+                "description": "Swaps the key in place \u2014 pulled usage stays attached to the connection \u2014 and clears the recorded error.",
+                "operationId": "replaceKey",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/ReplaceVendorKeyRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorConnectionDto"
                                 }
                             }
                         }
@@ -727,6 +786,271 @@
                         }
                     }
                 }
+            }
+        },
+        "/api/v1/spend/invoices": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Vendor Invoices"
+                ],
+                "summary": "List imported vendor invoices",
+                "operationId": "list",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListVendorInvoiceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Vendor Invoices"
+                ],
+                "summary": "Import a vendor invoice from CSV",
+                "description": "CSV with a header row. Required columns: description, amount (major units, e.g. dollars). Optional: kind (TOKEN, SEAT, TOOL, OTHER), model, quantity. periodEnd is inclusive.",
+                "operationId": "importCsv_1",
+                "parameters": [
+                    {
+                        "name": "provider",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "enum": [
+                                "ANTHROPIC",
+                                "OPENAI"
+                            ]
+                        }
+                    },
+                    {
+                        "name": "periodStart",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "periodEnd",
+                        "in": "query",
+                        "required": true,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "currency",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "default": "USD"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "file": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "required": [
+                                    "file"
+                                ]
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorInvoiceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/connections": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "List connected vendor accounts (hints only)",
+                "operationId": "list_1",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListVendorConnectionDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Connect a vendor account",
+                "description": "The admin key is stored encrypted and never returned; only its last four characters are.",
+                "operationId": "create",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CreateVendorConnectionRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorConnectionDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/connections/{connectionId}/sync": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Pull usage and cost for a window",
+                "description": "Rewrites [from, to) from the vendor's reports. Defaults to the last 30 days. Runs synchronously; a 30-day window is a handful of requests.",
+                "operationId": "sync",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day to pull, inclusive (UTC). Default: 30 days before `to`.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Day to stop at, exclusive (UTC). Default: tomorrow. Windows over 31 days are pulled in 31-day chunks.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorSyncResultDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/connections/{connectionId}/probe": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Check the stored key against the vendor",
+                "description": "One cheap call. Records ACTIVE or ERROR (with the vendor's message) on the connection.",
+                "operationId": "probe",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVendorProbeResultDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
             }
         },
         "/api/v1/monetization/subscriptions": {
@@ -3942,6 +4266,104 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/usage": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "Usage and cost for a window",
+                "description": "[from, to). Defaults to the last 30 days.",
+                "operationId": "usage",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day, inclusive (UTC). Default: 30 days before `to`.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Day to stop at, EXCLUSIVE (UTC). Default: tomorrow.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendUsageReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/reports/reconcile": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "Reconcile a period per vendor",
+                "description": "[from, to] inclusive. Defaults to the last full calendar month. Metered = price book \u00d7 tokens; vendor = the vendor's cost report; invoiced = imported invoices that sit inside the window.",
+                "operationId": "reconcile",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "First day of the period, inclusive. Default: first day of last month.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Last day of the period, INCLUSIVE \u2014 invoices are dated, not timestamped. Default: last day of last month.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendReconcileReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/monetization/subscriptions/scheduled-changes": {
             "get": {
                 "tags": [
@@ -5679,6 +6101,78 @@
                 }
             }
         },
+        "/api/v1/spend/invoices/{invoiceId}": {
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Vendor Invoices"
+                ],
+                "summary": "Remove an imported invoice",
+                "operationId": "delete",
+                "parameters": [
+                    {
+                        "name": "invoiceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/connections/{connectionId}": {
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Vendor Connections"
+                ],
+                "summary": "Disconnect a vendor account",
+                "operationId": "delete_1",
+                "parameters": [
+                    {
+                        "name": "connectionId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/monetization/subscriptions/{subscriptionUuid}/scheduled-changes": {
             "delete": {
                 "tags": [
@@ -6139,6 +6633,80 @@
                     }
                 }
             },
+            "ReplaceVendorKeyRequest": {
+                "type": "object",
+                "properties": {
+                    "adminKey": {
+                        "type": "string",
+                        "description": "The new vendor admin key. Stored encrypted; never returned.",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "adminKey"
+                ]
+            },
+            "ApiResponseVendorConnectionDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorConnectionDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorConnectionDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "label": {
+                        "type": "string"
+                    },
+                    "keyHint": {
+                        "type": "string",
+                        "description": "Last four characters of the admin key. The key itself is never returned."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": [
+                            "ACTIVE",
+                            "ERROR"
+                        ]
+                    },
+                    "lastError": {
+                        "type": "string",
+                        "description": "Why the last probe or sync failed; null while healthy."
+                    },
+                    "lastSyncedAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
             "UsernameAndPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -6388,6 +6956,193 @@
                     "imported": {
                         "type": "integer",
                         "format": "int32"
+                    }
+                }
+            },
+            "ApiResponseVendorInvoiceDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorInvoiceDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Line": {
+                "type": "object",
+                "properties": {
+                    "description": {
+                        "type": "string"
+                    },
+                    "kind": {
+                        "type": "string",
+                        "enum": [
+                            "TOKEN",
+                            "SEAT",
+                            "TOOL",
+                            "OTHER"
+                        ]
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "quantity": {
+                        "type": "number"
+                    },
+                    "amountCents": {
+                        "type": "number"
+                    }
+                }
+            },
+            "VendorInvoiceDto": {
+                "type": "object",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "periodStart": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "periodEnd": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "totalCents": {
+                        "type": "number"
+                    },
+                    "importedFrom": {
+                        "type": "string"
+                    },
+                    "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lines": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Line"
+                        }
+                    }
+                }
+            },
+            "CreateVendorConnectionRequest": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "label": {
+                        "type": "string",
+                        "description": "How this org shows up in the console, e.g. \"Anthropic \u2014 engineering org\"",
+                        "maxLength": 100,
+                        "minLength": 0
+                    },
+                    "adminKey": {
+                        "type": "string",
+                        "description": "Vendor admin key. Stored encrypted; never returned.",
+                        "minLength": 1
+                    }
+                },
+                "required": [
+                    "adminKey",
+                    "label",
+                    "provider"
+                ]
+            },
+            "ApiResponseVendorSyncResultDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorSyncResultDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorSyncResultDto": {
+                "type": "object",
+                "properties": {
+                    "connectionId": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rowsWritten": {
+                        "type": "integer",
+                        "format": "int32"
+                    }
+                }
+            },
+            "ApiResponseVendorProbeResultDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/VendorProbeResultDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "VendorProbeResultDto": {
+                "type": "object",
+                "properties": {
+                    "ok": {
+                        "type": "boolean"
+                    },
+                    "message": {
+                        "type": "string"
                     }
                 }
             },
@@ -9147,6 +9902,12 @@
                     "outputCostPerMillion": {
                         "type": "number"
                     },
+                    "cacheReadCostPerMillion": {
+                        "type": "number"
+                    },
+                    "cacheWriteCostPerMillion": {
+                        "type": "number"
+                    },
                     "createdAt": {
                         "type": "string",
                         "format": "date-time"
@@ -9530,6 +10291,322 @@
                     "createdAt": {
                         "type": "string",
                         "format": "date-time"
+                    }
+                }
+            },
+            "ActorRow": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "actor": {
+                        "type": "string",
+                        "description": "Claude Code actor email or key name, or OpenAI user id."
+                    },
+                    "totalTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "sessions": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "vendorCostCents": {
+                        "type": "number",
+                        "description": "The vendor's own estimate for this actor (Claude Code); null for OpenAI users."
+                    },
+                    "meteredCostCents": {
+                        "type": "number"
+                    }
+                }
+            },
+            "ApiResponseSpendUsageReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendUsageReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "DayRow": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "totalTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "meteredCostCents": {
+                        "type": "number"
+                    },
+                    "vendorCostCents": {
+                        "type": "number"
+                    }
+                }
+            },
+            "ModelRow": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "requests": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Null when the vendor does not report request counts for this model."
+                    },
+                    "meteredCostCents": {
+                        "type": "number"
+                    },
+                    "vendorCostCents": {
+                        "type": "number",
+                        "description": "Cost-report rows the vendor attributed to this model; null when the vendor does not break cost down by model (OpenAI)."
+                    },
+                    "priced": {
+                        "type": "boolean"
+                    },
+                    "cacheRatesKnown": {
+                        "type": "boolean",
+                        "description": "False when the price book has no cache rates for this model, so cached tokens were priced at the full input rate (an overestimate)."
+                    }
+                }
+            },
+            "SpendUsageReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "totals": {
+                        "$ref": "#/components/schemas/Totals"
+                    },
+                    "byModel": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ModelRow"
+                        }
+                    },
+                    "byDay": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DayRow"
+                        }
+                    },
+                    "byActor": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ActorRow"
+                        }
+                    },
+                    "unpricedModels": {
+                        "type": "array",
+                        "description": "Models seen in usage that the price book does not know; their metered cost is zero.",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "Totals": {
+                "type": "object",
+                "properties": {
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "requests": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Null when no vendor in the window reports request counts (Anthropic does not)."
+                    },
+                    "vendorCostCents": {
+                        "type": "number",
+                        "description": "What the vendors' cost reports say, in cents."
+                    },
+                    "meteredCostCents": {
+                        "type": "number",
+                        "description": "What the price book says the tokens should cost, in cents."
+                    }
+                }
+            },
+            "ApiResponseSpendReconcileReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendReconcileReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Row": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI"
+                        ]
+                    },
+                    "meteredCents": {
+                        "type": "number"
+                    },
+                    "meteredIsEstimate": {
+                        "type": "boolean",
+                        "description": "True when some model was unpriced or a cache rate was missing, so metered is a floor or a ceiling, not a figure."
+                    },
+                    "vendorReportedCents": {
+                        "type": "number"
+                    },
+                    "invoicedCents": {
+                        "type": "number",
+                        "description": "Sum of imported invoices whose period lies inside the window. Null when none."
+                    },
+                    "invoiceCount": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "meteredVsVendorCents": {
+                        "type": "number"
+                    },
+                    "vendorVsInvoiceCents": {
+                        "type": "number"
+                    }
+                }
+            },
+            "SpendReconcileReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Row"
+                        }
+                    }
+                }
+            },
+            "ApiResponseListVendorInvoiceDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/VendorInvoiceDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "ApiResponseListVendorConnectionDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/VendorConnectionDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
                     }
                 }
             },

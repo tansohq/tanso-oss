@@ -26,6 +26,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
       # Required — the app fails to start without it (no insecure default shipped)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set — e.g. openssl rand -base64 48}
+      APP_SECRETS_KEY: ${APP_SECRETS_KEY:?APP_SECRETS_KEY must be set — e.g. openssl rand -base64 48; it encrypts stored Stripe and vendor admin keys}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Optional MCP server for AI agents — both must be true to expose /mcp
@@ -33,6 +34,13 @@ services:
       SPRING_AI_MCP_SERVER_ENABLED: ${SPRING_AI_MCP_SERVER_ENABLED:-false}
       # Anonymous daily instance ping — set false to opt out (payload documented in README)
       TANSO_TELEMETRY_ENABLED: ${TANSO_TELEMETRY_ENABLED:-true}
+      APP_MODULES_BUILD_ENABLED: ${APP_MODULES_BUILD_ENABLED:-true}
+      APP_SPEND_ANTHROPIC_BASE_URL: ${APP_SPEND_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      APP_SPEND_OPENAI_BASE_URL: ${APP_SPEND_OPENAI_BASE_URL:-https://api.openai.com}
+      # The default profile logs request bodies and SQL at DEBUG; that is a dev
+      # convenience, not something to ship with credentials flowing through.
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:-INFO}
+      LOGGING_LEVEL_ORG_HIBERNATE_SQL: ${LOGGING_LEVEL_ORG_HIBERNATE_SQL:-INFO}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:

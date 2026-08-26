@@ -24,6 +24,7 @@ import com.tansoflow.tansocore.model.exception.IdempotencyConflictException;
 import com.tansoflow.tansocore.model.exception.RateLimitExceededException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.VendorApiException;
 import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.Error;
@@ -120,6 +121,16 @@ public class GlobalExceptionHandlerController {
         log.info("Tariff publish conflict [errorId={}]: {}", errorId, exception.getMessage());
 
         return ResponseEntity.status(HttpStatus.CONFLICT).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.CONFLICT));
+    }
+
+    // A vendor's admin API refusing us is their answer, not our bug: 502 with
+    // the vendor's message, so the operator sees "invalid x-api-key" rather
+    // than an internal_error they cannot act on.
+    @ExceptionHandler(VendorApiException.class)
+    public ResponseEntity<ApiResponse<Void>> handleVendorApiException(VendorApiException exception) {
+        String errorId = assignErrorId();
+        log.warn("Vendor API failure [errorId={}]: {}", errorId, exception.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.VENDOR_ERROR));
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)

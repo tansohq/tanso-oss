@@ -5,3 +5,8 @@ spring:
     password: dev_pass
   liquibase:
     enabled: false   # or true, if you want it during tests
+app:
+  secrets:
+    # Same fallback as application-dev.yaml: tests boot the full app against the dev database, and
+    # SecretsUpgradeRunner rewrites plaintext rows on boot — a different key here would lock dev out.
+    key: ${APP_SECRETS_KEY:local-dev-insecure-secrets-key-change-me-0123456789abcdef}

@@ -18,7 +18,7 @@ From the Tanso Core repository root:
 ```bash
 cd deploy
 cp .env.example .env
-# Set JWT_SECRET, for example: openssl rand -base64 48
+# Set JWT_SECRET and APP_SECRETS_KEY, for example: openssl rand -base64 48 (each)
 docker compose up -d --build
 ./setup.sh
 

@@ -1,0 +1,5 @@
+{"data":[{"date":"2026-08-20T00:00:00Z","actor":{"type":"user_actor","email_address":"dev@acme.test"},"organization_id":"org_1","customer_type":"api","terminal_type":"vscode",
+ "core_metrics":{"num_sessions":5,"lines_of_code":{"added":10,"removed":2},"commits_by_claude_code":1,"pull_requests_by_claude_code":0},
+ "tool_actions":{"edit_tool":{"accepted":1,"rejected":0}},
+ "model_breakdown":[{"model":"claude-opus-5","tokens":{"input":100000,"output":35000,"cache_read":10000,"cache_creation":5000},"estimated_cost":{"currency":"USD","amount":141}}]}],
+ "has_more":false,"next_page":null}

@@ -32,6 +32,7 @@ public enum ErrorCode {
     CONFLICT("conflict"),
     RATE_LIMITED("rate_limited"),
     BUDGET_EXCEEDED("budget_exceeded"),
+    VENDOR_ERROR("vendor_error"),
     INTERNAL_ERROR("internal_error");
 
     private final String code;

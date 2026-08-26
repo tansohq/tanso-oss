@@ -18,8 +18,11 @@
 package com.tansoflow.tansocore.model.data.stripe.request;
 
 import lombok.Data;
+import lombok.ToString;
 
 @Data
 public class StripeApiKeyRegisterRequest {
+    /** Excluded from toString: Spring MVC logs deserialised request bodies at DEBUG. */
+    @ToString.Exclude
     private String clientStripeApiKey;
 }

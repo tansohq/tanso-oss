@@ -11,8 +11,10 @@ import {
   Puzzle,
   ReceiptText,
   Repeat,
+  Scale,
   Settings,
   Users,
+  Wallet,
 } from "lucide-react"
 
 import {
@@ -28,6 +30,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { clearToken, getClaims } from "@/lib/auth"
+import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 
 const catalogNav = [
   { title: "Plans", href: "/plans", icon: Package },
@@ -43,10 +46,18 @@ const customersNav = [
 
 const usageNav = [{ title: "Events", href: "/events", icon: Activity }]
 
+const spendNav = [
+  { title: "Usage", href: "/spend/usage", icon: Gauge },
+  { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
+  { title: "Connections", href: "/spend/connections", icon: Wallet },
+]
+
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const email = getClaims()?.email
+  const vendorConnections = useVendorConnections()
+  const buildSideOff = isBuildSideOff(vendorConnections.error)
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href)
@@ -137,6 +148,26 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+        {!buildSideOff && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Spend</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {spendNav.map((item) => (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      render={<Link href={item.href} />}
+                      isActive={isActive(item.href)}
+                    >
+                      <item.icon />
+                      {item.title}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
       <SidebarFooter>
         <SidebarMenu>
@@ -157,7 +188,9 @@ export function AppSidebar() {
           </SidebarMenuItem>
         </SidebarMenu>
         {email && (
-          <div className="truncate px-2 pb-1 text-xs text-muted-foreground">{email}</div>
+          <div className="truncate px-2 pb-1 text-xs text-muted-foreground">
+            {email}
+          </div>
         )}
       </SidebarFooter>
     </Sidebar>
