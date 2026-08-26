@@ -38,4 +38,9 @@ public class SpendBudgetDto {
     private BigDecimal monthlySpentCents;
     private Instant dailyResetsAt;
     private Instant monthlyResetsAt;
+    @Schema(description = "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only.")
+    private String enforcementTarget;
+    private Instant enforcedAt;
+    @Schema(description = "Why the last push to the gateway failed; null when it worked or was never attempted.")
+    private String enforcementError;
 }

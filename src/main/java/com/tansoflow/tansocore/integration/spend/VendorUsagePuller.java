@@ -33,6 +33,30 @@ public interface VendorUsagePuller {
     /** Cheapest possible call that proves the key works. Throws {@link VendorApiException} otherwise. */
     void probe(String adminKey);
 
-    /** Every row for days in [from, toExclusive). Callers keep windows to 31 days. */
+    /** Vendors whose key does not name the org take a scope (Copilot: the GitHub org). Default ignores it. */
+    default void probe(String adminKey, String scope) {
+        probe(adminKey);
+    }
+
+    /** Every row for days in [from, toExclusive). Callers keep windows to {@link #maxWindowDays()}. */
     List<UsageBucketRecord> pull(String adminKey, LocalDate from, LocalDate toExclusive);
+
+    default List<UsageBucketRecord> pull(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        return pull(adminKey, from, toExclusive);
+    }
+
+    /** Per-person daily signals for the same window, where the vendor reports any. */
+    default List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        return List.of();
+    }
+
+    /** Longest window one pull may cover. Anthropic and OpenAI page 31 daily buckets; Cursor allows 30 days. */
+    default int maxWindowDays() {
+        return 31;
+    }
+
+    /** True when the vendor needs a scope alongside the key (Copilot: the org). */
+    default boolean requiresScope() {
+        return false;
+    }
 }

@@ -254,15 +254,25 @@ spend is: the Anthropic and OpenAI bills for your engineers and agents.
 
 It works from the vendor's admin API, not a proxy in your request path:
 
-1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`)
-   or an OpenAI admin key. It is encrypted at rest and only its last four
+1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`),
+   an OpenAI admin key, a Cursor admin API key (Enterprise; sent as HTTP
+   Basic with the key as username; Cursor caps a window at 30 days, so a
+   longer sync is pulled in 30-day chunks), a GitHub token with the *View
+   Organization Copilot Metrics* permission plus the org name (a fine-grained
+   PAT owned by an org admin; the org must have the Copilot metrics API
+   policy enabled; reports cover one UTC day each and 204 means no activity),
+   or a LiteLLM proxy's master key plus its URL.
+   It is encrypted at rest and only its last four
    characters are ever shown. **Check key** makes one call to prove it works;
    **Sync now** pulls the last 30 days. An hourly job re-pulls the last three
    days after that (vendor reports lag by up to an hour).
 2. **Spend → Usage**: tokens and cost by model, by day, and by person, two
    ways — what the price book (`model_pricing`) says the tokens should cost
-   and what the vendor's own cost report says. Anthropic reports people only
-   for Claude Code; OpenAI only for user-scoped keys.
+   and what the vendor's own cost report says. The by-person view also shows
+   what each vendor reports per seat: Claude Code sessions, commits, PRs and
+   tool accept/reject; Cursor accepted lines, accepts/rejects and requests;
+   Copilot interactions, accepted code and AI credits. Anthropic reports
+   people only for Claude Code; OpenAI only for user-scoped keys.
 3. **Spend → Reconcile**: per vendor and period, metered vs vendor-reported
    vs invoiced, with the two variances. Import the bill as a CSV with a header
    row — `description, amount` (dollars), optional `kind` (TOKEN, SEAT, TOOL,
@@ -284,8 +294,14 @@ It works from the vendor's admin API, not a proxy in your request path:
    trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
    Slack incoming webhook if one is stored under Spend settings. Tanso is not
-   in the request path, so a "Block" budget cannot stop a request — its alert
-   says so; enforce at your gateway or revoke the key.
+   in the request path, so on its own a "Block" budget cannot stop a request —
+   its alert says so. **Gateway mode**: connect a LiteLLM proxy and add a
+   LiteLLM rule to the unit (its team id, key or user); a Block budget is then
+   pushed to LiteLLM as that object's `max_budget` for the calendar month, the
+   budget card shows where it is enforced, and the proxy refuses requests past
+   the ceiling. Switching the budget back to Alert clears the limit. The
+   proxy's spend logs are pulled like any other vendor, with the team, key
+   and user LiteLLM already resolved per request.
 
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
@@ -302,7 +318,11 @@ It works from the vendor's admin API, not a proxy in your request path:
    scope is comma-separated team keys or `*`. A person's GitHub login goes on
    the PERSON unit. An outcome lands on the person whose email or GitHub
    login matches (person level on), else on the source's default unit.
-   Disconnecting a source removes the outcomes it pulled; posted ones stay. The report divides
+   Disconnecting a source removes the outcomes it pulled; posted ones stay.
+   A merged PR is tagged **AI-assisted** (with the tool) when GitHub already
+   says so — a `claude-code-assisted`/`copilot`/`cursor` label, a
+   `Co-authored-by`/`Made-with` trailer, or a bot author; posted outcomes can
+   say so with `aiAssisted`/`aiTool`. Absence is not evidence. The report divides
    a unit's spend (with descendants) by its outcomes (with descendants):
    cost per merged PR, per team, per month. Pulled hourly for the last three
    days; re-pulls upsert.
@@ -333,7 +353,8 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
 `/api/v1/spend/reports/outcomes` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
-`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor. Next:
+`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
+LiteLLM connection carries its own proxy URL. Next:
 feature-level P&L — a project's build cost next to the serve-side revenue of
 the feature it shipped.
 
@@ -362,7 +383,8 @@ supply them via environment variables. The common ones:
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
-| `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes are pulled from (defaults: api.github.com, api.linear.app/graphql) |
+| `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
+| `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

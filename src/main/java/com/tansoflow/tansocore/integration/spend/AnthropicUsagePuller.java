@@ -103,6 +103,46 @@ public class AnthropicUsagePuller implements VendorUsagePuller {
         return rows;
     }
 
+    @Override
+    public List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        List<ActorMetricRecord> out = new ArrayList<>();
+        for (LocalDate day = from; day.isBefore(toExclusive); day = day.plusDays(1)) {
+            LocalDate d = day;
+            String page = null;
+            do {
+                String pageToken = page;
+                JsonNode body = get(adminKey, b -> b.path("/v1/organizations/usage_report/claude_code")
+                        .queryParam("starting_at", d.toString())
+                        .queryParam("limit", 1000)
+                        .queryParamIfPresent("page", java.util.Optional.ofNullable(pageToken))
+                        .build());
+                for (JsonNode r : body.path("data")) {
+                    JsonNode actor = r.path("actor");
+                    String actorId = actor.hasNonNull("email_address") ? actor.get("email_address").asText() : text(actor, "api_key_name");
+                    JsonNode core = r.path("core_metrics");
+                    int accepted = 0;
+                    int rejected = 0;
+                    for (JsonNode tool : r.path("tool_actions")) {
+                        accepted += tool.path("accepted").asInt();
+                        rejected += tool.path("rejected").asInt();
+                    }
+                    long cents = 0;
+                    for (JsonNode m : r.path("model_breakdown")) {
+                        cents += m.path("estimated_cost").path("amount").asLong();
+                    }
+                    out.add(new ActorMetricRecord(d, actorId, text(r, "terminal_type"),
+                            core.path("num_sessions").asInt(), null,
+                            core.path("lines_of_code").path("added").asInt(), core.path("lines_of_code").path("removed").asInt(), null,
+                            accepted, rejected,
+                            core.path("commits_by_claude_code").asInt(), core.path("pull_requests_by_claude_code").asInt(),
+                            null, BigDecimal.valueOf(cents)));
+                }
+                page = body.path("has_more").asBoolean(false) ? text(body, "next_page") : null;
+            } while (page != null);
+        }
+        return out;
+    }
+
     private List<UsageBucketRecord> usageRows(JsonNode body) {
         List<UsageBucketRecord> out = new ArrayList<>();
         for (JsonNode bucket : body.path("data")) {

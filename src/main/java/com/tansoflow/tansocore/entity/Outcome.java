@@ -74,6 +74,13 @@ public class Outcome {
     @Column(name = "actor_login", length = 255)
     private String actorLogin;
 
+    @Column(name = "ai_assisted", nullable = false)
+    private boolean aiAssisted;
+
+    /** Which assistant was in the work, when known: a PR label, a co-author trailer, a bot author. */
+    @Column(name = "ai_tool", length = 64)
+    private String aiTool;
+
     /** Resolved at write time: the person whose email/login matched, else the source's default unit. */
     @Column(name = "spend_unit_id")
     private UUID spendUnitId;

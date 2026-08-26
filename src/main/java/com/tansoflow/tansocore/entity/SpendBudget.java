@@ -65,6 +65,16 @@ public class SpendBudget {
     @Column(name = "monthly_mode", nullable = false, length = 16)
     private BudgetMode monthlyMode = BudgetMode.ALERT;
 
+    /** Where a Block budget was pushed as a hard limit ("litellm:team:backend"), when, or why it could not be. */
+    @Column(name = "enforced_at")
+    private Instant enforcedAt;
+
+    @Column(name = "enforcement_target", length = 255)
+    private String enforcementTarget;
+
+    @Column(name = "enforcement_error", length = Integer.MAX_VALUE)
+    private String enforcementError;
+
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

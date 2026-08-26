@@ -224,7 +224,7 @@ export default function SpendConnectionsPage() {
           data={connections.data ?? []}
           isLoading={connections.isPending}
           emptyTitle="No vendors connected"
-          emptyDescription="Connect an Anthropic or OpenAI admin key to start pulling internal spend."
+          emptyDescription="Connect an Anthropic or OpenAI admin key, a Cursor admin key or a Copilot token to start pulling internal spend."
         />
       )}
       <Sheet open={open} onOpenChange={setOpen}>
@@ -241,12 +241,21 @@ export default function SpendConnectionsPage() {
               isPending={create.isPending}
               onSubmit={(input) =>
                 create.mutate(input, {
-                  onSuccess: () => {
+                  onSuccess: (created) => {
                     setOpen(false)
-                    toast.add({
-                      title: "Vendor connected",
-                      description: "Check the key, then sync.",
-                    })
+                    if (created.status === "ERROR") {
+                      toast.add({
+                        title: "Key rejected",
+                        description:
+                          created.lastError ??
+                          "The vendor refused the key. Replace it and check again.",
+                      })
+                    } else {
+                      toast.add({
+                        title: "Vendor connected",
+                        description: "The key checked out. Sync to pull usage.",
+                      })
+                    }
                   },
                   onError: (error) =>
                     toast.add({

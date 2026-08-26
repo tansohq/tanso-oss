@@ -38,4 +38,6 @@ public class OutcomeDto {
     private String spendUnitId;
     private String unitName;
     private Instant occurredAt;
+    private boolean aiAssisted;
+    private String aiTool;
 }

@@ -53,6 +53,8 @@ class VendorConnectionServiceImplTest {
     private AccountRepository accountRepository;
     @Mock
     private com.tansoflow.tansocore.repository.VendorUsageBucketRepository bucketRepository;
+    @Mock
+    private com.tansoflow.tansocore.repository.VendorActorMetricRepository actorMetricRepository;
 
     private VendorConnectionServiceImpl service;
     private final UUID accountId = UUID.randomUUID();
@@ -60,7 +62,7 @@ class VendorConnectionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, accountRepository, List.of());
+        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, actorMetricRepository, accountRepository, List.of());
         account = new Account();
         account.setId(accountId);
     }

@@ -82,10 +82,10 @@ export default function SpendOutcomesPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Outcomes</h1>
           <p className="text-sm text-muted-foreground">
-            Shipped work next to what it cost. Last 30 days. Anything can post
-            one:{" "}
+            Shipped work next to what it cost. Last 30 days. CI can post one
+            with a tenant key:{" "}
             <code className="font-mono text-xs">
-              POST /api/v1/spend/outcomes
+              POST /api/v1/client/outcomes
             </code>
             .
           </p>
@@ -96,12 +96,22 @@ export default function SpendOutcomesPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader>
             <CardDescription>Outcomes</CardDescription>
             <CardTitle className="text-2xl tabular-nums">
               {report.data?.totalOutcomes ?? "—"}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>AI-assisted</CardDescription>
+            <CardTitle className="text-2xl tabular-nums">
+              {report.data && report.data.totalOutcomes > 0
+                ? `${report.data.aiAssistedOutcomes} (${Math.round((100 * report.data.aiAssistedOutcomes) / report.data.totalOutcomes)}%)`
+                : "—"}
             </CardTitle>
           </CardHeader>
         </Card>
@@ -151,6 +161,12 @@ export default function SpendOutcomesPage() {
                 <TableHead className="text-right">PRs</TableHead>
                 <TableHead className="text-right">Issues</TableHead>
                 <TableHead className="text-right">Custom</TableHead>
+                <TableHead
+                  className="text-right"
+                  title="Outcomes with an AI assistant in the work"
+                >
+                  AI-assisted
+                </TableHead>
                 <TableHead className="text-right">Metered spend</TableHead>
                 <TableHead
                   className="text-right"
@@ -175,6 +191,11 @@ export default function SpendOutcomesPage() {
                     {r.custom}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
+                    {r.prsMerged + r.issuesDone + r.custom > 0
+                      ? `${r.aiAssisted} / ${r.prsMerged + r.issuesDone + r.custom}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {formatCents(r.spendCents)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -188,7 +209,7 @@ export default function SpendOutcomesPage() {
               {report.data && report.data.rows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center text-muted-foreground"
                   >
                     No units yet. Create teams under Spend → Teams first.
@@ -364,8 +385,17 @@ export default function SpendOutcomesPage() {
                   <TableCell className="whitespace-nowrap tabular-nums">
                     {new Date(o.occurredAt).toLocaleString()}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="whitespace-nowrap">
                     <Badge variant="secondary">{kindLabel[o.kind]}</Badge>
+                    {o.aiAssisted && (
+                      <Badge
+                        variant="outline"
+                        className="ml-1"
+                        title={o.aiTool ?? undefined}
+                      >
+                        AI{o.aiTool ? ` · ${o.aiTool}` : ""}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="max-w-md whitespace-normal">
                     {o.url ? (

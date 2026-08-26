@@ -17,16 +17,12 @@
  */
 package com.tansoflow.tansocore.integration.spend;
 
-import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
+import java.math.BigDecimal;
+import java.time.LocalDate;
 
-import java.time.Instant;
-
-/** One shipped thing a puller found. externalId must be stable across pulls. */
-public record OutcomeRecord(OutcomeKind kind, String externalId, String title, String url,
-                            String actorEmail, String actorLogin, Instant occurredAt,
-                            boolean aiAssisted, String aiTool) {
-    public OutcomeRecord(OutcomeKind kind, String externalId, String title, String url,
-                         String actorEmail, String actorLogin, Instant occurredAt) {
-        this(kind, externalId, title, url, actorEmail, actorLogin, occurredAt, false, null);
-    }
+/** One person's day as a vendor reports it. Nulls where the vendor has no such number. */
+public record ActorMetricRecord(LocalDate day, String actorId, String tool, Integer sessions, Integer requests,
+                                Integer linesAdded, Integer linesRemoved, Integer linesSuggested,
+                                Integer accepted, Integer rejected, Integer commits, Integer pullRequests,
+                                BigDecimal creditsUsed, BigDecimal estimatedCostCents) {
 }

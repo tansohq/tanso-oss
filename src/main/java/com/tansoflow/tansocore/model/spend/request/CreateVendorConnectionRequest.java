@@ -39,4 +39,8 @@ public class CreateVendorConnectionRequest {
     @ToString.Exclude
     @Schema(description = "Vendor admin key. Stored encrypted; never returned.")
     private String adminKey;
+
+    @Size(max = 200)
+    @Schema(description = "Required for COPILOT: the GitHub organization name. Ignored by other providers.")
+    private String scope;
 }

@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-8"
+      author: tanso
+      comment: >
+        Gateway mode. A budget set to Block was advisory because Tanso is not
+        in the request path; a team that already runs LiteLLM has something
+        that is. When a unit's rule names a LiteLLM team, key or user, its
+        Block budget is pushed there as a hard max_budget and the outcome is
+        recorded on the budget — where it was enforced, when, or why it could
+        not be — so the alert can say "enforced" instead of "cannot block".
+      changes:
+        - addColumn:
+            tableName: spend_budgets
+            columns:
+              - column: { name: enforced_at, type: TIMESTAMP WITH TIME ZONE }
+              - column: { name: enforcement_target, type: VARCHAR(255) }
+              - column: { name: enforcement_error, type: TEXT }

@@ -87,10 +87,12 @@ public class GitHubOutcomePuller implements OutcomePuller {
                         }
                         continue;
                     }
+                    String tool = aiTool(pr);
                     out.add(new OutcomeRecord(OutcomeKind.PR_MERGED,
                             repo + "#" + pr.path("number").asLong(),
                             text(pr, "title"), text(pr, "html_url"),
-                            null, pr.path("user").path("login").asText(null), mergedAt));
+                            null, pr.path("user").path("login").asText(null), mergedAt,
+                            tool != null, tool));
                 }
                 if (pastWindow || prs.size() < PAGE_SIZE) {
                     break;
@@ -98,6 +100,40 @@ public class GitHubOutcomePuller implements OutcomePuller {
             }
         }
         return out;
+    }
+
+    /**
+     * Which assistant was in a pull request, from what GitHub already shows:
+     * a label ("claude-code-assisted", "copilot", "cursor", "ai-assisted"), a
+     * co-author or Made-with trailer in the body, or a bot author. Null when
+     * nothing says so — absence is not evidence.
+     */
+    static String aiTool(JsonNode pr) {
+        for (JsonNode label : pr.path("labels")) {
+            String name = label.path("name").asText("").toLowerCase();
+            if (name.contains("claude")) return "claude-code";
+            if (name.contains("copilot")) return "copilot";
+            if (name.contains("cursor")) return "cursor";
+            if (name.contains("codex")) return "codex";
+            if (name.contains("ai-assisted") || name.contains("ai_assisted") || name.equals("ai")) return "ai";
+        }
+        String body = pr.path("body").asText("").toLowerCase();
+        if (body.contains("co-authored-by: claude") || body.contains("generated with [claude code]") || body.contains("claude code")) return "claude-code";
+        if (body.contains("co-authored-by: copilot") || body.contains("copilot")) return "copilot";
+        if (body.contains("made-with: cursor") || body.contains("co-authored-by: cursor")) return "cursor";
+        if (body.contains("co-authored-by: codex") || body.contains("codex")) return "codex";
+        JsonNode user = pr.path("user");
+        String login = user.path("login").asText("").toLowerCase();
+        if ("bot".equalsIgnoreCase(user.path("type").asText("")) || login.endsWith("[bot]")) {
+            String bot = login.replace("[bot]", "");
+            if (bot.contains("copilot")) return "copilot";
+            if (bot.contains("claude")) return "claude-code";
+            if (bot.contains("cursor")) return "cursor";
+            if (bot.contains("codex")) return "codex";
+            if (bot.contains("devin")) return "devin";
+            return bot;
+        }
+        return null;
     }
 
     public static List<String> repos(String scope) {

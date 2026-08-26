@@ -69,6 +69,7 @@ class SpendBudgetServiceImplTest {
     @Mock private SpendUnitRepository unitRepository;
     @Mock private SpendAllocationService allocationService;
     @Mock private SlackNotifier slackNotifier;
+    @Mock private com.tansoflow.tansocore.service.internal.spend.GatewayEnforcementService gatewayEnforcement;
 
     private final Instant now = Instant.parse("2026-08-25T14:00:00Z");
     private final UUID accountId = UUID.randomUUID();
@@ -78,7 +79,7 @@ class SpendBudgetServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, slackNotifier,
+        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, slackNotifier, gatewayEnforcement,
                 Clock.fixed(now, ZoneOffset.UTC));
         unit = new SpendUnit();
         unit.setId(UUID.randomUUID());

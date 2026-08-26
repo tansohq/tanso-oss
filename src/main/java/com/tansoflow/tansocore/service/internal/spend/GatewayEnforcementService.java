@@ -15,18 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.integration.spend;
+package com.tansoflow.tansocore.service.internal.spend;
 
-import com.tansoflow.tansocore.model.spend.type.OutcomeKind;
+import com.tansoflow.tansocore.entity.SpendBudget;
 
-import java.time.Instant;
-
-/** One shipped thing a puller found. externalId must be stable across pulls. */
-public record OutcomeRecord(OutcomeKind kind, String externalId, String title, String url,
-                            String actorEmail, String actorLogin, Instant occurredAt,
-                            boolean aiAssisted, String aiTool) {
-    public OutcomeRecord(OutcomeKind kind, String externalId, String title, String url,
-                         String actorEmail, String actorLogin, Instant occurredAt) {
-        this(kind, externalId, title, url, actorEmail, actorLogin, occurredAt, false, null);
-    }
+public interface GatewayEnforcementService {
+    /**
+     * Pushes a Block budget to every gateway a unit's rules name, or clears
+     * it when the budget is no longer Block. Records the outcome on the
+     * budget; never throws — a gateway being down must not stop the save.
+     */
+    void apply(SpendBudget budget);
 }

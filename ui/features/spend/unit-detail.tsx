@@ -95,13 +95,16 @@ export function UnitDetail({
   const providerItems = [
     { label: "Anthropic", value: "ANTHROPIC" },
     { label: "OpenAI", value: "OPENAI" },
+    { label: "Cursor", value: "CURSOR" },
+    { label: "GitHub Copilot", value: "COPILOT" },
+    { label: "LiteLLM", value: "LITELLM" },
   ]
   const kindItems = (Object.keys(kindLabel) as AttributionMatchKind[]).map(
     (k) => ({ label: kindLabel[k], value: k })
   )
   const modeItems = [
     { label: "Alert only", value: "ALERT" },
-    { label: "Block (advisory)", value: "BLOCK" },
+    { label: "Block", value: "BLOCK" },
   ]
 
   return (
@@ -305,6 +308,26 @@ export function UnitDetail({
                   ` / ${formatCents(budget.data.monthlyCents)}`}
               </div>
             </div>
+            {budget.data.enforcementTarget && (
+              <div className="col-span-2 text-xs text-muted-foreground">
+                Enforced at {budget.data.enforcementTarget} — the gateway
+                refuses requests past the monthly ceiling.
+              </div>
+            )}
+            {budget.data.enforcementError && (
+              <div className="col-span-2 text-xs text-destructive">
+                Not enforced: {budget.data.enforcementError}
+              </div>
+            )}
+            {budget.data.monthlyMode === "BLOCK" &&
+              !budget.data.enforcementTarget &&
+              !budget.data.enforcementError && (
+                <div className="col-span-2 text-xs text-muted-foreground">
+                  Block is advisory until a LiteLLM connection and a LiteLLM
+                  rule on this unit exist; then the ceiling is pushed to the
+                  gateway.
+                </div>
+              )}
           </div>
         )}
         <form

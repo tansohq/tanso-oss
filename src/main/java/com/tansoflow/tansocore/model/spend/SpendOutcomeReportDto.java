@@ -35,6 +35,7 @@ public class SpendOutcomeReportDto {
     private LocalDate to;
     private List<OutcomeRow> rows;
     private long totalOutcomes;
+    private long aiAssistedOutcomes;
     private long unattributedOutcomes;
     private BigDecimal totalSpendCents;
     @Schema(description = "Total spend over total outcomes; null when there are no outcomes.")
@@ -51,6 +52,8 @@ public class SpendOutcomeReportDto {
         private long issuesDone;
         private long custom;
         private long outcomes;
+        @Schema(description = "Outcomes where an AI assistant was in the work (label, trailer, bot author, or said so when posted).")
+        private long aiAssisted;
         @Schema(description = "Metered spend allocated to the unit and its descendants — the price-book figure, same basis for every row.")
         private BigDecimal spendCents;
         @Schema(description = "PERSON units only: the vendor's own Claude Code estimate. Shown beside, never inside, spendCents.")

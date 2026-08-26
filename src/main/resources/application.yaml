@@ -16,6 +16,7 @@ app:
     openai-base-url: ${APP_SPEND_OPENAI_BASE_URL:https://api.openai.com}
     github-base-url: ${APP_SPEND_GITHUB_BASE_URL:https://api.github.com}
     linear-base-url: ${APP_SPEND_LINEAR_BASE_URL:https://api.linear.app/graphql}
+    cursor-base-url: ${APP_SPEND_CURSOR_BASE_URL:https://api.cursor.com}
   telemetry:
     enabled: ${TANSO_TELEMETRY_ENABLED:true}
     endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping

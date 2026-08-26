@@ -31,6 +31,7 @@ import com.tansoflow.tansocore.model.spend.request.CreateVendorConnectionRequest
 import com.tansoflow.tansocore.model.spend.type.VendorConnectionStatus;
 import com.tansoflow.tansocore.repository.AccountRepository;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
+import com.tansoflow.tansocore.repository.VendorActorMetricRepository;
 import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.service.internal.spend.VendorConnectionService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -46,15 +47,18 @@ import java.util.UUID;
 public class VendorConnectionServiceImpl implements VendorConnectionService {
     private final VendorConnectionRepository vendorConnectionRepository;
     private final VendorUsageBucketRepository vendorUsageBucketRepository;
+    private final VendorActorMetricRepository vendorActorMetricRepository;
     private final AccountRepository accountRepository;
     private final java.util.Map<VendorProvider, VendorUsagePuller> pullers = new java.util.EnumMap<>(VendorProvider.class);
 
     public VendorConnectionServiceImpl(VendorConnectionRepository vendorConnectionRepository,
                                        VendorUsageBucketRepository vendorUsageBucketRepository,
+                                       VendorActorMetricRepository vendorActorMetricRepository,
                                        AccountRepository accountRepository,
                                        List<VendorUsagePuller> pullers) {
         this.vendorConnectionRepository = vendorConnectionRepository;
         this.vendorUsageBucketRepository = vendorUsageBucketRepository;
+        this.vendorActorMetricRepository = vendorActorMetricRepository;
         this.accountRepository = accountRepository;
         for (VendorUsagePuller p : pullers) {
             this.pullers.put(p.provider(), p);
@@ -73,18 +77,33 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         Account account = accountRepository.findById(UUID.fromString(accountId))
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
         String adminKey = request.getAdminKey().trim();
+        VendorUsagePuller forProvider = pullers.get(request.getProvider());
+        String scope = request.getScope() == null || request.getScope().isBlank() ? null : request.getScope().trim();
+        if (forProvider != null && forProvider.requiresScope() && scope == null) {
+            throw new IllegalArgumentException(request.getProvider() + " needs a scope (the GitHub organization)");
+        }
+        if (forProvider != null && !forProvider.requiresScope()) {
+            scope = null;   // means nothing for this provider; storing it would only mislead the list
+        }
+        String label = request.getLabel().trim();
+        for (VendorConnection existing : vendorConnectionRepository.findAllByAccountIdOrderByCreatedAtAsc(account.getId())) {
+            if (existing.getProvider() == request.getProvider() && existing.getLabel().equalsIgnoreCase(label)) {
+                throw new IllegalArgumentException("A " + request.getProvider() + " connection labelled \"" + existing.getLabel() + "\" already exists — replace its key instead");
+            }
+        }
         VendorConnection connection = new VendorConnection();
         connection.setAccount(account);
         connection.setProvider(request.getProvider());
-        connection.setLabel(request.getLabel().trim());
+        connection.setLabel(label);
         connection.setAdminKey(adminKey);
         connection.setKeyHint(hintOf(adminKey));
+        connection.setScope(scope);
         connection = vendorConnectionRepository.saveAndFlush(connection);
         // Check the key now so the row never shows "OK" for a credential nobody has tried.
         VendorUsagePuller puller = pullers.get(connection.getProvider());
         if (puller != null) {
             try {
-                puller.probe(adminKey);
+                puller.probe(adminKey, connection.getScope());
                 connection.setStatus(VendorConnectionStatus.ACTIVE);
                 connection.setLastError(null);
             } catch (VendorApiException e) {
@@ -123,6 +142,7 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         // pulled usage outlives the disconnect: reconnecting the same org would
         // otherwise count its window twice.
         vendorUsageBucketRepository.deleteByConnectionId(connection.getId());
+        vendorActorMetricRepository.deleteByConnectionId(connection.getId());
         connection.setAdminKey("");
         connection.setDeletedAt(Instant.now());
         vendorConnectionRepository.save(connection);
@@ -138,6 +158,7 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
                 .provider(connection.getProvider())
                 .label(connection.getLabel())
                 .keyHint(connection.getKeyHint())
+                .scope(connection.getScope())
                 .status(connection.getStatus())
                 .lastError(connection.getLastError())
                 .lastSyncedAt(connection.getLastSyncedAt())

@@ -57,6 +57,8 @@ class SpendReportServiceImplTest {
     @Mock
     private VendorInvoiceRepository invoiceRepository;
     @Mock
+    private com.tansoflow.tansocore.repository.VendorActorMetricRepository actorMetricRepository;
+    @Mock
     private VendorCostEstimator estimator;
     @Mock
     private com.tansoflow.tansocore.service.internal.spend.SpendSettingsService settingsService;
@@ -68,7 +70,7 @@ class SpendReportServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendReportServiceImpl(bucketRepository, invoiceRepository, estimator, settingsService);
+        service = new SpendReportServiceImpl(bucketRepository, actorMetricRepository, invoiceRepository, estimator, settingsService);
         lenient().when(settingsService.personLevelEnabled(accountId.toString())).thenReturn(true);
         // sonnet: 1 cent per 1000 tokens of any class, cache rates known; mystery: unpriced
         lenient().when(estimator.estimate(eq("claude-sonnet-4-5"), anyLong(), anyLong(), anyLong(), anyLong()))
@@ -80,6 +82,46 @@ class SpendReportServiceImplTest {
 
     private static SpendUsageReportDto.ModelRow sonnetRow(SpendUsageReportDto r) {
         return r.getByModel().stream().filter(m -> "claude-sonnet-4-5".equals(m.getModel())).findFirst().orElseThrow();
+    }
+
+    @Test
+    void actorMetricsJoinTheByPersonView() {
+        when(bucketRepository.findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(eq(accountId), any(), any()))
+                .thenReturn(List.of(bucket(VendorUsageSource.CLAUDE_CODE_API, day1, "claude-sonnet-4-5", "dev@acme.test", 8_000, 0, 0, 2_000, 4L, "12")));
+        com.tansoflow.tansocore.entity.VendorActorMetric m = new com.tansoflow.tansocore.entity.VendorActorMetric();
+        m.setProvider(VendorProvider.ANTHROPIC);
+        m.setActorId("dev@acme.test");
+        m.setDay(LocalDate.of(2026, 7, 1));
+        m.setSessions(3);
+        m.setCommits(2);
+        m.setPullRequests(1);
+        m.setAccepted(40);
+        m.setRejected(4);
+        m.setLinesAdded(500);
+        m.setTool("vscode");
+        com.tansoflow.tansocore.entity.VendorActorMetric cursor = new com.tansoflow.tansocore.entity.VendorActorMetric();
+        cursor.setProvider(VendorProvider.CURSOR);
+        cursor.setActorId("dev@acme.test");
+        cursor.setDay(LocalDate.of(2026, 7, 1));
+        cursor.setAccepted(10);
+        cursor.setEstimatedCostCents(new BigDecimal("55"));
+        when(actorMetricRepository.findAllByAccountIdAndDayGreaterThanEqualAndDayLessThan(eq(accountId), any(), any())).thenReturn(List.of(m, cursor));
+
+        SpendUsageReportDto r = service.usage(accountId.toString(), LocalDate.of(2026, 7, 1), LocalDate.of(2026, 7, 3));
+
+        assertEquals(2, r.getByActor().size());
+        SpendUsageReportDto.ActorRow claude = r.getByActor().stream().filter(a -> a.getProvider() == VendorProvider.ANTHROPIC).findFirst().orElseThrow();
+        assertEquals(3, claude.getSessions());
+        assertEquals(2, claude.getCommits());
+        assertEquals(1, claude.getPullRequests());
+        assertEquals(40, claude.getAccepted());
+        assertEquals(500, claude.getLinesAdded());
+        assertNull(claude.getRequests());
+        assertEquals("vscode", claude.getTool());
+        SpendUsageReportDto.ActorRow cur = r.getByActor().stream().filter(a -> a.getProvider() == VendorProvider.CURSOR).findFirst().orElseThrow();
+        assertEquals(10, cur.getAccepted());
+        assertEquals(0, new BigDecimal("55").compareTo(cur.getVendorCostCents()));
+        assertEquals(0, cur.getTotalTokens());
     }
 
     @Test
@@ -176,6 +218,7 @@ class SpendReportServiceImplTest {
 
         assertEquals(1, r.getByActor().size());
         SpendUsageReportDto.ActorRow dev = r.getByActor().get(0);
+        assertNull(dev.getAccepted()); // no actor metrics in this window
         assertEquals("dev@acme.test", dev.getActor());
         assertEquals(10_000, dev.getTotalTokens());
         assertEquals(4, dev.getSessions());

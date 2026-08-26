@@ -20,5 +20,8 @@ package com.tansoflow.tansocore.model.spend.type;
 /** Where an operator's internal AI spend comes from. Phase 1 adds the pulls; this is the catalogue. */
 public enum VendorProvider {
     ANTHROPIC,
-    OPENAI
+    OPENAI,
+    CURSOR,
+    COPILOT,
+    LITELLM
 }

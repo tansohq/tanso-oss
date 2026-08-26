@@ -1,0 +1,58 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-7"
+      author: tanso
+      comment: >
+        Two more vendors and the per-person signals every engineering-
+        intelligence product shows. Cursor's admin API reports usage events
+        with what was actually charged, and per-user daily activity; GitHub
+        Copilot reports per-user daily records (interactions, accepted code,
+        lines, AI credits). vendor_actor_metrics is where those per-person
+        daily signals land — Claude Code's sessions, commits, pull requests
+        and tool accept/reject were already being pulled and dropped. A
+        connection gains a scope (the Copilot org). Outcomes gain an
+        AI-assisted flag with the tool that helped, read from pull request
+        labels, co-author trailers and bot authors, so a team's merged PRs
+        can be split by whether AI was in them.
+      changes:
+        - addColumn:
+            tableName: vendor_connections
+            columns:
+              - column: { name: scope, type: TEXT }
+        - createTable:
+            tableName: vendor_actor_metrics
+            columns:
+              - column: { name: vendor_actor_metric_id, type: UUID, defaultValueComputed: gen_random_uuid(), constraints: { primaryKey: true, nullable: false } }
+              - column: { name: account_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: vendor_connection_id, type: UUID, constraints: { nullable: false } }
+              - column: { name: provider, type: VARCHAR(32), constraints: { nullable: false } }
+              - column: { name: day, type: DATE, constraints: { nullable: false } }
+              - column: { name: actor_id, type: VARCHAR(255), constraints: { nullable: false } }
+              - column: { name: tool, type: VARCHAR(64) }
+              - column: { name: sessions, type: INTEGER }
+              - column: { name: requests, type: INTEGER }
+              - column: { name: lines_added, type: INTEGER }
+              - column: { name: lines_removed, type: INTEGER }
+              - column: { name: lines_suggested, type: INTEGER }
+              - column: { name: accepted, type: INTEGER }
+              - column: { name: rejected, type: INTEGER }
+              - column: { name: commits, type: INTEGER }
+              - column: { name: pull_requests, type: INTEGER }
+              - column: { name: credits_used, type: "NUMERIC(18, 4)" }
+              - column: { name: estimated_cost_cents, type: "NUMERIC(18, 6)" }
+              - column: { name: created_at, type: TIMESTAMP WITH TIME ZONE, defaultValueComputed: NOW(), constraints: { nullable: false } }
+        - addUniqueConstraint:
+            tableName: vendor_actor_metrics
+            columnNames: vendor_connection_id, day, actor_id
+            constraintName: uq_vendor_actor_metrics_day_actor
+        - createIndex:
+            tableName: vendor_actor_metrics
+            indexName: idx_vendor_actor_metrics_account_day
+            columns:
+              - column: { name: account_id }
+              - column: { name: day }
+        - addColumn:
+            tableName: outcomes
+            columns:
+              - column: { name: ai_assisted, type: BOOLEAN, defaultValueBoolean: false, constraints: { nullable: false } }
+              - column: { name: ai_tool, type: VARCHAR(64) }
