@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-10"
+      author: tanso
+      comment: >
+        Feature P&L. The build side knows what a project cost to make and the
+        serve side knows what a feature earns; nothing joined them. A PROJECT
+        unit can now name the feature it shipped, so one report puts the
+        project's AI build cost next to that feature's revenue and serving
+        cost in the same window.
+      changes:
+        - addColumn:
+            tableName: spend_units
+            columns:
+              - column: { name: feature_id, type: UUID }

@@ -136,6 +136,7 @@ export interface SpendUnitInput {
   email?: string
   githubLogin?: string
   parentId?: string
+  featureId?: string
 }
 
 function invalidateAllocation(queryClient: ReturnType<typeof useQueryClient>) {

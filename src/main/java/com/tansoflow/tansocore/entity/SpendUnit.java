@@ -66,6 +66,10 @@ public class SpendUnit {
     @Column(name = "parent_id")
     private UUID parentId;
 
+    /** PROJECT only: the serve-side feature this project shipped, for the P&L join. */
+    @Column(name = "feature_id")
+    private UUID featureId;
+
     @Setter(AccessLevel.NONE)
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)

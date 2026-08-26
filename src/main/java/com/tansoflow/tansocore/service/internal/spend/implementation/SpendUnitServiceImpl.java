@@ -27,6 +27,7 @@ import com.tansoflow.tansocore.model.spend.request.SpendUnitRequest;
 import com.tansoflow.tansocore.model.spend.type.SpendUnitType;
 import com.tansoflow.tansocore.repository.SpendAttributionRuleRepository;
 import com.tansoflow.tansocore.repository.SpendBudgetRepository;
+import com.tansoflow.tansocore.repository.FeatureRepository;
 import com.tansoflow.tansocore.repository.SpendUnitRepository;
 import com.tansoflow.tansocore.service.internal.spend.SpendSettingsService;
 import com.tansoflow.tansocore.service.internal.spend.SpendUnitService;
@@ -45,6 +46,7 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class SpendUnitServiceImpl implements SpendUnitService {
     private final SpendUnitRepository unitRepository;
+    private final FeatureRepository featureRepository;
     private final SpendAttributionRuleRepository ruleRepository;
     private final SpendBudgetRepository budgetRepository;
     private final SpendSettingsService settingsService;
@@ -144,6 +146,17 @@ public class SpendUnitServiceImpl implements SpendUnitService {
         unit.setEmail(email);
         String login = request.getGithubLogin() == null || request.getGithubLogin().isBlank() ? null : request.getGithubLogin().trim().replaceFirst("^@", "");
         unit.setGithubLogin(login);
+        if (request.getFeatureId() == null || request.getFeatureId().isBlank()) {
+            unit.setFeatureId(null);
+        } else {
+            if (request.getType() != SpendUnitType.PROJECT) {
+                throw new IllegalArgumentException("Only a project can be linked to a feature");
+            }
+            UUID featureId = UUID.fromString(request.getFeatureId().trim());
+            featureRepository.findByIdAndAccountId(featureId, account)
+                    .orElseThrow(() -> new ResourceNotFoundException("Feature not found: " + featureId));
+            unit.setFeatureId(featureId);
+        }
         if (request.getParentId() == null || request.getParentId().isBlank()) {
             unit.setParentId(null);
         } else {
@@ -172,6 +185,7 @@ public class SpendUnitServiceImpl implements SpendUnitService {
         return SpendUnitDto.builder()
                 .id(u.getId().toString()).type(u.getType()).name(u.getName()).email(u.getEmail()).githubLogin(u.getGithubLogin())
                 .parentId(u.getParentId() == null ? null : u.getParentId().toString())
+                .featureId(u.getFeatureId() == null ? null : u.getFeatureId().toString())
                 .createdAt(u.getCreatedAt()).build();
     }
 

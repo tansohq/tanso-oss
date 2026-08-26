@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { useFeatures } from "@/features/features/queries"
 import { useCreateSpendUnit, useUpdateSpendUnit } from "./mutations"
 import type { SpendUnitDto, SpendUnitType } from "./types"
 
@@ -45,6 +46,17 @@ export function UnitForm({
   const [parentId, setParentId] = useState<string | null>(
     existing?.parentId ?? null
   )
+  const [featureId, setFeatureId] = useState<string | null>(
+    existing?.featureId ?? null
+  )
+  const features = useFeatures()
+  const featureItems = [
+    { label: "No feature", value: null as string | null },
+    ...(features.data ?? []).map((ft) => ({
+      label: `${ft.name} (${ft.key})`,
+      value: (ft.id ?? null) as string | null,
+    })),
+  ]
   const [error, setError] = useState<string | null>(null)
   const pending = create.isPending || update.isPending
 
@@ -75,6 +87,7 @@ export function UnitForm({
           email: email.trim() || undefined,
           githubLogin: githubLogin.trim() || undefined,
           parentId: parentId ?? undefined,
+          featureId: type === "PROJECT" ? (featureId ?? undefined) : undefined,
         }
         const opts = {
           onSuccess: (unit: SpendUnitDto) => {
@@ -147,6 +160,33 @@ export function UnitForm({
             />
             <p className="text-xs text-muted-foreground">
               Merged pull requests by this login count as their outcomes.
+            </p>
+          </Field>
+        )}
+        {type === "PROJECT" && (
+          <Field>
+            <FieldLabel htmlFor="unit-feature">Feature shipped</FieldLabel>
+            <Select
+              items={featureItems}
+              value={featureId}
+              onValueChange={(v) => setFeatureId(v ?? null)}
+            >
+              <SelectTrigger id="unit-feature">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {featureItems.map((item) => (
+                    <SelectItem key={item.value ?? "none"} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              The serve-side feature this project built. Spend → P&amp;L puts
+              the project&apos;s build cost next to what the feature earns.
             </p>
           </Field>
         )}

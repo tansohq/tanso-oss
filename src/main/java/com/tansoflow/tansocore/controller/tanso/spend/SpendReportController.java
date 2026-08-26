@@ -36,8 +36,10 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import com.tansoflow.tansocore.model.spend.PriceBookModelDto;
 import com.tansoflow.tansocore.model.spend.SpendRouteSimulationDto;
+import com.tansoflow.tansocore.model.spend.SpendPnlReportDto;
 import com.tansoflow.tansocore.model.spend.SpendSavingsReportDto;
 import com.tansoflow.tansocore.model.spend.request.SpendRouteSimulationRequest;
+import com.tansoflow.tansocore.service.internal.spend.SpendPnlService;
 import com.tansoflow.tansocore.service.internal.spend.SpendSavingsService;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -58,6 +60,7 @@ import java.time.LocalDate;
 @Tag(name = "Spend — Reports", description = "Internal AI usage and the three-way reconcile (price book vs vendor report vs invoice)")
 public class SpendReportController {
     private final SpendReportService spendReportService;
+    private final SpendPnlService spendPnlService;
     private final SpendSavingsService spendSavingsService;
     private final SpendAllocationService spendAllocationService;
 
@@ -111,6 +114,16 @@ public class SpendReportController {
     @Operation(summary = "The price book", description = "Every model with a price, for the simulator's target list.", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<List<PriceBookModelDto>>> models(@AuthenticationPrincipal UserContext userContext) {
         return ok(spendSavingsService.models());
+    }
+
+    @GetMapping("/pnl")
+    @Operation(summary = "Feature P&L", description = "Each project's AI build cost next to the revenue and serving cost of the feature it shipped, same window. Defaults to the last 30 days.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendPnlReportDto>> pnl(
+            @AuthenticationPrincipal UserContext userContext,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        return ok(spendPnlService.report(userContext.getAccountId(), from, to));
     }
 
     @GetMapping("/reconcile")

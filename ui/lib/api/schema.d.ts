@@ -1400,6 +1400,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/pnl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Feature P&L
+         * @description Each project's AI build cost next to the revenue and serving cost of the feature it shipped, same window. Defaults to the last 30 days.
+         */
+        get: operations["pnl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/reports/outcomes": {
         parameters: {
             query?: never;
@@ -2248,6 +2268,8 @@ export interface components {
             githubLogin?: string;
             /** @description Unit this one rolls up into (a team for a person, a project for a team). Optional. */
             parentId?: string;
+            /** @description PROJECT only: id of the serve-side feature it shipped. Null clears it. */
+            featureId?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendUnitDto: {
@@ -2265,6 +2287,7 @@ export interface components {
             email?: string;
             githubLogin?: string;
             parentId?: string;
+            featureId?: string;
             /** Format: date-time */
             createdAt?: string;
         };
@@ -4348,6 +4371,51 @@ export interface components {
             /** Format: date */
             to?: string;
             rows?: components["schemas"]["ReconcileRow"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendPnlReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendPnlReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PnlRow: {
+            unitId?: string;
+            name?: string;
+            featureId?: string;
+            featureKey?: string;
+            featureName?: string;
+            /** @description Metered AI spend attributed to the project and its descendants (build side). */
+            buildCents?: number;
+            /** Format: int64 */
+            outcomes?: number;
+            /** @description Sum of revenueAmount on the feature's events in the window (serve side). */
+            revenueCents?: number;
+            /** @description Sum of costAmount on the feature's events in the window (serve side). */
+            serveCostCents?: number;
+            /** @description revenue − serve cost. */
+            serveMarginCents?: number;
+            /** @description serve margin − build cost. */
+            netCents?: number;
+            /** @description Build cost per outcome; null with no outcomes. */
+            buildPerOutcomeCents?: number;
+        };
+        SpendPnlReportDto: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive.
+             */
+            to?: string;
+            rows?: components["schemas"]["PnlRow"][];
+            /** @description PROJECT units with no feature linked — they have a build cost and no revenue to put beside it. */
+            unlinkedProjects?: string[];
+            totalBuildCents?: number;
+            totalRevenueCents?: number;
+            totalServeCostCents?: number;
+            totalNetCents?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendOutcomeReportDto: {
@@ -7866,6 +7934,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendReconcileReportDto"];
+                };
+            };
+        };
+    };
+    pnl: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendPnlReportDto"];
                 };
             };
         };

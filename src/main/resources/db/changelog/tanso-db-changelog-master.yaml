@@ -425,3 +425,6 @@ databaseChangeLog:
   - include:
       file: db/changelog/2026.08.25.9.yaml
       id: "20260825-9"
+  - include:
+      file: db/changelog/2026.08.25.10.yaml
+      id: "20260825-10"

@@ -32,6 +32,8 @@ public interface FeatureRepository extends JpaRepository<Feature, UUID> {
 
     List<Feature> findAllByAccount(Account account);
 
+    Optional<Feature> findByIdAndAccountId(UUID id, UUID accountId);
+
     @org.springframework.data.jpa.repository.Query("SELECT COUNT(f) > 0 FROM Feature f WHERE f.key = :key AND f.account.id = :accountId")
     Boolean existsByKeyAndAccountId(String key, UUID accountId);
 

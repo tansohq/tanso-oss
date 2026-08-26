@@ -322,6 +322,13 @@ It works from the vendor's admin API, not a proxy in your request path:
    target's rates with the caveats spelled out (tokenizer drift, no cache
    rates, quality not modelled). Advice only; Tanso never routes.
 
+7. **Spend → P&L**: the join the two halves exist for. Link a *project*
+   unit to the serve-side feature it shipped (Teams → the project → Feature),
+   and the report puts the project's AI build cost (its attributed spend, with
+   descendants) next to that feature's revenue and serving cost from the
+   customer events in the same window: serve margin, net of build, build cost
+   per outcome. Projects with no feature are listed, not hidden.
+
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
 <img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
@@ -371,13 +378,13 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
 `/api/v1/spend/reports/outcomes`, `/api/v1/spend/reports/savings`,
-`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`
-(console JWT only).
+`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`,
+`/api/v1/spend/reports/pnl` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
 `_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
 LiteLLM connection carries its own proxy URL. Next:
-feature-level P&L — a project's build cost next to the serve-side revenue of
-the feature it shipped.
+per-unit savings, employee self-view with a manager cohort minimum, and
+Jira as an outcome source.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.

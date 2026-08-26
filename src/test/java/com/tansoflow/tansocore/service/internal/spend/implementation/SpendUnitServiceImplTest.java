@@ -48,6 +48,7 @@ import static org.mockito.Mockito.when;
 class SpendUnitServiceImplTest {
 
     @Mock private SpendUnitRepository unitRepository;
+    @Mock private com.tansoflow.tansocore.repository.FeatureRepository featureRepository;
     @Mock private SpendAttributionRuleRepository ruleRepository;
     @Mock private SpendBudgetRepository budgetRepository;
     @Mock private SpendSettingsService settingsService;
@@ -57,7 +58,7 @@ class SpendUnitServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendUnitServiceImpl(unitRepository, ruleRepository, budgetRepository, settingsService);
+        service = new SpendUnitServiceImpl(unitRepository, featureRepository, ruleRepository, budgetRepository, settingsService);
         lenient().when(unitRepository.save(any())).thenAnswer(inv -> { SpendUnit u = inv.getArgument(0); if (u.getId() == null) u.setId(UUID.randomUUID()); return u; });
     }
 
