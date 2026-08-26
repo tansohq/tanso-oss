@@ -37,6 +37,17 @@ public class SpendDigestDto {
     private BigDecimal unattributedCents;
     private int alertsFired;
     private List<DigestRow> rows;
+    @Schema(description = "Set by POST /digest/send: what happened on each channel.")
+    private DeliveryDto delivery;
+
+    @Getter
+    @Builder
+    public static class DeliveryDto {
+        @Schema(description = "SENT, FAILED or NOT_CONFIGURED")
+        private String slack;
+        private String webhook;
+        private String email;
+    }
 
     @Getter
     @Builder

@@ -6,7 +6,8 @@ export type {
 
 // Report shapes are hand-written on purpose: the generated schema marks every field optional,
 // which would push null-handling into every cell. Keep in step with model/spend/*.java.
-export type VendorProvider = "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT"
+export type VendorProvider =
+  "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM"
 
 export interface VendorInvoiceLineDto {
   description: string
@@ -152,6 +153,7 @@ export interface SpendBudgetDto {
   dailyResetsAt?: string
   monthlyResetsAt?: string
   effectiveMonthlyCents?: number | null
+  gatewaySpentCents?: number | null
   bumpMonthlyCents?: number | null
   bumpExpiresAt?: string | null
   bumpReason?: string | null
@@ -203,6 +205,11 @@ export interface SpendDigestDto {
   unattributedCents: number
   alertsFired: number
   rows: SpendDigestRow[]
+  delivery?: {
+    slack: "SENT" | "FAILED" | "NOT_CONFIGURED"
+    webhook: "SENT" | "FAILED" | "NOT_CONFIGURED"
+    email: "SENT" | "FAILED" | "NOT_CONFIGURED"
+  } | null
 }
 
 // ---- phase 3: outcomes

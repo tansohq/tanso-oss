@@ -60,10 +60,18 @@ public class SpendNotifier {
     private final ObjectMapper objectMapper;
     private final RestClient client;
     private final String from;
+    private final boolean resendConfigured;
+
+    public enum Outcome { SENT, FAILED, NOT_CONFIGURED }
+
+    /** What happened on each channel; the console shows this instead of a blanket "sent". */
+    public record Delivery(Outcome slack, Outcome webhook, Outcome email) {}
 
     public SpendNotifier(SlackNotifier slack, ExternalApiKeyRepository externalApiKeyRepository, AccountSettingRepository accountSettingRepository,
                          Resend resend, ObjectMapper objectMapper, RestClient.Builder builder,
-                         @Value("${app.spend.alert-from:Tanso <alerts@your-domain.com>}") String from) {
+                         @Value("${app.spend.alert-from:Tanso <alerts@your-domain.com>}") String from,
+                         @Value("${app.resend.api-key:}") String resendApiKey) {
+        this.resendConfigured = resendApiKey != null && !resendApiKey.isBlank();
         this.slack = slack;
         this.externalApiKeyRepository = externalApiKeyRepository;
         this.accountSettingRepository = accountSettingRepository;
@@ -79,16 +87,17 @@ public class SpendNotifier {
      * @param html    the email body; null falls back to text
      * @param payload the object serialised into the webhook body under the event's key
      */
-    public void notify(UUID accountId, String event, String subject, String text, String html, Object payload) {
-        slack.post(accountId, "[tanso] " + text);
-        postWebhook(accountId, event, payload);
-        sendEmail(accountId, subject, text, html);
+    public Delivery notify(UUID accountId, String event, String subject, String text, String html, Object payload) {
+        Outcome slackOutcome = slack.configured(accountId)
+                ? (slack.post(accountId, "[tanso] " + text) ? Outcome.SENT : Outcome.FAILED)
+                : Outcome.NOT_CONFIGURED;
+        return new Delivery(slackOutcome, postWebhook(accountId, event, payload), sendEmail(accountId, subject, text, html));
     }
 
-    private void postWebhook(UUID accountId, String event, Object payload) {
+    private Outcome postWebhook(UUID accountId, String event, Object payload) {
         ExternalApiKey hook = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SPEND_WEBHOOK.name(), accountId);
         if (hook == null || hook.getKeyValue() == null || hook.getKeyValue().isBlank()) {
-            return;
+            return Outcome.NOT_CONFIGURED;
         }
         String body;
         try {
@@ -110,16 +119,22 @@ public class SpendNotifier {
                 req = req.header("X-Tanso-Signature", "sha256=" + hmac(secret.getKeyValue(), body));
             }
             req.body(body).retrieve().toBodilessEntity();
+            return Outcome.SENT;
         } catch (RuntimeException e) {
             log.warn("Spend webhook post failed for account {}: {}", accountId, e.getMessage());
+            return Outcome.FAILED;
         }
     }
 
-    private void sendEmail(UUID accountId, String subject, String text, String html) {
+    private Outcome sendEmail(UUID accountId, String subject, String text, String html) {
         AccountSetting setting = accountSettingRepository.findAccountSettingById(accountId);
         List<String> to = recipients(setting == null ? null : setting.getSpendAlertEmails());
         if (to.isEmpty()) {
-            return;
+            return Outcome.NOT_CONFIGURED;
+        }
+        if (!resendConfigured) {
+            log.warn("Spend alert email skipped for account {}: {} recipient(s) configured but APP_RESEND_API_KEY is not set on the server", accountId, to.size());
+            return Outcome.FAILED;
         }
         try {
             resend.emails().send(CreateEmailOptions.builder()
@@ -127,8 +142,10 @@ public class SpendNotifier {
                     .text(text)
                     .html(html != null ? html : "<p>" + HtmlUtils.htmlEscape(text) + "</p>")
                     .build());
+            return Outcome.SENT;
         } catch (ResendException | RuntimeException e) {
             log.warn("Spend alert email failed for account {}: {}", accountId, e.getMessage());
+            return Outcome.FAILED;
         }
     }
 

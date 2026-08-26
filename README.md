@@ -310,7 +310,9 @@ It works from the vendor's admin API, not a proxy in your request path:
    budget card shows where it is enforced, and the proxy refuses requests past
    the ceiling. Switching the budget back to Alert clears the limit. The
    proxy's spend logs are pulled like any other vendor, with the team, key
-   and user LiteLLM already resolved per request.
+   and user LiteLLM already resolved per request. Two clocks, though: Tanso
+   measures the budget on its price book, LiteLLM enforces against its own
+   model map — the card shows both figures so the drift is visible.
 
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
@@ -384,7 +386,7 @@ supply them via environment variables. The common ones:
 | `JWT_SECRET` | Signing secret for UI session tokens |
 | `APP_SECRETS_KEY` | Encrypts stored integration credentials (Stripe keys, vendor admin keys) at rest. Required. Startup refuses a key that does not decrypt what is stored; to rotate, `DELETE FROM external_api_keys` and `UPDATE vendor_connections SET admin_key=''`, then reconnect |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe integration |
-| `RESEND_API_KEY` | Transactional email |
+| `APP_RESEND_API_KEY` | Transactional email via Resend — spend alerts and the weekly digest. Empty = email is skipped (logged per send) |
 | `OPENAI_API_KEY` | AI features (optional) |
 | `APP_WEBHOOK_ENDPOINT` | Public Stripe webhook URL |
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |

@@ -60,7 +60,7 @@ class SpendNotifierTest {
     private final UUID account = UUID.randomUUID();
 
     private SpendNotifier notifier(RestClient.Builder builder) {
-        return new SpendNotifier(slack, keys, settings, resend, new ObjectMapper(), builder, "Tanso <alerts@test>");
+        return new SpendNotifier(slack, keys, settings, resend, new ObjectMapper(), builder, "Tanso <alerts@test>", "re_test");
     }
 
     private ExternalApiKey key(String value) {
@@ -86,10 +86,14 @@ class SpendNotifierTest {
                 .andExpect(header("X-Tanso-Signature", "sha256=" + SpendNotifier.hmac("s3cret", body)))
                 .andRespond(withSuccess());
 
-        notifier(builder).notify(account, "spend.alert", "subject", "text", null, Map.of("kind", "BREACH"));
+        when(slack.configured(account)).thenReturn(true);
+        when(slack.post(account, "[tanso] text")).thenReturn(true);
+        SpendNotifier.Delivery d = notifier(builder).notify(account, "spend.alert", "subject", "text", null, Map.of("kind", "BREACH"));
         server.verify();
-        verify(slack).post(account, "[tanso] text");
         verify(resend, never()).emails();
+        assertEquals(SpendNotifier.Outcome.SENT, d.slack());
+        assertEquals(SpendNotifier.Outcome.SENT, d.webhook());
+        assertEquals(SpendNotifier.Outcome.NOT_CONFIGURED, d.email());
     }
 
     @Test
@@ -102,8 +106,22 @@ class SpendNotifierTest {
         server.expect(requestTo("https://hooks.test/dead"))
                 .andExpect(headerDoesNotExist("X-Tanso-Signature"))
                 .andRespond(withStatus(org.springframework.http.HttpStatus.BAD_GATEWAY));
-        notifier(builder).notify(account, "spend.digest", "s", "t", null, Map.of());
+        SpendNotifier.Delivery d = notifier(builder).notify(account, "spend.digest", "s", "t", null, Map.of());
         server.verify();
+        assertEquals(SpendNotifier.Outcome.FAILED, d.webhook());
+        assertEquals(SpendNotifier.Outcome.NOT_CONFIGURED, d.slack());
+    }
+
+    @Test
+    void recipientsWithoutAResendKeyIsAFailureNotASilentSkip() {
+        when(keys.findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SPEND_WEBHOOK.name(), account)).thenReturn(null);
+        AccountSetting s = new AccountSetting();
+        s.setSpendAlertEmails("cto@x.io");
+        when(settings.findAccountSettingById(account)).thenReturn(s);
+        SpendNotifier n = new SpendNotifier(slack, keys, settings, resend, new ObjectMapper(), RestClient.builder(), "Tanso <alerts@test>", "");
+        SpendNotifier.Delivery d = n.notify(account, "spend.alert", "s", "t", null, Map.of());
+        assertEquals(SpendNotifier.Outcome.FAILED, d.email());
+        verify(resend, never()).emails();
     }
 
     @Test
@@ -112,9 +130,11 @@ class SpendNotifierTest {
         AccountSetting s = new AccountSetting();
         s.setSpendAlertEmails("  ");
         when(settings.findAccountSettingById(account)).thenReturn(s);
-        notifier(RestClient.builder()).notify(account, "spend.alert", "s", "t", null, Map.of());
+        SpendNotifier.Delivery d = notifier(RestClient.builder()).notify(account, "spend.alert", "s", "t", null, Map.of());
         verify(resend, never()).emails();
-        verify(slack).post(eq(account), eq("[tanso] t"));
+        verify(slack, never()).post(eq(account), eq("[tanso] t"));
+        assertEquals(SpendNotifier.Outcome.NOT_CONFIGURED, d.slack());
+        assertEquals(SpendNotifier.Outcome.NOT_CONFIGURED, d.email());
     }
 
     @Test

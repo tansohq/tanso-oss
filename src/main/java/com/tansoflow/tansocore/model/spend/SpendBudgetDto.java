@@ -43,6 +43,8 @@ public class SpendBudgetDto {
     private BigDecimal bumpMonthlyCents;
     private Instant bumpExpiresAt;
     private String bumpReason;
+    @Schema(description = "What the gateway itself has counted this month for the LiteLLM team/key/user this unit's rules name — the number LiteLLM enforces max_budget against, priced by its own model map. Null when the unit has no LiteLLM rule.")
+    private BigDecimal gatewaySpentCents;
     @Schema(description = "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only.")
     private String enforcementTarget;
     private Instant enforcedAt;

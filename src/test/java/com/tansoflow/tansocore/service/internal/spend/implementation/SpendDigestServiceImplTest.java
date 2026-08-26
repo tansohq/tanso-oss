@@ -120,7 +120,11 @@ class SpendDigestServiceImplTest {
 
     @Test
     void sendRendersTextAndHtmlAndFansOutAsADigestEvent() {
-        service.send(account.toString());
+        when(notifier.notify(eq(account), eq("spend.digest"), any(), any(), any(), any()))
+                .thenReturn(new SpendNotifier.Delivery(SpendNotifier.Outcome.NOT_CONFIGURED, SpendNotifier.Outcome.SENT, SpendNotifier.Outcome.FAILED));
+        SpendDigestDto sent = service.send(account.toString());
+        assertEquals("SENT", sent.getDelivery().getWebhook());
+        assertEquals("FAILED", sent.getDelivery().getEmail());
         ArgumentCaptor<String> subject = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> text = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<String> html = ArgumentCaptor.forClass(String.class);

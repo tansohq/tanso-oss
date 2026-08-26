@@ -39,6 +39,12 @@ public class SlackNotifier {
         this.client = builder.build();
     }
 
+    public boolean configured(UUID accountId) {
+        ExternalApiKey webhook = externalApiKeyRepository
+                .findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SLACK_SPEND_WEBHOOK.name(), accountId);
+        return webhook != null && webhook.getKeyValue() != null && !webhook.getKeyValue().isBlank();
+    }
+
     public boolean post(UUID accountId, String text) {
         ExternalApiKey webhook = externalApiKeyRepository
                 .findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SLACK_SPEND_WEBHOOK.name(), accountId);

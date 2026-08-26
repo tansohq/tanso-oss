@@ -124,9 +124,14 @@ public class SpendDigestServiceImpl implements SpendDigestService {
     public SpendDigestDto send(String accountId) {
         SpendDigestDto digest = build(accountId);
         String subject = "AI spend this week: " + dollars(digest.getTotalCents()) + " (" + delta(digest.getTotalCents(), digest.getPreviousTotalCents()) + " vs last week)";
-        notifier.notify(UUID.fromString(accountId), "spend.digest", subject, text(digest), html(digest), digest);
-        log.info("Spend digest sent for account {}: {}", accountId, subject);
-        return digest;
+        SpendNotifier.Delivery delivery = notifier.notify(UUID.fromString(accountId), "spend.digest", subject, text(digest), html(digest), digest);
+        log.info("Spend digest sent for account {}: {} ({})", accountId, subject, delivery);
+        return SpendDigestDto.builder()
+                .from(digest.getFrom()).to(digest.getTo()).totalCents(digest.getTotalCents()).previousTotalCents(digest.getPreviousTotalCents())
+                .unattributedCents(digest.getUnattributedCents()).alertsFired(digest.getAlertsFired()).rows(digest.getRows())
+                .delivery(SpendDigestDto.DeliveryDto.builder()
+                        .slack(delivery.slack().name()).webhook(delivery.webhook().name()).email(delivery.email().name()).build())
+                .build();
     }
 
     static String text(SpendDigestDto d) {

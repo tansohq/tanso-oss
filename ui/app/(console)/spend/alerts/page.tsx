@@ -25,6 +25,7 @@ import {
   isBuildSideOff,
   useSpendAlerts,
   useSpendDigest,
+  useSpendSettings,
 } from "@/features/spend/queries"
 import type { SpendAlertKind } from "@/features/spend/types"
 
@@ -45,6 +46,7 @@ export default function SpendAlertsPage() {
   const evaluate = useEvaluateBudgets()
   const digest = useSpendDigest()
   const sendDigest = useSendSpendDigest()
+  const settings = useSpendSettings()
 
   if (isBuildSideOff(alerts.error)) {
     return (
@@ -180,7 +182,9 @@ export default function SpendAlertsPage() {
               {digest.data
                 ? `${digest.data.from} to ${digest.data.to} (exclusive): ${formatCents(digest.data.totalCents)} vs ${formatCents(digest.data.previousTotalCents)} the week before; ${digest.data.alertsFired} alert${digest.data.alertsFired === 1 ? "" : "s"} fired.`
                 : "Last seven full days against the seven before, per unit."}{" "}
-              Sent Monday 08:00 UTC when switched on under Teams → Settings.
+              {settings.data?.digestEnabled
+                ? "Goes out Monday 08:00 UTC."
+                : "Not scheduled — switch it on under Teams → Settings to send it Monday 08:00 UTC."}
             </p>
           </div>
           <Button
@@ -188,12 +192,19 @@ export default function SpendAlertsPage() {
             disabled={sendDigest.isPending}
             onClick={() =>
               sendDigest.mutate(undefined, {
-                onSuccess: () =>
+                onSuccess: (sent) => {
+                  const d = sent.delivery
+                  const word = (o?: string) =>
+                    o === "SENT" ? "sent" : o === "FAILED" ? "failed" : "off"
+                  const anyFailed =
+                    d && [d.slack, d.webhook, d.email].includes("FAILED")
                   toast.add({
-                    title: "Digest sent",
-                    description:
-                      "To Slack, the webhook and the alert emails — whichever are configured.",
-                  }),
+                    title: anyFailed ? "Digest partly sent" : "Digest sent",
+                    description: d
+                      ? `Slack ${word(d.slack)} · webhook ${word(d.webhook)} · email ${word(d.email)}`
+                      : undefined,
+                  })
+                },
                 onError: (e) =>
                   toast.add({ title: "Send failed", description: e.message }),
               })

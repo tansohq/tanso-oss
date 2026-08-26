@@ -268,11 +268,17 @@ export function UnitDetail({
                 value={matchValue}
                 onChange={(e) => setMatchValue(e.target.value)}
                 placeholder={
-                  matchKind === "ACTOR"
-                    ? "alice@acme.com"
-                    : matchKind === "API_KEY_ID"
-                      ? "apikey_01…"
-                      : "wrkspc_01… / proj_…"
+                  provider === "LITELLM"
+                    ? matchKind === "WORKSPACE_ID"
+                      ? "team_id, e.g. backend"
+                      : matchKind === "API_KEY_ID"
+                        ? "the virtual key (sk-…)"
+                        : "user_id"
+                    : matchKind === "ACTOR"
+                      ? "alice@acme.com"
+                      : matchKind === "API_KEY_ID"
+                        ? "apikey_01…"
+                        : "wrkspc_01… / proj_…"
                 }
               />
             </Field>
@@ -311,15 +317,19 @@ export function UnitDetail({
               <div className="text-xs text-muted-foreground">This month</div>
               <div className="tabular-nums">
                 {formatCents(budget.data.monthlySpentCents)}
-                {budget.data.monthlyCents != null &&
-                  ` / ${formatCents(budget.data.monthlyCents)}`}
+                {budget.data.effectiveMonthlyCents != null &&
+                  ` / ${formatCents(budget.data.effectiveMonthlyCents)}`}
               </div>
             </div>
             {budget.data.bumpMonthlyCents != null &&
               budget.data.bumpExpiresAt && (
                 <div className="col-span-2 text-xs">
                   Bumped to {formatCents(budget.data.bumpMonthlyCents)} until{" "}
-                  {new Date(budget.data.bumpExpiresAt).toLocaleString()}
+                  {new Date(budget.data.bumpExpiresAt)
+                    .toISOString()
+                    .replace("T", " ")
+                    .slice(0, 16)}{" "}
+                  UTC
                   {budget.data.bumpReason ? ` — ${budget.data.bumpReason}` : ""}
                   .{" "}
                   <button
@@ -345,6 +355,15 @@ export function UnitDetail({
               <div className="col-span-2 text-xs text-muted-foreground">
                 Enforced at {budget.data.enforcementTarget} — the gateway
                 refuses requests past the monthly ceiling.
+              </div>
+            )}
+            {budget.data.gatewaySpentCents != null && (
+              <div className="col-span-2 text-xs text-muted-foreground">
+                LiteLLM itself counts{" "}
+                {formatCents(budget.data.gatewaySpentCents)} this month for the
+                team/key/user this unit&apos;s rules name — priced by its own
+                model map, and the number it enforces against. The figure above
+                is by Tanso&apos;s price book.
               </div>
             )}
             {budget.data.enforcementError && (

@@ -2250,6 +2250,8 @@ export interface components {
             /** Format: date-time */
             bumpExpiresAt?: string;
             bumpReason?: string;
+            /** @description What the gateway itself has counted this month for the LiteLLM team/key/user this unit's rules name — the number LiteLLM enforces max_budget against, priced by its own model map. Null when the unit has no LiteLLM rule. */
+            gatewaySpentCents?: number;
             /** @description Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only. */
             enforcementTarget?: string;
             /** Format: date-time */
@@ -2311,7 +2313,7 @@ export interface components {
             label?: string;
             /** @description Last four characters of the admin key. The key itself is never returned. */
             keyHint?: string;
-            /** @description Provider scope: the GitHub organization for Copilot. Null otherwise. */
+            /** @description Provider scope: the GitHub organization for Copilot, the proxy URL for LiteLLM. Null for providers that have none. */
             scope?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "ERROR";
@@ -2448,7 +2450,7 @@ export interface components {
             provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @enum {string} */
             matchKind: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
-            /** @description Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id). */
+            /** @description Vendor workspace/project id (LiteLLM: team_id), API key id (LiteLLM: the key), or actor (Claude Code email / OpenAI user id / LiteLLM user_id). */
             matchValue: string;
             /**
              * Format: int32
@@ -2626,6 +2628,12 @@ export interface components {
             meta?: unknown[];
             success?: boolean;
         };
+        DeliveryDto: {
+            /** @description SENT, FAILED or NOT_CONFIGURED */
+            slack?: string;
+            webhook?: string;
+            email?: string;
+        };
         DigestRow: {
             unitId?: string;
             name?: string;
@@ -2650,6 +2658,8 @@ export interface components {
             /** Format: int32 */
             alertsFired?: number;
             rows?: components["schemas"]["DigestRow"][];
+            /** @description Set by POST /digest/send: what happened on each channel. */
+            delivery?: components["schemas"]["DeliveryDto"];
         };
         CreateVendorConnectionRequest: {
             /** @enum {string} */
@@ -2658,7 +2668,7 @@ export interface components {
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
-            /** @description Required for COPILOT: the GitHub organization name. Ignored by other providers. */
+            /** @description Copilot: the GitHub organization (required). LiteLLM: the proxy URL, e.g. https://llm.internal:4000 (required). Other providers: ignored and not stored. */
             scope?: string;
         };
         /** @description Generic API response wrapper */

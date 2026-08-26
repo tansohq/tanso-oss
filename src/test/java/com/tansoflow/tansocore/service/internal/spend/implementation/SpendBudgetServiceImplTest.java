@@ -69,6 +69,8 @@ class SpendBudgetServiceImplTest {
     @Mock private SpendAlertRepository alertRepository;
     @Mock private SpendUnitRepository unitRepository;
     @Mock private SpendAllocationService allocationService;
+    @Mock private com.tansoflow.tansocore.repository.SpendAttributionRuleRepository ruleRepository;
+    @Mock private com.tansoflow.tansocore.repository.VendorUsageBucketRepository bucketRepository;
     @Mock private SpendNotifier notifier;
     @Mock private com.tansoflow.tansocore.service.internal.spend.GatewayEnforcementService gatewayEnforcement;
 
@@ -80,7 +82,7 @@ class SpendBudgetServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, notifier, gatewayEnforcement,
+        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, ruleRepository, bucketRepository, notifier, gatewayEnforcement,
                 Clock.fixed(now, ZoneOffset.UTC));
         unit = new SpendUnit();
         unit.setId(UUID.randomUUID());

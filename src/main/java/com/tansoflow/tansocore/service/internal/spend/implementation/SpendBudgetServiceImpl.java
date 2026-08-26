@@ -18,6 +18,10 @@
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
 import com.tansoflow.tansocore.entity.SpendAlert;
+import com.tansoflow.tansocore.entity.SpendAttributionRule;
+import com.tansoflow.tansocore.entity.VendorUsageBucket;
+import com.tansoflow.tansocore.model.spend.type.VendorProvider;
+import com.tansoflow.tansocore.model.spend.type.VendorUsageSource;
 import com.tansoflow.tansocore.entity.SpendBudget;
 import com.tansoflow.tansocore.entity.SpendUnit;
 import com.tansoflow.tansocore.integration.spend.SpendNotifier;
@@ -31,7 +35,9 @@ import com.tansoflow.tansocore.model.spend.request.SpendBudgetRequest;
 import com.tansoflow.tansocore.model.spend.type.BudgetMode;
 import com.tansoflow.tansocore.model.spend.type.SpendAlertKind;
 import com.tansoflow.tansocore.repository.SpendAlertRepository;
+import com.tansoflow.tansocore.repository.SpendAttributionRuleRepository;
 import com.tansoflow.tansocore.repository.SpendBudgetRepository;
+import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
 import com.tansoflow.tansocore.repository.SpendUnitRepository;
 import com.tansoflow.tansocore.service.internal.spend.SpendAllocationService;
 import com.tansoflow.tansocore.service.internal.spend.GatewayEnforcementService;
@@ -76,6 +82,8 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     private final SpendAlertRepository alertRepository;
     private final SpendUnitRepository unitRepository;
     private final SpendAllocationService allocationService;
+    private final SpendAttributionRuleRepository ruleRepository;
+    private final VendorUsageBucketRepository bucketRepository;
     private final SpendNotifier notifier;
     private final GatewayEnforcementService gatewayEnforcement;
     private final Clock clock;
@@ -340,9 +348,40 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
                 .dailySpentCents(spentToday).monthlySpentCents(spentMonth)
                 .dailyResetsAt(day.resetsAt()).monthlyResetsAt(month.resetsAt())
                 .effectiveMonthlyCents(budget.effectiveMonthlyCents(now))
+                .gatewaySpentCents(gatewaySpent(account, budget.getSpendUnitId(), month.start(), now))
                 .bumpMonthlyCents(budget.getBumpMonthlyCents()).bumpExpiresAt(budget.getBumpExpiresAt()).bumpReason(budget.getBumpReason())
                 .enforcementTarget(budget.getEnforcementTarget()).enforcedAt(budget.getEnforcedAt()).enforcementError(budget.getEnforcementError())
                 .build();
+    }
+
+    /**
+     * The proxy prices requests off its own model map, not our price book, and enforces
+     * max_budget against that figure. Show it, or the card says $2 while the gateway says $40.
+     */
+    private BigDecimal gatewaySpent(UUID account, UUID unitId, Instant monthStart, Instant now) {
+        List<SpendAttributionRule> rules = ruleRepository.findAllByAccountIdOrderByPriorityAscCreatedAtAsc(account).stream()
+                .filter(r -> r.getSpendUnitId().equals(unitId) && r.getProvider() == VendorProvider.LITELLM).toList();
+        if (rules.isEmpty()) {
+            return null;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (VendorUsageBucket b : bucketRepository.findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(account, monthStart, now)) {
+            if (b.getProvider() != VendorProvider.LITELLM || b.getSource() != VendorUsageSource.COST_API || b.getVendorCostCents() == null) {
+                continue;
+            }
+            for (SpendAttributionRule r : rules) {
+                String value = switch (r.getMatchKind()) {
+                    case WORKSPACE_ID -> b.getWorkspaceId();
+                    case API_KEY_ID -> b.getVendorApiKeyId();
+                    case ACTOR -> b.getActorId();
+                };
+                if (r.getMatchValue().equals(value)) {
+                    total = total.add(b.getVendorCostCents());
+                    break;
+                }
+            }
+        }
+        return total;
     }
 
     private static SpendAlertDto toDto(SpendAlert a, String unitName) {
