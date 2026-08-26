@@ -125,7 +125,13 @@ public class GitHubOutcomePuller implements OutcomePuller {
         JsonNode user = pr.path("user");
         String login = user.path("login").asText("").toLowerCase();
         if ("bot".equalsIgnoreCase(user.path("type").asText("")) || login.endsWith("[bot]")) {
-            return login.replace("[bot]", "");
+            String bot = login.replace("[bot]", "");
+            if (bot.contains("copilot")) return "copilot";
+            if (bot.contains("claude")) return "claude-code";
+            if (bot.contains("cursor")) return "cursor";
+            if (bot.contains("codex")) return "codex";
+            if (bot.contains("devin")) return "devin";
+            return bot;
         }
         return null;
     }

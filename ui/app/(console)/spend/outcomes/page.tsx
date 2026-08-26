@@ -82,10 +82,10 @@ export default function SpendOutcomesPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight">Outcomes</h1>
           <p className="text-sm text-muted-foreground">
-            Shipped work next to what it cost. Last 30 days. Anything can post
-            one:{" "}
+            Shipped work next to what it cost. Last 30 days. CI can post one
+            with a tenant key:{" "}
             <code className="font-mono text-xs">
-              POST /api/v1/spend/outcomes
+              POST /api/v1/client/outcomes
             </code>
             .
           </p>
@@ -191,6 +191,11 @@ export default function SpendOutcomesPage() {
                     {r.custom}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
+                    {r.prsMerged + r.issuesDone + r.custom > 0
+                      ? `${r.aiAssisted} / ${r.prsMerged + r.issuesDone + r.custom}`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
                     {formatCents(r.spendCents)}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
@@ -204,7 +209,7 @@ export default function SpendOutcomesPage() {
               {report.data && report.data.rows.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={7}
+                    colSpan={8}
                     className="text-center text-muted-foreground"
                   >
                     No units yet. Create teams under Spend → Teams first.

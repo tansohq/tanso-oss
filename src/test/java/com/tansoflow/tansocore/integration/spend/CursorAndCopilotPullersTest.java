@@ -93,7 +93,7 @@ class CursorAndCopilotPullersTest {
         assertEquals(300, a.linesAdded());
         assertEquals(40, a.linesRemoved());
         assertEquals(400, a.linesSuggested());
-        assertEquals(85, a.accepted());   // applies accepted + tabs accepted
+        assertEquals(25, a.accepted());   // applies only, same basis as rejected
         assertEquals(5, a.rejected());
         assertEquals(30, a.requests());   // agent + chat + composer + cmdk
         assertEquals("claude-4-sonnet", a.tool());
@@ -105,14 +105,12 @@ class CursorAndCopilotPullersTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         CopilotUsagePuller puller = new CopilotUsagePuller(builder, "https://gh.test");
-        // usage pull: one day → report → link; the same for actor metrics
-        for (int i = 0; i < 2; i++) {
-            server.expect(requestTo("https://gh.test/orgs/acme/copilot/metrics/reports/users-1-day?day=2026-08-20"))
-                    .andExpect(header("Authorization", "Bearer ghp_x"))
-                    .andRespond(withSuccess("{\"download_links\":[\"https://files.test/report.ndjson\"],\"report_day\":\"2026-08-20\"}", MediaType.APPLICATION_JSON));
-            server.expect(requestTo("https://files.test/report.ndjson"))
-                    .andRespond(withSuccess(new ClassPathResource("spend/copilot-users.ndjson"), MediaType.TEXT_PLAIN));
-        }
+        // one day → report → link, fetched once: the actor-metrics pass reads what the usage pass fetched
+        server.expect(requestTo("https://gh.test/orgs/acme/copilot/metrics/reports/users-1-day?day=2026-08-20"))
+                .andExpect(header("Authorization", "Bearer ghp_x"))
+                .andRespond(withSuccess("{\"download_links\":[\"https://files.test/report.ndjson\"],\"report_day\":\"2026-08-20\"}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo("https://files.test/report.ndjson"))
+                .andRespond(withSuccess(new ClassPathResource("spend/copilot-users.ndjson"), MediaType.TEXT_PLAIN));
 
         List<UsageBucketRecord> rows = puller.pull("ghp_x", "acme", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
         List<ActorMetricRecord> metrics = puller.pullActorMetrics("ghp_x", "acme", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
@@ -159,7 +157,7 @@ class CursorAndCopilotPullersTest {
         ObjectMapper m = new ObjectMapper();
         assertEquals("claude-code", GitHubOutcomePuller.aiTool(m.readTree("{\"labels\":[{\"name\":\"claude-code-assisted\"}],\"body\":\"\",\"user\":{\"login\":\"alice\",\"type\":\"User\"}}")));
         assertEquals("cursor", GitHubOutcomePuller.aiTool(m.readTree("{\"labels\":[],\"body\":\"Made-with: Cursor\",\"user\":{\"login\":\"alice\",\"type\":\"User\"}}")));
-        assertEquals("copilot-swe-agent", GitHubOutcomePuller.aiTool(m.readTree("{\"labels\":[],\"body\":null,\"user\":{\"login\":\"copilot-swe-agent[bot]\",\"type\":\"Bot\"}}")));
+        assertEquals("copilot", GitHubOutcomePuller.aiTool(m.readTree("{\"labels\":[],\"body\":null,\"user\":{\"login\":\"copilot-swe-agent[bot]\",\"type\":\"Bot\"}}")));
         assertNull(GitHubOutcomePuller.aiTool(m.readTree("{\"labels\":[{\"name\":\"bug\"}],\"body\":\"fixes a thing\",\"user\":{\"login\":\"alice\",\"type\":\"User\"}}")));
     }
 }

@@ -233,8 +233,9 @@ export default function SpendUsagePage() {
                 <CardHeader>
                   <CardTitle>By person</CardTitle>
                   <CardDescription>
-                    Claude Code actors and OpenAI users. Tokens here are already
-                    inside the totals above.
+                    Claude Code actors, OpenAI users, Cursor and Copilot seats.
+                    Tokens here are already inside the totals above; "Sessions"
+                    is events for Cursor and CLI sessions for Copilot.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">
@@ -244,6 +245,12 @@ export default function SpendUsagePage() {
                         <TableHead>Actor</TableHead>
                         <TableHead className="text-right">Tokens</TableHead>
                         <TableHead className="text-right">Sessions</TableHead>
+                        <TableHead
+                          className="text-right"
+                          title="Requests or interactions the person made through the assistant"
+                        >
+                          Requests
+                        </TableHead>
                         <TableHead
                           className="text-right"
                           title="Accepted / rejected suggestions"
@@ -261,6 +268,12 @@ export default function SpendUsagePage() {
                           title="Commits / pull requests made through the assistant"
                         >
                           Commits / PRs
+                        </TableHead>
+                        <TableHead
+                          className="text-right"
+                          title="Copilot premium-request credits"
+                        >
+                          Credits
                         </TableHead>
                         <TableHead className="text-right">Metered</TableHead>
                         <TableHead className="text-right">
@@ -284,6 +297,11 @@ export default function SpendUsagePage() {
                             {formatNumber(row.sessions)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
+                            {row.requests != null
+                              ? formatNumber(row.requests)
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {row.accepted != null
                               ? `${formatNumber(row.accepted)} / ${row.rejected != null ? formatNumber(row.rejected) : "—"}`
                               : "—"}
@@ -301,6 +319,9 @@ export default function SpendUsagePage() {
                               : "—"}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
+                            {row.creditsUsed != null ? row.creditsUsed : "—"}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">
                             {formatCents(row.meteredCostCents)}
                           </TableCell>
                           <TableCell className="text-right tabular-nums">
@@ -311,7 +332,7 @@ export default function SpendUsagePage() {
                       {data && data.byActor.length === 0 && (
                         <TableRow>
                           <TableCell
-                            colSpan={8}
+                            colSpan={10}
                             className="text-center text-muted-foreground"
                           >
                             No per-person data. Anthropic reports people only

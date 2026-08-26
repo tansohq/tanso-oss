@@ -38,6 +38,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
 
 /**
  * GitHub Copilot usage metrics for one org (the scope). Each day has a
@@ -132,8 +134,26 @@ public class CopilotUsagePuller implements VendorUsagePuller {
         return out;
     }
 
-    /** The day's per-user report: 204 = nothing that day; otherwise follow every download link. */
+    /**
+     * A sync calls pull() then pullActorMetrics() over the same window; the second
+     * pass reads what the first fetched instead of downloading every report twice.
+     * Entries are consumed on the second read so nothing lingers across syncs.
+     */
+    private final Map<String, List<JsonNode>> fetched = new ConcurrentHashMap<>();
+
     private List<JsonNode> dayRecords(String adminKey, String scope, LocalDate day) {
+        String key = Integer.toHexString(adminKey.hashCode()) + "|" + org(scope) + "|" + day;
+        List<JsonNode> cached = fetched.remove(key);
+        if (cached != null) {
+            return cached;
+        }
+        List<JsonNode> records = fetchDay(adminKey, scope, day);
+        fetched.put(key, records);
+        return records;
+    }
+
+    /** The day's per-user report: 204 = nothing that day; otherwise follow every download link. */
+    private List<JsonNode> fetchDay(String adminKey, String scope, LocalDate day) {
         List<JsonNode> records = new ArrayList<>();
         ResponseEntity<JsonNode> resp;
         try {

@@ -82,10 +82,19 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         if (forProvider != null && forProvider.requiresScope() && scope == null) {
             throw new IllegalArgumentException(request.getProvider() + " needs a scope (the GitHub organization)");
         }
+        if (forProvider != null && !forProvider.requiresScope()) {
+            scope = null;   // means nothing for this provider; storing it would only mislead the list
+        }
+        String label = request.getLabel().trim();
+        for (VendorConnection existing : vendorConnectionRepository.findAllByAccountIdOrderByCreatedAtAsc(account.getId())) {
+            if (existing.getProvider() == request.getProvider() && existing.getLabel().equalsIgnoreCase(label)) {
+                throw new IllegalArgumentException("A " + request.getProvider() + " connection labelled \"" + existing.getLabel() + "\" already exists — replace its key instead");
+            }
+        }
         VendorConnection connection = new VendorConnection();
         connection.setAccount(account);
         connection.setProvider(request.getProvider());
-        connection.setLabel(request.getLabel().trim());
+        connection.setLabel(label);
         connection.setAdminKey(adminKey);
         connection.setKeyHint(hintOf(adminKey));
         connection.setScope(scope);

@@ -136,6 +136,14 @@ public class SpendReportServiceImpl implements SpendReportService {
                     if (b.getModel() != null) {
                         vendorCostByModel.merge(b.getProvider() + "|" + b.getModel(), cents, BigDecimal::add);
                     }
+                    if (b.getActorId() != null) {
+                        // Cursor charges per seat: the person's own vendor figure lives on the cost row.
+                        String actorKey = b.getProvider() + "|" + b.getActorId();
+                        BigDecimal[] ac = actorCost.computeIfAbsent(actorKey, k -> new BigDecimal[]{BigDecimal.ZERO, null});
+                        ac[1] = (ac[1] == null ? BigDecimal.ZERO : ac[1]).add(cents);
+                        actorTokens.computeIfAbsent(actorKey, k -> new long[5]);
+                        actorProvider.putIfAbsent(actorKey, b.getProvider());
+                    }
                 }
                 case CLAUDE_CODE_API -> {
                     String actorKey = b.getProvider() + "|" + b.getActorId();

@@ -255,8 +255,13 @@ spend is: the Anthropic and OpenAI bills for your engineers and agents.
 It works from the vendor's admin API, not a proxy in your request path:
 
 1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`),
-   an OpenAI admin key, a Cursor admin API key (Enterprise), or a GitHub
-   token with Copilot metrics permission plus the org name. It is encrypted at rest and only its last four
+   an OpenAI admin key, a Cursor admin API key (Enterprise; sent as HTTP
+   Basic with the key as username; Cursor caps a window at 30 days, so a
+   longer sync is pulled in 30-day chunks), or a GitHub token with the *View
+   Organization Copilot Metrics* permission plus the org name (a fine-grained
+   PAT owned by an org admin; the org must have the Copilot metrics API
+   policy enabled; reports cover one UTC day each and 204 means no activity).
+   It is encrypted at rest and only its last four
    characters are ever shown. **Check key** makes one call to prove it works;
    **Sync now** pulls the last 30 days. An hourly job re-pulls the last three
    days after that (vendor reports lag by up to an hour).

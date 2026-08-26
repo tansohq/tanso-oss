@@ -136,7 +136,7 @@ public class CursorUsagePuller implements VendorUsagePuller {
                 out.add(new ActorMetricRecord(day, d.path("email").asText(null), d.path("mostUsedModel").asText(null),
                         null, requests,
                         d.path("acceptedLinesAdded").asInt(), d.path("acceptedLinesDeleted").asInt(), d.path("totalLinesAdded").asInt(),
-                        d.path("totalAccepts").asInt() + d.path("totalTabsAccepted").asInt(), d.path("totalRejects").asInt(),
+                        d.path("totalAccepts").asInt(), d.path("totalRejects").asInt(),   // applies only — tabs have no reject counter
                         null, null, null, null));
             }
             if (!body.path("pagination").path("hasNextPage").asBoolean(false)) {
