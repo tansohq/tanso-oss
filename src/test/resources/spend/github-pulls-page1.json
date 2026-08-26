@@ -1,0 +1,5 @@
+[
+ {"number": 42, "title": "Ship budgets", "html_url": "https://github.com/acme/app/pull/42", "state": "closed", "merged_at": "2026-08-20T10:00:00Z", "updated_at": "2026-08-20T10:00:00Z", "user": {"login": "alice"}},
+ {"number": 41, "title": "Closed not merged", "html_url": "https://github.com/acme/app/pull/41", "state": "closed", "merged_at": null, "updated_at": "2026-08-19T10:00:00Z", "user": {"login": "bob"}},
+ {"number": 40, "title": "Old merge", "html_url": "https://github.com/acme/app/pull/40", "state": "closed", "merged_at": "2026-07-01T10:00:00Z", "updated_at": "2026-07-01T10:00:00Z", "user": {"login": "bob"}}
+]

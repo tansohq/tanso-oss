@@ -1,0 +1,4 @@
+{"data":{"issues":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[
+ {"id":"i1","identifier":"BE-12","title":"Fix sync","url":"https://linear.app/acme/issue/BE-12","completedAt":"2026-08-21T09:00:00Z","team":{"key":"BE"},"assignee":{"email":"alice@acme.test","displayName":"Alice"}},
+ {"id":"i2","identifier":"FE-3","title":"Other team","url":"https://linear.app/acme/issue/FE-3","completedAt":"2026-08-21T11:00:00Z","team":{"key":"FE"},"assignee":null}
+]}}}

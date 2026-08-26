@@ -71,6 +71,8 @@ class VendorSyncServiceImplTest {
     private VendorUsagePuller anthropic;
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Mock
+    private com.tansoflow.tansocore.service.internal.spend.SpendBudgetService budgetService;
 
     private VendorSyncServiceImpl service;
     private final UUID accountId = UUID.randomUUID();
@@ -80,7 +82,7 @@ class VendorSyncServiceImplTest {
     @BeforeEach
     void setUp() {
         when(anthropic.provider()).thenReturn(VendorProvider.ANTHROPIC);
-        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, List.of(anthropic), transactionManager);
+        service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, List.of(anthropic), transactionManager, budgetService);
         Account account = new Account();
         account.setId(accountId);
         connection = new VendorConnection();

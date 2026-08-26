@@ -250,6 +250,8 @@ The engine has two halves. The **serve side** — everything above — answers w
 it costs to serve each customer. The **build side** answers what your own AI
 spend is: the Anthropic and OpenAI bills for your engineers and agents.
 
+<img src=".github/assets/screenshots/spend-usage.png" alt="Spend → Usage — internal AI usage by model, by person, by day; price-book cost next to the vendor's report" width="800" />
+
 It works from the vendor's admin API, not a proxy in your request path:
 
 1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`)
@@ -267,6 +269,54 @@ It works from the vendor's admin API, not a proxy in your request path:
    OTHER), `model`, `quantity`. An invoice only counts toward a window it sits
    entirely inside.
 
+4. **Spend → Teams**: units (teams, projects, and — once switched on — people,
+   nested however you like) and attribution rules that map a vendor workspace
+   or project id, an API key id, or an actor onto a unit. Rules apply at
+   report time, so editing one re-allocates history; when several rules match
+   one row the lowest priority number wins. Whatever no rule claims shows as
+   **Unattributed**. A unit's total is its own spend plus every descendant's
+   (a person's Claude Code estimate is shown on the person only); budgets
+   measure that total. Each unit can carry a budget: a small **daily**
+   ceiling that catches a runaway agent and a **monthly** one for the real
+   number (UTC calendar windows), with an alert threshold (default 80%).
+5. **Spend → Alerts**: threshold and breach alerts on each ceiling, plus a
+   **spike** when a unit has spent at least $5 today and more than twice its
+   trailing-seven-day daily average — each once per window,
+   checked after every sync and hourly; acknowledge to clear. Posted to a
+   Slack incoming webhook if one is stored under Spend settings. Tanso is not
+   in the request path, so a "Block" budget cannot stop a request — its alert
+   says so; enforce at your gateway or revoke the key.
+
+<img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
+
+<img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
+
+6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
+   (merged pull requests per repo) or Linear (completed issues per team), or
+   have any CI job post one: `POST /api/v1/client/outcomes` with the tenant
+   `sk_` key (or `/api/v1/spend/outcomes` with a console JWT) and a body of
+   `kind` (`PR_MERGED`, `ISSUE_DONE`, `CUSTOM`), a stable `externalId`, and
+   optionally `title`, `url`, `actorEmail`, `actorLogin`, `spendUnitId`,
+   `occurredAt`; posting the same `externalId` again updates only the fields
+   you send. GitHub scope is a comma-separated `owner/repo` list; Linear
+   scope is comma-separated team keys or `*`. A person's GitHub login goes on
+   the PERSON unit. An outcome lands on the person whose email or GitHub
+   login matches (person level on), else on the source's default unit.
+   Disconnecting a source removes the outcomes it pulled; posted ones stay. The report divides
+   a unit's spend (with descendants) by its outcomes (with descendants):
+   cost per merged PR, per team, per month. Pulled hourly for the last three
+   days; re-pulls upsert.
+
+<img src=".github/assets/screenshots/spend-outcomes.png" alt="Spend → Outcomes — merged PRs and completed issues next to allocated spend: cost per outcome per unit" width="800" />
+
+Person-level attribution is **off by default**. Attributing spend to a named
+employee is a monitoring capability (in Germany a works council can veto it);
+the switch under Spend settings will not turn on until you have written down
+what staff were told. While it is off, people cannot be created, person rules
+are skipped, and the by-person view stays empty. A person's Claude Code
+estimate is shown on the person and not rolled up into the team — the same
+traffic already reaches the team through its key rules.
+
 Pulled data lands in `vendor_usage_buckets` in the vendor's own dimensions
 (model, workspace/project, key, actor); a window is rewritten on every pull.
 `POST /api/v1/spend/connections/{id}/sync?from=&to=` pulls any window (`to`
@@ -276,11 +326,16 @@ dated, not timestamped. "Metered" means tokens × the price book; it is marked
 an estimate when a model is unpriced or has no cache rates. Seat lines on an
 invoice count toward "invoiced" but never appear in the vendor's token cost
 report, so "vendor − invoice" carries the seats.
-API: `/api/v1/spend/connections`, `/api/v1/spend/reports/usage`,
-`/api/v1/spend/reports/reconcile`, `/api/v1/spend/invoices` (console JWT only).
-`APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` point the pull at
-a gateway or proxy instead of the vendor. Next: allocation to teams and people
-with daily + monthly budgets, then the join to merged PRs and closed issues.
+API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,allocation}`,
+`/api/v1/spend/invoices`, `/api/v1/spend/units` and `/api/v1/spend/units/{id}/budget`,
+`/api/v1/spend/rules`, `/api/v1/spend/alerts` (+ `/{id}/ack`),
+`POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
+`/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
+`/api/v1/spend/reports/outcomes` (console JWT only).
+`APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
+`_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor. Next:
+feature-level P&L — a project's build cost next to the serve-side revenue of
+the feature it shipped.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
@@ -307,6 +362,7 @@ supply them via environment variables. The common ones:
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
+| `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

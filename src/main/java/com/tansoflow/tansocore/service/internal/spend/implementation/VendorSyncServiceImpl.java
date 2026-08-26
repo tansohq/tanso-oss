@@ -30,6 +30,7 @@ import com.tansoflow.tansocore.model.spend.type.VendorProvider;
 import com.tansoflow.tansocore.model.spend.type.VendorUsageSource;
 import com.tansoflow.tansocore.repository.VendorConnectionRepository;
 import com.tansoflow.tansocore.repository.VendorUsageBucketRepository;
+import com.tansoflow.tansocore.service.internal.spend.SpendBudgetService;
 import com.tansoflow.tansocore.service.internal.spend.VendorSyncService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -60,13 +61,16 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     private final VendorUsageBucketRepository bucketRepository;
     private final Map<VendorProvider, VendorUsagePuller> pullers = new EnumMap<>(VendorProvider.class);
     private final TransactionTemplate transactionTemplate;
+    private final SpendBudgetService budgetService;
 
     public VendorSyncServiceImpl(VendorConnectionRepository connectionRepository,
                                  VendorUsageBucketRepository bucketRepository,
                                  List<VendorUsagePuller> pullers,
-                                 PlatformTransactionManager transactionManager) {
+                                 PlatformTransactionManager transactionManager,
+                                 SpendBudgetService budgetService) {
         this.connectionRepository = connectionRepository;
         this.bucketRepository = bucketRepository;
+        this.budgetService = budgetService;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
         for (VendorUsagePuller puller : pullers) {
             this.pullers.put(puller.provider(), puller);
@@ -99,6 +103,7 @@ public class VendorSyncServiceImpl implements VendorSyncService {
             throw new IllegalArgumentException("from must be before to");
         }
         int rows = pullWindow(connection, start, end);
+        budgetService.evaluate(accountId);
         return VendorSyncResultDto.builder()
                 .connectionId(connection.getId().toString()).from(start).to(end).rowsWritten(rows).build();
     }
@@ -117,6 +122,7 @@ public class VendorSyncServiceImpl implements VendorSyncService {
                             .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + id));
                     pullWindow(connection, from, end);
                 });
+                budgetService.evaluate(listed.getAccount().getId().toString());
             } catch (VendorApiException e) {
                 // The failed transaction rolled the ERROR mark back with it; record it on its own.
                 transactionTemplate.executeWithoutResult(status ->

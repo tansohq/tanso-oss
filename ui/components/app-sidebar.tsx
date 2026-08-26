@@ -4,8 +4,10 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Activity,
+  Bell,
   Coins,
   Gauge,
+  GitMerge,
   LogOut,
   Package,
   Puzzle,
@@ -48,6 +50,9 @@ const usageNav = [{ title: "Events", href: "/events", icon: Activity }]
 
 const spendNav = [
   { title: "Usage", href: "/spend/usage", icon: Gauge },
+  { title: "Teams", href: "/spend/teams", icon: Users },
+  { title: "Alerts", href: "/spend/alerts", icon: Bell },
+  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
   { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
   { title: "Connections", href: "/spend/connections", icon: Wallet },
 ]

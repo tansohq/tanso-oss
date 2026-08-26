@@ -32,6 +32,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +60,7 @@ class VendorConnectionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, accountRepository);
+        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, accountRepository, List.of());
         account = new Account();
         account.setId(accountId);
     }
@@ -67,7 +68,7 @@ class VendorConnectionServiceImplTest {
     @Test
     void createStoresTrimmedKeyAndReturnsOnlyAHint() {
         when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(vendorConnectionRepository.save(any())).thenAnswer(inv -> {
+        when(vendorConnectionRepository.saveAndFlush(any())).thenAnswer(inv -> {
             VendorConnection c = inv.getArgument(0);
             c.setId(UUID.randomUUID());
             return c;
@@ -80,7 +81,7 @@ class VendorConnectionServiceImplTest {
         VendorConnectionDto dto = service.create(accountId.toString(), request);
 
         ArgumentCaptor<VendorConnection> saved = ArgumentCaptor.forClass(VendorConnection.class);
-        verify(vendorConnectionRepository).save(saved.capture());
+        verify(vendorConnectionRepository).saveAndFlush(saved.capture());
         assertEquals("sk-ant-admin01-abcdef-wxyz", saved.getValue().getAdminKey());
         assertEquals(account, saved.getValue().getAccount());
         assertEquals("Engineering org", dto.getLabel());
@@ -103,7 +104,7 @@ class VendorConnectionServiceImplTest {
         request.setLabel("x");
         request.setAdminKey("sk-admin-1234");
         assertThrows(ResourceNotFoundException.class, () -> service.create(accountId.toString(), request));
-        verify(vendorConnectionRepository, never()).save(any());
+        verify(vendorConnectionRepository, never()).saveAndFlush(any());
     }
 
     @Test

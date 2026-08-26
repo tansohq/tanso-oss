@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-5"
+      author: tanso
+      comment: >
+        A rule is (unit, provider, dimension, value); the same one twice adds
+        nothing and confuses the priority list. The service refuses a duplicate
+        with a message; this is the backstop for two requests racing.
+      changes:
+        - addUniqueConstraint:
+            tableName: spend_attribution_rules
+            columnNames: spend_unit_id, provider, match_kind, match_value
+            constraintName: uq_spend_attribution_rules_once

@@ -33,11 +33,11 @@ public class SpendReconcileReportDto {
     private LocalDate from;
     /** Inclusive — invoices are dated, not timestamped. */
     private LocalDate to;
-    private List<Row> rows;
+    private List<ReconcileRow> rows;
 
     @Getter
     @Builder
-    public static class Row {
+    public static class ReconcileRow {
         private VendorProvider provider;
         private BigDecimal meteredCents;
         @Schema(description = "True when some model was unpriced or a cache rate was missing, so metered is a floor or a ceiling, not a figure.")

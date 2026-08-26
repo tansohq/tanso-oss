@@ -37,10 +37,15 @@ services:
       APP_MODULES_BUILD_ENABLED: ${APP_MODULES_BUILD_ENABLED:-true}
       APP_SPEND_ANTHROPIC_BASE_URL: ${APP_SPEND_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       APP_SPEND_OPENAI_BASE_URL: ${APP_SPEND_OPENAI_BASE_URL:-https://api.openai.com}
+      APP_SPEND_GITHUB_BASE_URL: ${APP_SPEND_GITHUB_BASE_URL:-https://api.github.com}
+      APP_SPEND_LINEAR_BASE_URL: ${APP_SPEND_LINEAR_BASE_URL:-https://api.linear.app/graphql}
       # The default profile logs request bodies and SQL at DEBUG; that is a dev
       # convenience, not something to ship with credentials flowing through.
       LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:-INFO}
       LOGGING_LEVEL_ORG_HIBERNATE_SQL: ${LOGGING_LEVEL_ORG_HIBERNATE_SQL:-INFO}
+      SPRING_JPA_SHOW_SQL: ${SPRING_JPA_SHOW_SQL:-false}
+      # application.yaml also sets hibernate.show_sql under spring.jpa.properties; that is the one that prints
+      SPRING_JPA_PROPERTIES_HIBERNATE_SHOW_SQL: ${SPRING_JPA_PROPERTIES_HIBERNATE_SHOW_SQL:-false}
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
