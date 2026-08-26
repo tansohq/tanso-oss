@@ -149,8 +149,10 @@ export function UnitDetail({
               {rules.map((r) => (
                 <TableRow key={r.id}>
                   <TableCell>{providerLabel[r.provider]}</TableCell>
-                  <TableCell>{kindLabel[r.matchKind]}</TableCell>
-                  <TableCell className="font-mono text-xs">
+                  <TableCell className="whitespace-normal">
+                    {kindLabel[r.matchKind]}
+                  </TableCell>
+                  <TableCell className="font-mono text-xs whitespace-normal break-words">
                     {r.matchValue}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">
