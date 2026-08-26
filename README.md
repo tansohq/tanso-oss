@@ -326,8 +326,11 @@ It works from the vendor's admin API, not a proxy in your request path:
    unit to the serve-side feature it shipped (Teams → the project → Feature),
    and the report puts the project's AI build cost (its attributed spend, with
    descendants) next to that feature's revenue and serving cost from the
-   customer events in the same window: serve margin, net of build, build cost
-   per outcome. Projects with no feature are listed, not hidden.
+   customer events in the same window — the `revenueAmount` and `costAmount`
+   your events carry (`POST /api/v1/client/events`), summed per feature:
+   serve margin, net of build, build cost per outcome. Events without a cost
+   make the serve margin equal the revenue. Projects with no feature are
+   listed, not hidden.
 
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
