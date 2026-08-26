@@ -49,4 +49,21 @@ final class VendorErrors {
     private static String truncate(String s) {
         return s.length() <= MAX_MESSAGE ? s : s.substring(0, MAX_MESSAGE) + "…";
     }
+
+    /** Only a JSON error field (error.message / detail / message), truncated; null for anything else. */
+    public static String jsonMessage(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            com.fasterxml.jackson.databind.JsonNode n = MAPPER.readTree(body);
+            String m = n.path("error").path("message").asText(null);
+            if (m == null) m = n.path("detail").isTextual() ? n.path("detail").asText() : null;
+            if (m == null) m = n.path("message").asText(null);
+            if (m == null) m = n.path("error").isTextual() ? n.path("error").asText() : null;
+            return m == null ? null : (m.length() > 200 ? m.substring(0, 200) + "…" : m);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 }

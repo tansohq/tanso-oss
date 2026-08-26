@@ -39,4 +39,6 @@ public class SpendUnitRequest {
     private String githubLogin;
     @Schema(description = "Unit this one rolls up into (a team for a person, a project for a team). Optional.")
     private String parentId;
+    @io.swagger.v3.oas.annotations.media.Schema(description = "PROJECT only: id of the serve-side feature it shipped. Null clears it.")
+    private String featureId;
 }

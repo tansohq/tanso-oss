@@ -110,6 +110,7 @@ export interface SpendUnitDto {
   email?: string
   githubLogin?: string
   parentId?: string
+  featureId?: string
   createdAt?: string
 }
 
@@ -319,4 +320,32 @@ export interface PriceBookModelDto {
   outputCostPerMillion: number
   cacheReadCostPerMillion?: number | null
   cacheWriteCostPerMillion?: number | null
+}
+
+// ---- phase 8: feature P&L
+
+export interface PnlRow {
+  unitId: string
+  name: string
+  featureId: string
+  featureKey?: string | null
+  featureName?: string | null
+  buildCents: number
+  outcomes: number
+  revenueCents: number
+  serveCostCents: number
+  serveMarginCents: number
+  netCents: number
+  buildPerOutcomeCents?: number | null
+}
+
+export interface SpendPnlReportDto {
+  from: string
+  to: string
+  rows: PnlRow[]
+  unlinkedProjects: string[]
+  totalBuildCents: number
+  totalRevenueCents: number
+  totalServeCostCents: number
+  totalNetCents: number
 }

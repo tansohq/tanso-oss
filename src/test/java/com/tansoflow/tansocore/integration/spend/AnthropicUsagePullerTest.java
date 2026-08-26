@@ -107,7 +107,7 @@ class AnthropicUsagePullerTest {
         assertEquals(10000, cc.cacheReadTokens());
         assertEquals(5000, cc.cacheCreationTokens());
         assertEquals(new BigDecimal("141"), cc.vendorCostCents());
-        assertEquals(5L, cc.requests());
+        assertNull(cc.requests(), "sessions come from the actor-metric row; per-model rows would multiply them");
     }
 
     @Test

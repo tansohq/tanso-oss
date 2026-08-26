@@ -54,7 +54,7 @@ class SpendSettingsServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendSettingsServiceImpl(accountSettingRepository, externalApiKeyRepository);
+        service = new SpendSettingsServiceImpl(accountSettingRepository, new com.tansoflow.tansocore.util.OutboundUrlPolicy(true, true), externalApiKeyRepository);
         setting = new AccountSetting();
         setting.setId(accountId);
         lenient().when(accountSettingRepository.findAccountSettingById(accountId)).thenReturn(setting);

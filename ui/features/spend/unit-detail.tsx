@@ -359,11 +359,7 @@ export function UnitDetail({
             )}
             {budget.data.gatewaySpentCents != null && (
               <div className="col-span-2 text-xs text-muted-foreground">
-                LiteLLM itself counts{" "}
-                {formatCents(budget.data.gatewaySpentCents)} this month for the
-                team/key/user this unit&apos;s rules name — priced by its own
-                model map, and the number it enforces against. The figure above
-                is by Tanso&apos;s price book.
+                {`LiteLLM itself counts ${formatCents(budget.data.gatewaySpentCents)} this month for the team/key/user this unit's rules name — priced by its own model map, and the number it enforces against. The figure above is by Tanso's price book.`}
               </div>
             )}
             {budget.data.enforcementError && (

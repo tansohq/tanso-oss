@@ -67,11 +67,20 @@ export default function SpendOutcomesPage() {
   const [adding, setAdding] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
 
+  if (sources.error && !isBuildSideOff(sources.error)) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Could not load outcome sources</AlertTitle>
+        <AlertDescription>{sources.error.message}</AlertDescription>
+      </Alert>
+    )
+  }
   if (isBuildSideOff(sources.error)) {
     return (
       <p className="text-sm text-muted-foreground">
         The build side is switched off on this install
-        (APP_MODULES_BUILD_ENABLED=false).
+        (APP_MODULES_BUILD_ENABLED=false) — or the console&apos;s API base URL
+        does not reach it.
       </p>
     )
   }

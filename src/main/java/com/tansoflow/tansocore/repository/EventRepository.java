@@ -181,6 +181,27 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
             @Param("since") Instant since);
 
     @Query("""
+        SELECT e.featureId,
+               COALESCE(SUM(e.revenueAmount), 0),
+               COALESCE(SUM(e.costAmount), 0)
+        FROM Event e
+        WHERE e.account.id = :accountId
+        AND e.featureId IN :featureIds
+        AND e.eventType IN :eventTypes
+        AND e.occurredAt >= :start AND e.occurredAt < :end
+        AND (e.revenueUnit IS NULL OR e.revenueUnit = :currency)
+        AND (e.costUnit IS NULL OR e.costUnit = :currency)
+        GROUP BY e.featureId
+    """)
+    List<Object[]> sumRevenueAndCostByFeature(
+            @Param("accountId") UUID accountId,
+            @Param("featureIds") Collection<UUID> featureIds,
+            @Param("eventTypes") Collection<EventType> eventTypes,
+            @Param("start") Instant start,
+            @Param("end") Instant end,
+            @Param("currency") com.tansoflow.tansocore.model.event.events.type.CostUnit currency);
+
+    @Query("""
         SELECT e.customerId,
                COALESCE(SUM(e.revenueAmount), 0),
                COALESCE(SUM(e.costAmount), 0)

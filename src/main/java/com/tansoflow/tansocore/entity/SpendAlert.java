@@ -67,7 +67,7 @@ public class SpendAlert {
     @Column(name = "limit_cents", precision = 18, scale = 2)
     private BigDecimal limitCents;
 
-    @Column(name = "message", nullable = false, length = 500)
+    @Column(name = "message", nullable = false, length = Integer.MAX_VALUE)
     private String message;
 
     @Column(name = "fired_at", nullable = false, updatable = false)

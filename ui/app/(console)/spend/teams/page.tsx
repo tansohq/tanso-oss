@@ -99,11 +99,20 @@ export default function SpendTeamsPage() {
   for (const r of rules.data ?? [])
     rulesByUnit.set(r.spendUnitId, (rulesByUnit.get(r.spendUnitId) ?? 0) + 1)
 
+  if (units.error && !isBuildSideOff(units.error)) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Could not load units</AlertTitle>
+        <AlertDescription>{units.error.message}</AlertDescription>
+      </Alert>
+    )
+  }
   if (isBuildSideOff(units.error)) {
     return (
       <p className="text-sm text-muted-foreground">
         The build side is switched off on this install
-        (APP_MODULES_BUILD_ENABLED=false).
+        (APP_MODULES_BUILD_ENABLED=false) — or the console&apos;s API base URL
+        does not reach it.
       </p>
     )
   }

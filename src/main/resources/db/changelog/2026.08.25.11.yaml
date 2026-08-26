@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260825-11"
+      author: tanso
+      comment: >
+        Review fix. A budget enforced at several gateways lists every target,
+        and a breach message carries the unit name plus that list; both
+        overflowed VARCHAR limits and turned a budget save or an alert into
+        a 500. Free text, no limit.
+      changes:
+        - modifyDataType: { tableName: spend_budgets, columnName: enforcement_target, newDataType: TEXT }
+        - modifyDataType: { tableName: spend_alerts, columnName: message, newDataType: TEXT }

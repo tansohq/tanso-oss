@@ -72,7 +72,7 @@ public class GatewayEnforcementServiceImpl implements GatewayEnforcementService 
                     if (block) {
                         targets.add(target);
                     }
-                } catch (VendorApiException | IllegalArgumentException e) {
+                } catch (RuntimeException e) {
                     errors.add(rule.getMatchKind() + " " + rule.getMatchValue() + ": " + e.getMessage());
                     log.warn("Gateway push failed for unit {}: {}", budget.getSpendUnitId(), e.getMessage());
                 }

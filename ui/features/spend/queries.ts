@@ -18,6 +18,7 @@ import type {
   SpendDigestDto,
   SpendSavingsReportDto,
   PriceBookModelDto,
+  SpendPnlReportDto,
 } from "./types"
 
 /** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the routes 404. */
@@ -129,6 +130,17 @@ export function useSpendSavings(from: string, to: string) {
     queryFn: () =>
       apiFetch<SpendSavingsReportDto>(
         `/api/v1/spend/reports/savings${queryString({ from, to })}`
+      ),
+    enabled: !!from && !!to,
+  })
+}
+
+export function useSpendPnl(from: string, to: string) {
+  return useQuery({
+    queryKey: ["spend-pnl", from, to],
+    queryFn: () =>
+      apiFetch<SpendPnlReportDto>(
+        `/api/v1/spend/reports/pnl${queryString({ from, to })}`
       ),
     enabled: !!from && !!to,
   })

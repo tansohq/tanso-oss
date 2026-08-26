@@ -107,7 +107,8 @@ public class SpendNotifier {
             envelope.put(event.equals("spend.alert") ? "alert" : "digest", payload);
             body = objectMapper.writeValueAsString(envelope);
         } catch (JsonProcessingException e) {
-            throw new IllegalStateException("Could not serialise " + event + " payload", e);
+            log.error("Could not serialise {} payload for account {}: {}", event, accountId, e.getMessage(), e);
+            return Outcome.FAILED;
         }
         ExternalApiKey secret = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SPEND_WEBHOOK_SECRET.name(), accountId);
         try {
@@ -121,7 +122,8 @@ public class SpendNotifier {
             req.body(body).retrieve().toBodilessEntity();
             return Outcome.SENT;
         } catch (RuntimeException e) {
-            log.warn("Spend webhook post failed for account {}: {}", accountId, e.getMessage());
+            log.warn("Spend webhook post failed for account {}: {}{}", accountId, e.getClass().getSimpleName(),
+                    e instanceof org.springframework.web.client.RestClientResponseException r ? " " + r.getStatusCode().value() : "");
             return Outcome.FAILED;
         }
     }

@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 /**
@@ -106,6 +107,7 @@ public class AnthropicUsagePuller implements VendorUsagePuller {
     @Override
     public List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
         List<ActorMetricRecord> out = new ArrayList<>();
+        Map<String, ActorMetricRecord> perDayActor = new java.util.LinkedHashMap<>();
         for (LocalDate day = from; day.isBefore(toExclusive); day = day.plusDays(1)) {
             LocalDate d = day;
             String page = null;
@@ -130,16 +132,28 @@ public class AnthropicUsagePuller implements VendorUsagePuller {
                     for (JsonNode m : r.path("model_breakdown")) {
                         cents += m.path("estimated_cost").path("amount").asLong();
                     }
-                    out.add(new ActorMetricRecord(d, actorId, text(r, "terminal_type"),
+                    if (actorId == null || actorId.isEmpty()) {
+                        continue;
+                    }
+                    // One report row per terminal type; the table is unique per (day, actor), so fold them.
+                    ActorMetricRecord prev = perDayActor.get(d + "|" + actorId);
+                    ActorMetricRecord cur = new ActorMetricRecord(d, actorId, text(r, "terminal_type"),
                             core.path("num_sessions").asInt(), null,
                             core.path("lines_of_code").path("added").asInt(), core.path("lines_of_code").path("removed").asInt(), null,
                             accepted, rejected,
                             core.path("commits_by_claude_code").asInt(), core.path("pull_requests_by_claude_code").asInt(),
-                            null, BigDecimal.valueOf(cents)));
+                            null, BigDecimal.valueOf(cents));
+                    perDayActor.put(d + "|" + actorId, prev == null ? cur : new ActorMetricRecord(d, actorId, prev.tool(),
+                            prev.sessions() + cur.sessions(), null,
+                            prev.linesAdded() + cur.linesAdded(), prev.linesRemoved() + cur.linesRemoved(), null,
+                            prev.accepted() + cur.accepted(), prev.rejected() + cur.rejected(),
+                            prev.commits() + cur.commits(), prev.pullRequests() + cur.pullRequests(),
+                            null, prev.estimatedCostCents().add(cur.estimatedCostCents())));
                 }
                 page = body.path("has_more").asBoolean(false) ? text(body, "next_page") : null;
             } while (page != null);
         }
+        out.addAll(perDayActor.values());
         return out;
     }
 
@@ -194,8 +208,7 @@ public class AnthropicUsagePuller implements VendorUsagePuller {
                         text(m, "model"), null, null, actorId, null, text(r, "terminal_type"),
                         tokens.path("input").asLong(), tokens.path("cache_read").asLong(),
                         tokens.path("cache_creation").asLong(), tokens.path("output").asLong(),
-                        r.path("core_metrics").path("num_sessions").isNumber()
-                                ? r.path("core_metrics").path("num_sessions").asLong() : null,
+                        null,   // sessions live on the actor-metric row; one per model here would multiply them
                         cost.isMissingNode() ? null : BigDecimal.valueOf(cost.path("amount").asLong()),
                         cost.path("currency").asText("USD")));
             }

@@ -80,10 +80,12 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
 
     @Override
     public List<UsageBucketRecord> pull(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
-        JsonNode rows = get(adminKey, base(scope) + "/spend/logs?start_date=" + from + "&end_date=" + toExclusive.minusDays(1) + "&summarize=false");
+        // LiteLLM parses end_date to midnight and filters startTime <= it, so the exclusive end is what it needs;
+        // the day filter below drops the one row that can sit exactly on that midnight.
+        JsonNode rows = get(adminKey, base(scope) + "/spend/logs?start_date=" + from + "&end_date=" + toExclusive + "&summarize=false");
         // (day, model, team, key, user) → [prompt, completion, requests, spend in millionths of a dollar]
-        Map<String, long[]> agg = new LinkedHashMap<>();
-        Map<String, String> providers = new LinkedHashMap<>();
+        Map<Key, long[]> agg = new LinkedHashMap<>();
+        Map<Key, String> providers = new LinkedHashMap<>();
         for (JsonNode r : rows.isArray() ? rows : rows.path("data")) {
             String start = r.path("startTime").asText(null);
             if (start == null) {
@@ -93,7 +95,7 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
             if (day.isBefore(from) || !day.isBefore(toExclusive)) {
                 continue;
             }
-            String key = String.join("|", day.toString(), text(r, "model"), text(r, "team_id"), text(r, "api_key"), actor(r));
+            Key key = new Key(day, nullIfEmpty(text(r, "model")), nullIfEmpty(text(r, "team_id")), nullIfEmpty(text(r, "api_key")), nullIfEmpty(actor(r)));
             long[] a = agg.computeIfAbsent(key, k -> new long[4]);
             a[0] += r.path("prompt_tokens").asLong();
             a[1] += r.path("completion_tokens").asLong();
@@ -104,15 +106,15 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
             }
         }
         List<UsageBucketRecord> out = new ArrayList<>();
-        for (Map.Entry<String, long[]> e : agg.entrySet()) {
-            String[] k = e.getKey().split("\\|", -1);
-            LocalDate day = LocalDate.parse(k[0]);
+        for (Map.Entry<Key, long[]> e : agg.entrySet()) {
+            Key k = e.getKey();
+            LocalDate day = k.day();
             Instant s = day.atStartOfDay(ZoneOffset.UTC).toInstant();
             Instant en = day.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant();
-            String model = nullIfEmpty(k[1]);
-            String team = nullIfEmpty(k[2]);
-            String apiKey = nullIfEmpty(k[3]);
-            String user = nullIfEmpty(k[4]);
+            String model = k.model();
+            String team = k.team();
+            String apiKey = k.apiKey();
+            String user = k.actor();
             long[] a = e.getValue();
             out.add(new UsageBucketRecord(VendorUsageSource.USAGE_API, s, en, model, team, apiKey, user, null, null,
                     a[0], 0, 0, a[1], a[2], null, null));
@@ -127,7 +129,7 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
 
     @Override
     public List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
-        JsonNode rows = get(adminKey, base(scope) + "/spend/logs?start_date=" + from + "&end_date=" + toExclusive.minusDays(1) + "&summarize=false");
+        JsonNode rows = get(adminKey, base(scope) + "/spend/logs?start_date=" + from + "&end_date=" + toExclusive + "&summarize=false");
         Map<String, int[]> perActorDay = new LinkedHashMap<>();
         for (JsonNode r : rows.isArray() ? rows : rows.path("data")) {
             String start = r.path("startTime").asText(null);
@@ -149,6 +151,8 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
         }
         return out;
     }
+
+    private record Key(LocalDate day, String model, String team, String apiKey, String actor) {}
 
     /** Prefer the end-user the caller passed; fall back to the internal user who owns the key. */
     private static String actor(JsonNode r) {
@@ -186,8 +190,10 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
                     .header("User-Agent", VendorErrors.USER_AGENT)
                     .retrieve().body(JsonNode.class);
         } catch (RestClientResponseException e) {
+            // The URL is operator-typed: echo only a JSON error field, never a raw body, so this cannot read arbitrary hosts.
+            String m = VendorErrors.jsonMessage(e.getResponseBodyAsString());
             throw new VendorApiException(e.getStatusCode().value(),
-                    "LiteLLM returned " + e.getStatusCode().value() + ": " + VendorErrors.message(e.getResponseBodyAsString()));
+                    "LiteLLM returned " + e.getStatusCode().value() + (m == null ? "" : ": " + m));
         } catch (ResourceAccessException e) {
             throw new VendorApiException("Could not reach LiteLLM at " + url + ": " + e.getMessage(), e);
         }

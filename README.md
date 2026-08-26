@@ -322,9 +322,27 @@ It works from the vendor's admin API, not a proxy in your request path:
    target's rates with the caveats spelled out (tokenizer drift, no cache
    rates, quality not modelled). Advice only; Tanso never routes.
 
+7. **Spend → P&L**: the join the two halves exist for. Link a *project*
+   unit to the serve-side feature it shipped (Teams → the project → Feature),
+   and the report puts the project's AI build cost (its attributed spend, with
+   descendants) next to that feature's revenue and serving cost from the
+   customer events in the same window — the `revenueAmount` and `costAmount`
+   your events carry (`POST /api/v1/client/events`), summed per feature:
+   serve margin, net of build, build cost per outcome. Events without a cost
+   make the serve margin equal the revenue. Projects with no feature are
+   listed, not hidden.
+
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
 <img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
+
+<img src=".github/assets/screenshots/spend-gateway-budget.png" alt="Spend → Teams — a Block budget enforced at LiteLLM, bumped for launch week, with the gateway's own count beside Tanso's" width="800" />
+
+<img src=".github/assets/screenshots/spend-digest.png" alt="Spend → Alerts — the weekly digest: last week per unit against the week before, month-to-date against the ceiling" width="800" />
+
+<img src=".github/assets/screenshots/spend-savings.png" alt="Spend → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
+
+<img src=".github/assets/screenshots/spend-pnl.png" alt="Spend → P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
 
 6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
@@ -371,13 +389,13 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
 `/api/v1/spend/reports/outcomes`, `/api/v1/spend/reports/savings`,
-`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`
-(console JWT only).
+`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`,
+`/api/v1/spend/reports/pnl` (console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
 `_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
 LiteLLM connection carries its own proxy URL. Next:
-feature-level P&L — a project's build cost next to the serve-side revenue of
-the feature it shipped.
+per-unit savings, employee self-view with a manager cohort minimum, and
+Jira as an outcome source.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
@@ -406,6 +424,7 @@ supply them via environment variables. The common ones:
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
+| `APP_SPEND_OUTBOUND_ALLOW_PRIVATE` | Whether operator-typed URLs (LiteLLM proxy, webhook) may point at private ranges (default `true` — a self-hosted proxy lives there). Loopback and link-local (cloud metadata) are always refused. Set `false` on a multi-tenant install |
 | `APP_SPEND_ALERT_FROM` | Sender for alert emails and the weekly digest, via Resend (`APP_RESEND_API_KEY`); default `Tanso <alerts@your-domain.com>` |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for

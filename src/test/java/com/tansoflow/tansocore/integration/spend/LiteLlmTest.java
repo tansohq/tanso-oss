@@ -50,7 +50,7 @@ class LiteLlmTest {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         LiteLlmUsagePuller puller = new LiteLlmUsagePuller(builder);
-        server.expect(requestTo("https://llm.test:4000/spend/logs?start_date=2026-08-20&end_date=2026-08-21&summarize=false"))
+        server.expect(requestTo("https://llm.test:4000/spend/logs?start_date=2026-08-20&end_date=2026-08-22&summarize=false"))
                 .andExpect(header("Authorization", "Bearer sk-master"))
                 .andRespond(withSuccess(new ClassPathResource("spend/litellm-spend-logs.json"), MediaType.APPLICATION_JSON));
 
@@ -130,5 +130,29 @@ class LiteLlmTest {
         VendorApiException e = assertThrows(VendorApiException.class,
                 () -> gateway.pushMonthlyBudget("sk-master", "https://llm.test", AttributionMatchKind.ACTOR, "ghost", new BigDecimal("100")));
         assertTrue(e.getMessage().contains("400"));
+    }
+
+    @Test
+    void teamIdsWithPipesStayWhole() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        LiteLlmUsagePuller puller = new LiteLlmUsagePuller(builder);
+        server.expect(requestTo("https://llm.test/spend/logs?start_date=2026-08-20&end_date=2026-08-21&summarize=false"))
+                .andRespond(withSuccess("[{\"startTime\":\"2026-08-20T09:00:00+00:00\",\"model\":\"m\",\"team_id\":\"ops|eu\",\"api_key\":\"sk-abc\",\"end_user\":\"kat\",\"prompt_tokens\":10,\"completion_tokens\":2,\"spend\":0.01}]", MediaType.APPLICATION_JSON));
+        List<UsageBucketRecord> rows = puller.pull("sk-master", "https://llm.test", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
+        assertEquals("ops|eu", rows.get(0).workspaceId());
+        assertEquals("sk-abc", rows.get(0).vendorApiKeyId());
+        assertEquals("kat", rows.get(0).actorId());
+    }
+
+    @Test
+    void proxyErrorsEchoOnlyAJsonMessageNeverARawBody() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        LiteLlmUsagePuller puller = new LiteLlmUsagePuller(builder);
+        server.expect(requestTo("https://llm.test/health/liveliness"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN).contentType(MediaType.TEXT_HTML).body("<html>internal admin panel AKIA...</html>"));
+        VendorApiException e = assertThrows(VendorApiException.class, () -> puller.probe("k", "https://llm.test"));
+        assertEquals("LiteLLM returned 403", e.getMessage());
     }
 }

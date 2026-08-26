@@ -32,5 +32,6 @@ public class SpendUnitDto {
     private String email;
     private String githubLogin;
     private String parentId;
+    private String featureId;
     private Instant createdAt;
 }

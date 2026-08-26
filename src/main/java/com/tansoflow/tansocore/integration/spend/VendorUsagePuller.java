@@ -51,6 +51,13 @@ public interface VendorUsagePuller {
     }
 
     /** Longest window one pull may cover. Anthropic and OpenAI page 31 daily buckets; Cursor allows 30 days. */
+    /** Both in one pass; a vendor whose two reads share a download (Copilot) overrides this to fetch once. */
+    default PullResult pullAll(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        return new PullResult(pull(adminKey, scope, from, toExclusive), pullActorMetrics(adminKey, scope, from, toExclusive));
+    }
+
+    record PullResult(List<UsageBucketRecord> usage, List<ActorMetricRecord> actors) {}
+
     default int maxWindowDays() {
         return 31;
     }

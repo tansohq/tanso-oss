@@ -38,7 +38,7 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
@@ -87,9 +87,18 @@ public class CopilotUsagePuller implements VendorUsagePuller {
 
     @Override
     public List<UsageBucketRecord> pull(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
-        List<UsageBucketRecord> out = new ArrayList<>();
+        Map<LocalDate, List<JsonNode>> days = new LinkedHashMap<>();
         for (LocalDate day = from; day.isBefore(toExclusive); day = day.plusDays(1)) {
-            for (JsonNode r : dayRecords(adminKey, scope, day)) {
+            days.put(day, dayRecords(adminKey, scope, day));
+        }
+        return usage(days);
+    }
+
+    private static List<UsageBucketRecord> usage(Map<LocalDate, List<JsonNode>> days) {
+        List<UsageBucketRecord> out = new ArrayList<>();
+        for (Map.Entry<LocalDate, List<JsonNode>> e : days.entrySet()) {
+            LocalDate day = e.getKey();
+            for (JsonNode r : e.getValue()) {
                 long prompt = 0;
                 long output = 0;
                 long requests = 0;
@@ -115,9 +124,21 @@ public class CopilotUsagePuller implements VendorUsagePuller {
 
     @Override
     public List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
-        List<ActorMetricRecord> out = new ArrayList<>();
+        Map<LocalDate, List<JsonNode>> days = new LinkedHashMap<>();
         for (LocalDate day = from; day.isBefore(toExclusive); day = day.plusDays(1)) {
-            for (JsonNode r : dayRecords(adminKey, scope, day)) {
+            days.put(day, dayRecords(adminKey, scope, day));
+        }
+        return actorMetrics(days);
+    }
+
+    private static List<ActorMetricRecord> actorMetrics(Map<LocalDate, List<JsonNode>> days) {
+        List<ActorMetricRecord> out = new ArrayList<>();
+        for (Map.Entry<LocalDate, List<JsonNode>> e : days.entrySet()) {
+            LocalDate day = e.getKey();
+            for (JsonNode r : e.getValue()) {
+                if (!r.hasNonNull("user_login")) {
+                    continue;   // actor_id is NOT NULL; a record with no login has nothing to attribute
+                }
                 int sessions = r.path("totals_by_cli").path("session_count").asInt() + r.path("totals_by_copilot_app").path("session_count").asInt();
                 String tool = r.path("used_copilot_coding_agent").asBoolean(false) ? "coding-agent"
                         : r.path("used_agent").asBoolean(false) ? "agent"
@@ -134,22 +155,17 @@ public class CopilotUsagePuller implements VendorUsagePuller {
         return out;
     }
 
-    /**
-     * A sync calls pull() then pullActorMetrics() over the same window; the second
-     * pass reads what the first fetched instead of downloading every report twice.
-     * Entries are consumed on the second read so nothing lingers across syncs.
-     */
-    private final Map<String, List<JsonNode>> fetched = new ConcurrentHashMap<>();
+    @Override
+    public PullResult pullAll(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        Map<LocalDate, List<JsonNode>> days = new LinkedHashMap<>();
+        for (LocalDate day = from; day.isBefore(toExclusive); day = day.plusDays(1)) {
+            days.put(day, fetchDay(adminKey, scope, day));
+        }
+        return new PullResult(usage(days), actorMetrics(days));
+    }
 
     private List<JsonNode> dayRecords(String adminKey, String scope, LocalDate day) {
-        String key = Integer.toHexString(adminKey.hashCode()) + "|" + org(scope) + "|" + day;
-        List<JsonNode> cached = fetched.remove(key);
-        if (cached != null) {
-            return cached;
-        }
-        List<JsonNode> records = fetchDay(adminKey, scope, day);
-        fetched.put(key, records);
-        return records;
+        return fetchDay(adminKey, scope, day);
     }
 
     /** The day's per-user report: 204 = nothing that day; otherwise follow every download link. */

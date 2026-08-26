@@ -49,6 +49,9 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 
     @Override
     public String convertToEntityAttribute(String dbData) {
+        if (dbData != null && dbData.startsWith("enc:") && !dbData.startsWith(SecretCipher.PREFIX)) {
+            throw new IllegalStateException("Stored secret looks encrypted but is not in a known format (" + dbData.substring(0, Math.min(8, dbData.length())) + "…) — refusing to hand it to a vendor as plaintext");
+        }
         if (dbData == null || !cipher.isEncrypted(dbData)) {
             return dbData;
         }

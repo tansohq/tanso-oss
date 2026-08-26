@@ -37,6 +37,10 @@ public class VendorUsageSyncJob {
     @SchedulerLock(name = "vendorUsageSyncJob", lockAtMostFor = "PT50M", lockAtLeastFor = "PT1M")
     public void run() {
         log.info("Vendor usage sync starting");
-        vendorSyncService.syncAll();
+        try {
+            vendorSyncService.syncAll();
+        } catch (RuntimeException e) {
+            log.error("Vendor usage sync aborted: {}", e.getMessage(), e);
+        }
     }
 }

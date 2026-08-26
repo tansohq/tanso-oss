@@ -6,6 +6,7 @@ import { KeyRound, Plus, RefreshCw, ShieldCheck, Trash2 } from "lucide-react"
 
 import { DataTable } from "@/components/data-table"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import {
   Sheet,
@@ -213,7 +214,12 @@ export default function SpendConnectionsPage() {
           Connect vendor
         </Button>
       </div>
-      {isBuildSideOff(connections.error) ? (
+      {connections.error && !isBuildSideOff(connections.error) ? (
+        <Alert variant="destructive">
+          <AlertTitle>Could not load connections</AlertTitle>
+          <AlertDescription>{connections.error.message}</AlertDescription>
+        </Alert>
+      ) : isBuildSideOff(connections.error) ? (
         <p className="text-sm text-muted-foreground">
           The build side is switched off on this install
           (APP_MODULES_BUILD_ENABLED=false).

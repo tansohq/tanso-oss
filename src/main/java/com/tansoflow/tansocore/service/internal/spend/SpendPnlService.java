@@ -15,24 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend.request;
+package com.tansoflow.tansocore.service.internal.spend;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
-import lombok.Data;
+import com.tansoflow.tansocore.model.spend.SpendPnlReportDto;
 
-import java.math.BigDecimal;
-import java.time.Instant;
+import java.time.LocalDate;
 
-@Data
-public class SpendBudgetBumpRequest {
-    @NotNull
-    @Schema(description = "The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling.")
-    private BigDecimal monthlyCents;
-    @NotNull
-    @Schema(description = "When the bump ends and the standing ceiling applies again.")
-    private Instant expiresAt;
-    @jakarta.validation.constraints.Size(max = 255)
-    @Schema(description = "Why — shown on the budget and in the digest.")
-    private String reason;
+public interface SpendPnlService {
+    SpendPnlReportDto report(String accountId, LocalDate from, LocalDate to);
 }

@@ -62,7 +62,8 @@ class VendorConnectionServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, actorMetricRepository, accountRepository, List.of());
+        service = new VendorConnectionServiceImpl(vendorConnectionRepository, bucketRepository, actorMetricRepository, accountRepository, List.of(),
+                new com.tansoflow.tansocore.util.OutboundUrlPolicy(true, true));
         account = new Account();
         account.setId(accountId);
     }
@@ -93,8 +94,8 @@ class VendorConnectionServiceImplTest {
     }
 
     @Test
-    void shortKeyHintIsTheWholeKey() {
-        assertEquals("ab", VendorConnectionServiceImpl.hintOf("ab"));
+    void shortKeyHintRevealsNothing() {
+        assertEquals("", VendorConnectionServiceImpl.hintOf("ab"));
         assertEquals("cdef", VendorConnectionServiceImpl.hintOf("abcdef"));
     }
 

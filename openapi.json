@@ -322,7 +322,7 @@
                 "tags": [
                     "Spend \u2014 Units & Attribution"
                 ],
-                "summary": "Rename or re-parent a unit",
+                "summary": "Update a unit: name, parent, person fields, feature link",
                 "operationId": "updateUnit",
                 "parameters": [
                     {
@@ -5269,6 +5269,53 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/pnl": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "Feature P&L",
+                "description": "Each project's AI build cost next to the revenue and serving cost of the feature it shipped, same window. Defaults to the last 30 days.",
+                "operationId": "pnl",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendPnlReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/reports/outcomes": {
             "get": {
                 "tags": [
@@ -7830,6 +7877,10 @@
                     "parentId": {
                         "type": "string",
                         "description": "Unit this one rolls up into (a team for a person, a project for a team). Optional."
+                    },
+                    "featureId": {
+                        "type": "string",
+                        "description": "PROJECT only: id of the serve-side feature it shipped. Null clears it."
                     }
                 },
                 "required": [
@@ -7881,6 +7932,9 @@
                         "type": "string"
                     },
                     "parentId": {
+                        "type": "string"
+                    },
+                    "featureId": {
                         "type": "string"
                     },
                     "createdAt": {
@@ -8434,7 +8488,9 @@
                     },
                     "reason": {
                         "type": "string",
-                        "description": "Why \u2014 shown on the budget and in the digest."
+                        "description": "Why \u2014 shown on the budget and in the digest.",
+                        "maxLength": 255,
+                        "minLength": 0
                     }
                 },
                 "required": [
@@ -12905,6 +12961,113 @@
                         "items": {
                             "$ref": "#/components/schemas/ReconcileRow"
                         }
+                    }
+                }
+            },
+            "ApiResponseSpendPnlReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendPnlReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PnlRow": {
+                "type": "object",
+                "properties": {
+                    "unitId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "featureId": {
+                        "type": "string"
+                    },
+                    "featureKey": {
+                        "type": "string"
+                    },
+                    "featureName": {
+                        "type": "string"
+                    },
+                    "buildCents": {
+                        "type": "number",
+                        "description": "Metered AI spend attributed to the project and its descendants (build side)."
+                    },
+                    "outcomes": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "revenueCents": {
+                        "type": "number",
+                        "description": "Sum of revenueAmount on the feature's events in the window (serve side)."
+                    },
+                    "serveCostCents": {
+                        "type": "number",
+                        "description": "Sum of costAmount on the feature's events in the window (serve side)."
+                    },
+                    "serveMarginCents": {
+                        "type": "number",
+                        "description": "revenue \u2212 serve cost."
+                    },
+                    "netCents": {
+                        "type": "number",
+                        "description": "serve margin \u2212 build cost."
+                    },
+                    "buildPerOutcomeCents": {
+                        "type": "number",
+                        "description": "Build cost per outcome; null with no outcomes."
+                    }
+                }
+            },
+            "SpendPnlReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive."
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PnlRow"
+                        }
+                    },
+                    "unlinkedProjects": {
+                        "type": "array",
+                        "description": "PROJECT units with no feature linked \u2014 they have a build cost and no revenue to put beside it.",
+                        "items": {
+                            "type": "string"
+                        }
+                    },
+                    "totalBuildCents": {
+                        "type": "number"
+                    },
+                    "totalRevenueCents": {
+                        "type": "number"
+                    },
+                    "totalServeCostCents": {
+                        "type": "number"
+                    },
+                    "totalNetCents": {
+                        "type": "number"
                     }
                 }
             },
