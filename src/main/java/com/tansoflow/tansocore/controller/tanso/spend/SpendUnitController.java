@@ -69,7 +69,7 @@ public class SpendUnitController {
     }
 
     @PutMapping("/units/{unitId}")
-    @Operation(summary = "Rename or re-parent a unit", security = @SecurityRequirement(name = "Bearer"))
+    @Operation(summary = "Update a unit: name, parent, person fields, feature link", security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<SpendUnitDto>> updateUnit(@AuthenticationPrincipal UserContext userContext,
                                                                 @PathVariable String unitId,
                                                                 @Valid @RequestBody SpendUnitRequest request) {

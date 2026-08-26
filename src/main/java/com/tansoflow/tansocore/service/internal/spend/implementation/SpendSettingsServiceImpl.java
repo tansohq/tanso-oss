@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
+import com.tansoflow.tansocore.util.OutboundUrlPolicy;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.ExternalApiKey;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyEntityName;
@@ -40,6 +41,7 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class SpendSettingsServiceImpl implements SpendSettingsService {
     private final AccountSettingRepository accountSettingRepository;
+    private final OutboundUrlPolicy outboundUrlPolicy;
     private final ExternalApiKeyRepository externalApiKeyRepository;
 
     @Override
@@ -78,8 +80,8 @@ public class SpendSettingsServiceImpl implements SpendSettingsService {
         UUID id = UUID.fromString(accountId);
         if (request.getWebhookUrl() != null) {
             String url = request.getWebhookUrl().trim();
-            if (!url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) {
-                throw new IllegalArgumentException("The webhook URL must start with https:// (or http:// on a private network)");
+            if (!url.isEmpty()) {
+                url = outboundUrlPolicy.check(url, "The webhook URL");
             }
             storeSecret(id, ExternalApiKeyType.SPEND_WEBHOOK, ExternalApiKeyEntityName.WEBHOOK, url);
         }

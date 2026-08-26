@@ -112,8 +112,9 @@ class CursorAndCopilotPullersTest {
         server.expect(requestTo("https://files.test/report.ndjson"))
                 .andRespond(withSuccess(new ClassPathResource("spend/copilot-users.ndjson"), MediaType.TEXT_PLAIN));
 
-        List<UsageBucketRecord> rows = puller.pull("ghp_x", "acme", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
-        List<ActorMetricRecord> metrics = puller.pullActorMetrics("ghp_x", "acme", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
+        VendorUsagePuller.PullResult both = puller.pullAll("ghp_x", "acme", LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 21));
+        List<UsageBucketRecord> rows = both.usage();
+        List<ActorMetricRecord> metrics = both.actors();
         server.verify();
 
         assertEquals(1, rows.size()); // bob has no CLI/app tokens

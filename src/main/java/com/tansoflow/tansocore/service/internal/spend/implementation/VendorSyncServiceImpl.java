@@ -17,6 +17,8 @@
  */
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
 import com.tansoflow.tansocore.entity.VendorConnection;
 import com.tansoflow.tansocore.entity.VendorActorMetric;
 import com.tansoflow.tansocore.entity.VendorUsageBucket;
@@ -64,6 +66,8 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     private final Map<VendorProvider, VendorUsagePuller> pullers = new EnumMap<>(VendorProvider.class);
     private final TransactionTemplate transactionTemplate;
     private final SpendBudgetService budgetService;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public VendorSyncServiceImpl(VendorConnectionRepository connectionRepository,
                                  VendorUsageBucketRepository bucketRepository,
@@ -95,9 +99,7 @@ public class VendorSyncServiceImpl implements VendorSyncService {
         }
     }
 
-    // A vendor refusal must leave the connection marked ERROR, so it must not roll the transaction back.
     @Override
-    @Transactional(noRollbackFor = VendorApiException.class)
     public VendorSyncResultDto sync(String accountId, String connectionId, LocalDate from, LocalDate to) {
         VendorConnection connection = require(accountId, connectionId);
         LocalDate today = LocalDate.now(ZoneOffset.UTC);
@@ -106,8 +108,8 @@ public class VendorSyncServiceImpl implements VendorSyncService {
         if (!start.isBefore(end)) {
             throw new IllegalArgumentException("from must be before to");
         }
-        int rows = pullWindow(connection, start, end);
-        budgetService.evaluate(accountId);
+        int rows = syncWindow(connection.getId(), start, end);
+        evaluateQuietly(accountId);
         return VendorSyncResultDto.builder()
                 .connectionId(connection.getId().toString()).from(start).to(end).rowsWritten(rows).build();
     }
@@ -116,55 +118,99 @@ public class VendorSyncServiceImpl implements VendorSyncService {
     public void syncAll() {
         LocalDate end = LocalDate.now(ZoneOffset.UTC).plusDays(1);
         LocalDate from = end.minusDays(JOB_WINDOW_DAYS);
-        // Programmatic transactions: a call through `this` would not pass the
-        // Spring proxy, and the delete+rewrite of a window has to be one unit.
         for (VendorConnection listed : connectionRepository.findAll()) {
-            UUID id = listed.getId();
             try {
-                transactionTemplate.executeWithoutResult(status -> {
-                    VendorConnection connection = connectionRepository.findById(id)
-                            .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + id));
-                    pullWindow(connection, from, end);
-                });
-                budgetService.evaluate(listed.getAccount().getId().toString());
-            } catch (VendorApiException e) {
-                // The failed transaction rolled the ERROR mark back with it; record it on its own.
-                transactionTemplate.executeWithoutResult(status ->
-                        connectionRepository.findById(id).ifPresent(c -> markFailed(c, e)));
-                log.warn("Vendor sync failed for connection {}: {}", id, e.getMessage());
+                syncWindow(listed.getId(), from, end);
+            } catch (RuntimeException e) {
+                // Already marked on the connection; one bad vendor must not stop the others.
+                log.warn("Vendor sync failed for connection {}: {}", listed.getId(), e.getMessage());
+                continue;
             }
+            evaluateQuietly(listed.getAccount().getId().toString());
         }
     }
 
-    private int pullWindow(VendorConnection connection, LocalDate from, LocalDate to) {
-        VendorUsagePuller puller = puller(connection);
-        int window = puller.maxWindowDays();
+    /**
+     * The vendor calls run outside any transaction (a 30-day Copilot pull is
+     * dozens of HTTP round trips); the delete+rewrite is one short transaction
+     * under a per-connection advisory lock, so a manual sync and the hourly job
+     * cannot interleave and double the window. Any failure is recorded on the
+     * connection in its own transaction and rethrown.
+     */
+    private int syncWindow(UUID connectionId, LocalDate from, LocalDate to) {
+        VendorConnection connection = connectionRepository.findById(connectionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
         List<UsageBucketRecord> records = new ArrayList<>();
         List<ActorMetricRecord> actorRecords = new ArrayList<>();
         try {
+            VendorUsagePuller puller = puller(connection);
+            int window = puller.maxWindowDays();
             for (LocalDate chunk = from; chunk.isBefore(to); chunk = chunk.plusDays(window)) {
                 LocalDate chunkEnd = chunk.plusDays(window).isBefore(to) ? chunk.plusDays(window) : to;
-                records.addAll(puller.pull(connection.getAdminKey(), connection.getScope(), chunk, chunkEnd));
-                actorRecords.addAll(puller.pullActorMetrics(connection.getAdminKey(), connection.getScope(), chunk, chunkEnd));
+                VendorUsagePuller.PullResult r = puller.pullAll(connection.getAdminKey(), connection.getScope(), chunk, chunkEnd);
+                records.addAll(r.usage());
+                actorRecords.addAll(r.actors());
             }
-        } catch (VendorApiException e) {
-            markFailed(connection, e);
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status ->
+                    connectionRepository.findById(connectionId).ifPresent(c -> markFailed(c, e)));
             throw e;
         }
         Instant fromInstant = from.atStartOfDay(ZoneOffset.UTC).toInstant();
         Instant toInstant = to.atStartOfDay(ZoneOffset.UTC).toInstant();
-        for (VendorUsageSource source : VendorUsageSource.values()) {
-            bucketRepository.deleteWindow(connection.getId(), source, fromInstant, toInstant);
+        // A vendor that answers with a different shape reads as "no rows"; do not let that erase a window we had.
+        List<UsageBucketRecord> inWindow = records.stream()
+                .filter(r -> !r.bucketStart().isBefore(fromInstant) && r.bucketStart().isBefore(toInstant)).toList();
+        if (inWindow.size() < records.size()) {
+            log.warn("Vendor sync {}: dropped {} rows dated outside [{}, {})", connectionId, records.size() - inWindow.size(), from, to);
         }
-        List<VendorUsageBucket> rows = records.stream().map(r -> toEntity(connection, r)).toList();
-        bucketRepository.saveAll(rows);
-        actorMetricRepository.deleteWindow(connection.getId(), from, to);
-        actorMetricRepository.saveAll(actorRecords.stream().map(r -> toEntity(connection, r)).toList());
-        markHealthy(connection);
-        connection.setLastSyncedAt(Instant.now());
-        connectionRepository.save(connection);
-        log.info("Vendor sync {} [{}, {}): {} rows", connection.getId(), from, to, rows.size());
-        return rows.size();
+        Integer written;
+        try {
+            written = transactionTemplate.execute(status -> {
+                lock(connectionId);
+                VendorConnection c = connectionRepository.findById(connectionId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Vendor connection not found: " + connectionId));
+                if (inWindow.isEmpty()) {
+                    long had = bucketRepository.countByConnectionIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(connectionId, fromInstant, toInstant);
+                    if (had > 0) {
+                        throw new VendorApiException(502, "The vendor returned no usage for [" + from + ", " + to + ") where " + had
+                                + " rows were pulled before — the report shape may have changed; the window was left as it was");
+                    }
+                }
+                for (VendorUsageSource source : VendorUsageSource.values()) {
+                    bucketRepository.deleteWindow(connectionId, source, fromInstant, toInstant);
+                }
+                List<VendorUsageBucket> rows = inWindow.stream().map(r -> toEntity(c, r)).toList();
+                bucketRepository.saveAll(rows);
+                actorMetricRepository.deleteWindow(connectionId, from, to);
+                actorMetricRepository.saveAll(actorRecords.stream().map(r -> toEntity(c, r)).toList());
+                markHealthy(c);
+                c.setLastSyncedAt(Instant.now());
+                connectionRepository.save(c);
+                log.info("Vendor sync {} [{}, {}): {} rows", connectionId, from, to, rows.size());
+                return rows.size();
+            });
+        } catch (RuntimeException e) {
+            transactionTemplate.executeWithoutResult(status ->
+                    connectionRepository.findById(connectionId).ifPresent(c -> markFailed(c, e)));
+            throw e;
+        }
+        return written == null ? 0 : written;
+    }
+
+    private void lock(UUID connectionId) {
+        if (entityManager != null) {   // null only in unit tests that construct the service by hand
+            entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:id))")
+                    .setParameter("id", connectionId.toString()).getSingleResult();
+        }
+    }
+
+    private void evaluateQuietly(String accountId) {
+        try {
+            budgetService.evaluate(accountId);
+        } catch (RuntimeException e) {
+            log.warn("Budget evaluation after sync failed for account {}: {}", accountId, e.getMessage(), e);
+        }
     }
 
     private VendorUsagePuller puller(VendorConnection connection) {
@@ -181,9 +227,9 @@ public class VendorSyncServiceImpl implements VendorSyncService {
         connectionRepository.save(connection);
     }
 
-    private void markFailed(VendorConnection connection, VendorApiException e) {
+    private void markFailed(VendorConnection connection, RuntimeException e) {
         connection.setStatus(VendorConnectionStatus.ERROR);
-        connection.setLastError(e.getMessage());
+        connection.setLastError(e instanceof VendorApiException ? e.getMessage() : e.getClass().getSimpleName() + ": " + e.getMessage());
         connectionRepository.save(connection);
     }
 

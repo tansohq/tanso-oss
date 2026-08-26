@@ -17,6 +17,8 @@
  */
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.EntityManager;
 import com.tansoflow.tansocore.entity.SpendAlert;
 import com.tansoflow.tansocore.entity.SpendAttributionRule;
 import com.tansoflow.tansocore.entity.VendorUsageBucket;
@@ -87,6 +89,8 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     private final SpendNotifier notifier;
     private final GatewayEnforcementService gatewayEnforcement;
     private final Clock clock;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     @Override
     @Transactional(readOnly = true)
@@ -183,6 +187,10 @@ public class SpendBudgetServiceImpl implements SpendBudgetService {
     @Transactional
     public List<SpendAlertDto> evaluate(String accountId) {
         UUID account = UUID.fromString(accountId);
+        if (entityManager != null) {   // two evaluations of one account (job + sync + console) would both pass the once-per-window check
+            entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:k))")
+                    .setParameter("k", "spend-evaluate:" + accountId).getSingleResult();
+        }
         List<SpendBudget> budgets = budgetRepository.findAllByAccountId(account);
         if (budgets.isEmpty()) {
             return List.of();

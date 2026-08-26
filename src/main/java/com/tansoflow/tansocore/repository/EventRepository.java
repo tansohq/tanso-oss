@@ -189,6 +189,8 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
         AND e.featureId IN :featureIds
         AND e.eventType IN :eventTypes
         AND e.occurredAt >= :start AND e.occurredAt < :end
+        AND (e.revenueUnit IS NULL OR e.revenueUnit = :currency)
+        AND (e.costUnit IS NULL OR e.costUnit = :currency)
         GROUP BY e.featureId
     """)
     List<Object[]> sumRevenueAndCostByFeature(
@@ -196,7 +198,8 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
             @Param("featureIds") Collection<UUID> featureIds,
             @Param("eventTypes") Collection<EventType> eventTypes,
             @Param("start") Instant start,
-            @Param("end") Instant end);
+            @Param("end") Instant end,
+            @Param("currency") com.tansoflow.tansocore.model.event.events.type.CostUnit currency);
 
     @Query("""
         SELECT e.customerId,

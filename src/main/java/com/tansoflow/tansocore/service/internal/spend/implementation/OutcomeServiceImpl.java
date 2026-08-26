@@ -181,9 +181,9 @@ public class OutcomeServiceImpl implements OutcomeService {
             UUID id = listed.getId();
             try {
                 transactionTemplate.executeWithoutResult(status -> sourceRepository.findById(id).ifPresent(s -> pullWindow(s, from, end)));
-            } catch (VendorApiException e) {
+            } catch (RuntimeException e) {
                 transactionTemplate.executeWithoutResult(status -> sourceRepository.findById(id).ifPresent(s -> markFailed(s, e)));
-                log.warn("Outcome sync failed for source {}: {}", id, e.getMessage());
+                log.warn("Outcome sync failed for source {}: {}", id, e.getMessage(), e instanceof VendorApiException ? null : e);
             }
         }
     }
@@ -208,7 +208,7 @@ public class OutcomeServiceImpl implements OutcomeService {
             o.setKind(r.kind());
             o.setExternalId(r.externalId());
             o.setTitle(r.title());
-            o.setUrl(r.url());
+            o.setUrl(httpOnly(r.url()));
             o.setActorEmail(r.actorEmail());
             o.setActorLogin(r.actorLogin());
             o.setOccurredAt(r.occurredAt());
@@ -244,7 +244,10 @@ public class OutcomeServiceImpl implements OutcomeService {
             o.setTitle(request.getTitle());
         }
         if (fresh || request.getUrl() != null) {
-            o.setUrl(request.getUrl());
+            if (request.getUrl() != null && !request.getUrl().isBlank() && httpOnly(request.getUrl()) == null) {
+                throw new IllegalArgumentException("url must start with http:// or https://");
+            }
+            o.setUrl(request.getUrl() == null || request.getUrl().isBlank() ? null : request.getUrl().trim());
         }
         if (fresh || request.getActorEmail() != null) {
             o.setActorEmail(request.getActorEmail() == null ? null : request.getActorEmail().trim().toLowerCase(Locale.ROOT));
@@ -407,9 +410,9 @@ public class OutcomeServiceImpl implements OutcomeService {
         sourceRepository.save(s);
     }
 
-    private void markFailed(OutcomeSourceConnection s, VendorApiException e) {
+    private void markFailed(OutcomeSourceConnection s, RuntimeException e) {
         s.setStatus(VendorConnectionStatus.ERROR);
-        s.setLastError(e.getMessage());
+        s.setLastError(e instanceof VendorApiException ? e.getMessage() : e.getClass().getSimpleName() + ": " + e.getMessage());
         sourceRepository.save(s);
     }
 
@@ -452,5 +455,14 @@ public class OutcomeServiceImpl implements OutcomeService {
                 .occurredAt(o.getOccurredAt())
                 .aiAssisted(o.isAiAssisted()).aiTool(o.getAiTool())
                 .build();
+    }
+
+    /** The console renders outcome links as anchors; anything but http(s) is dropped rather than stored. */
+    static String httpOnly(String url) {
+        if (url == null) {
+            return null;
+        }
+        String t = url.trim().toLowerCase(java.util.Locale.ROOT);
+        return t.startsWith("http://") || t.startsWith("https://") ? url.trim() : null;
     }
 }

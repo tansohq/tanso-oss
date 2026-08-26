@@ -29,6 +29,7 @@ services:
       APP_SECRETS_KEY: ${APP_SECRETS_KEY:?APP_SECRETS_KEY must be set — e.g. openssl rand -base64 48; it encrypts stored Stripe and vendor admin keys}
       APP_RESEND_API_KEY: ${APP_RESEND_API_KEY:-}
       APP_SPEND_ALERT_FROM: ${APP_SPEND_ALERT_FROM:-Tanso <alerts@your-domain.com>}
+      APP_SPEND_OUTBOUND_ALLOW_PRIVATE: ${APP_SPEND_OUTBOUND_ALLOW_PRIVATE:-true}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Optional MCP server for AI agents — both must be true to expose /mcp

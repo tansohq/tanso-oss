@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Check, RefreshCw } from "lucide-react"
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -48,11 +49,20 @@ export default function SpendAlertsPage() {
   const sendDigest = useSendSpendDigest()
   const settings = useSpendSettings()
 
+  if (alerts.error && !isBuildSideOff(alerts.error)) {
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>Could not load alerts</AlertTitle>
+        <AlertDescription>{alerts.error.message}</AlertDescription>
+      </Alert>
+    )
+  }
   if (isBuildSideOff(alerts.error)) {
     return (
       <p className="text-sm text-muted-foreground">
         The build side is switched off on this install
-        (APP_MODULES_BUILD_ENABLED=false).
+        (APP_MODULES_BUILD_ENABLED=false) — or the console&apos;s API base URL
+        does not reach it.
       </p>
     )
   }

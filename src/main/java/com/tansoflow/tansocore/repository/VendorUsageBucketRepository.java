@@ -39,6 +39,8 @@ public interface VendorUsageBucketRepository extends JpaRepository<VendorUsageBu
     @Query("DELETE FROM VendorUsageBucket b WHERE b.connectionId = :connectionId")
     int deleteByConnectionId(UUID connectionId);
 
+    long countByConnectionIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(UUID connectionId, Instant from, Instant to);
+
     List<VendorUsageBucket> findAllByAccountIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(
             UUID accountId, Instant from, Instant to);
 }

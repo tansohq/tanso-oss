@@ -68,8 +68,12 @@ public class SpendPnlServiceImpl implements SpendPnlService {
             throw new IllegalArgumentException("from must be before to");
         }
         UUID account = UUID.fromString(accountId);
-        List<SpendUnit> projects = unitRepository.findAllByAccountIdOrderByNameAsc(account).stream()
-                .filter(u -> u.getType() == SpendUnitType.PROJECT).toList();
+        List<SpendUnit> all = unitRepository.findAllByAccountIdOrderByNameAsc(account);
+        Map<UUID, SpendUnit> byId = new HashMap<>();
+        for (SpendUnit u : all) {
+            byId.put(u.getId(), u);
+        }
+        List<SpendUnit> projects = all.stream().filter(u -> u.getType() == SpendUnitType.PROJECT).toList();
         List<String> unlinked = new ArrayList<>();
         List<UUID> featureIds = new ArrayList<>();
         for (SpendUnit p : projects) {
@@ -82,8 +86,10 @@ public class SpendPnlServiceImpl implements SpendPnlService {
         // Serve side: what the feature earned and cost to serve, dollars on the events → cents here.
         Map<UUID, BigDecimal[]> serve = new HashMap<>();
         if (!featureIds.isEmpty()) {
+            // Only amounts stamped as currency (or unstamped legacy rows); a revenue in CREDITS is not dollars.
             for (Object[] row : eventRepository.sumRevenueAndCostByFeature(account, featureIds, REVENUE_EVENTS,
-                    start.atStartOfDay(ZoneOffset.UTC).toInstant(), end.atStartOfDay(ZoneOffset.UTC).toInstant())) {
+                    start.atStartOfDay(ZoneOffset.UTC).toInstant(), end.atStartOfDay(ZoneOffset.UTC).toInstant(),
+                    com.tansoflow.tansocore.model.event.events.type.CostUnit.CURRENCY)) {
                 serve.put((UUID) row[0], new BigDecimal[]{toCents((BigDecimal) row[1]), toCents((BigDecimal) row[2])});
             }
         }
@@ -122,6 +128,9 @@ public class SpendPnlServiceImpl implements SpendPnlService {
                     .netCents(serveMargin.subtract(buildCents))
                     .buildPerOutcomeCents(shipped == 0 ? null : buildCents.divide(BigDecimal.valueOf(shipped), 2, RoundingMode.HALF_UP))
                     .build());
+            if (hasLinkedProjectAncestor(p, byId)) {
+                continue;   // its build cost is already inside the ancestor's totalCents
+            }
             totalBuild = totalBuild.add(buildCents);
             totalRevenue = totalRevenue.add(s[0]);
             totalServe = totalServe.add(s[1]);
@@ -132,6 +141,22 @@ public class SpendPnlServiceImpl implements SpendPnlService {
                 .totalBuildCents(totalBuild).totalRevenueCents(totalRevenue).totalServeCostCents(totalServe)
                 .totalNetCents(totalRevenue.subtract(totalServe).subtract(totalBuild))
                 .build();
+    }
+
+    private static boolean hasLinkedProjectAncestor(SpendUnit unit, Map<UUID, SpendUnit> byId) {
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        UUID parent = unit.getParentId();
+        while (parent != null && seen.add(parent)) {
+            SpendUnit p = byId.get(parent);
+            if (p == null) {
+                return false;
+            }
+            if (p.getType() == SpendUnitType.PROJECT && p.getFeatureId() != null) {
+                return true;
+            }
+            parent = p.getParentId();
+        }
+        return false;
     }
 
     private static BigDecimal toCents(BigDecimal dollars) {

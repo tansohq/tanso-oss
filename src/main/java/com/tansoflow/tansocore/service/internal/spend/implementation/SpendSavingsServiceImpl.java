@@ -80,15 +80,15 @@ public class SpendSavingsServiceImpl implements SpendSavingsService {
         BigDecimal totalNoCache = BigDecimal.ZERO;
         boolean allRatesKnown = true;
         for (Map.Entry<String, long[]> e : tokens.entrySet()) {
-            String model = e.getKey().substring(e.getKey().indexOf('|') + 1);
+            String model = e.getKey().endsWith("|null") ? null : e.getKey().substring(e.getKey().indexOf('|') + 1);
             long[] t = e.getValue();
-            ModelPricingResolver.ResolvedPricing resolved = model == null || model.equals("null") ? null : pricingResolver.resolve(model);
+            ModelPricingResolver.ResolvedPricing resolved = model == null ? null : pricingResolver.resolve(model);
             SpendSavingsReportDto.SavingsRow.SavingsRowBuilder row = SpendSavingsReportDto.SavingsRow.builder()
                     .provider(providers.get(e.getKey())).model(model)
                     .uncachedInputTokens(t[0]).cacheReadTokens(t[1]).cacheCreationTokens(t[2]).outputTokens(t[3])
                     .cacheShare(share(t));
             if (resolved == null) {
-                unpriced.add(String.valueOf(model));
+                unpriced.add(model == null ? "(no model)" : model);
                 rows.add(row.priced(false).cacheRatesKnown(false)
                         .inputCostCents(BigDecimal.ZERO).noCacheCostCents(BigDecimal.ZERO).savedCents(BigDecimal.ZERO).build());
                 continue;

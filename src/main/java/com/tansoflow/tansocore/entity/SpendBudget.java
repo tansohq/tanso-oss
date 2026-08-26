@@ -87,7 +87,7 @@ public class SpendBudget {
     @Column(name = "enforced_at")
     private Instant enforcedAt;
 
-    @Column(name = "enforcement_target", length = 255)
+    @Column(name = "enforcement_target", length = Integer.MAX_VALUE)
     private String enforcementTarget;
 
     @Column(name = "enforcement_error", length = Integer.MAX_VALUE)

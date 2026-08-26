@@ -18,6 +18,11 @@ app:
     linear-base-url: ${APP_SPEND_LINEAR_BASE_URL:https://api.linear.app/graphql}
     cursor-base-url: ${APP_SPEND_CURSOR_BASE_URL:https://api.cursor.com}
     alert-from: ${APP_SPEND_ALERT_FROM:Tanso <alerts@your-domain.com>}   # sender for alert emails and the weekly digest (Resend)
+    outbound:
+      # Operator-typed URLs the server will call (LiteLLM proxy, webhook). Loopback and link-local
+      # (cloud metadata) are always refused; private ranges are allowed for self-hosted proxies.
+      allow-private: ${APP_SPEND_OUTBOUND_ALLOW_PRIVATE:true}
+      allow-loopback: ${APP_SPEND_OUTBOUND_ALLOW_LOOPBACK:false}
   telemetry:
     enabled: ${TANSO_TELEMETRY_ENABLED:true}
     endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping

@@ -32,6 +32,7 @@ public class SpendBudgetBumpRequest {
     @NotNull
     @Schema(description = "When the bump ends and the standing ceiling applies again.")
     private Instant expiresAt;
+    @jakarta.validation.constraints.Size(max = 255)
     @Schema(description = "Why — shown on the budget and in the digest.")
     private String reason;
 }

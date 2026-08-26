@@ -87,6 +87,10 @@ class VendorSyncServiceImplTest {
         when(anthropic.provider()).thenReturn(VendorProvider.ANTHROPIC);
         lenient().when(anthropic.maxWindowDays()).thenReturn(31);
         lenient().when(anthropic.pullActorMetrics(any(), any(), any(), any())).thenReturn(List.of());
+        // a Mockito mock does not run the interface's default pullAll; wire it to the two stubs
+        lenient().when(anthropic.pullAll(any(), any(), any(), any())).thenAnswer(inv -> new VendorUsagePuller.PullResult(
+                anthropic.pull(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2), inv.getArgument(3)),
+                anthropic.pullActorMetrics(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2), inv.getArgument(3))));
         service = new VendorSyncServiceImpl(connectionRepository, bucketRepository, actorMetricRepository, List.of(anthropic), transactionManager, budgetService);
         Account account = new Account();
         account.setId(accountId);
@@ -96,6 +100,7 @@ class VendorSyncServiceImplTest {
         connection.setProvider(VendorProvider.ANTHROPIC);
         connection.setAdminKey("sk-ant-admin01-x");
         lenient().when(connectionRepository.findByIdAndAccountId(connectionId, accountId)).thenReturn(Optional.of(connection));
+        lenient().when(connectionRepository.findById(connectionId)).thenReturn(Optional.of(connection));
     }
 
     @Test
@@ -190,7 +195,19 @@ class VendorSyncServiceImplTest {
         assertEquals(VendorConnectionStatus.ACTIVE, other.getStatus());
         assertNotNull(other.getLastSyncedAt());
         // one transaction per connection, plus one to record the failure outside the rolled-back one
-        verify(transactionManager, times(3)).getTransaction(any());
-        verify(transactionManager, times(1)).rollback(any());
+        // the pull runs outside any transaction now: one tx to mark the bad one failed, one to write the good one
+        verify(transactionManager, times(2)).getTransaction(any());
+        verify(transactionManager, never()).rollback(any());
+    }
+
+    @Test
+    void emptyPullOverAWindowThatHadRowsIsRefusedNotWiped() {
+        when(anthropic.pull(anyString(), any(), any(), any())).thenReturn(List.of());
+        when(bucketRepository.countByConnectionIdAndBucketStartGreaterThanEqualAndBucketStartLessThan(eq(connectionId), any(), any())).thenReturn(120L);
+        VendorApiException e = assertThrows(VendorApiException.class,
+                () -> service.sync(accountId.toString(), connectionId.toString(), LocalDate.of(2026, 8, 20), LocalDate.of(2026, 8, 22)));
+        assertTrue(e.getMessage().contains("120 rows were pulled before"));
+        verify(bucketRepository, never()).deleteWindow(any(), any(), any(), any());
+        assertEquals(VendorConnectionStatus.ERROR, connection.getStatus());
     }
 }

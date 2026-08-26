@@ -72,8 +72,9 @@ public class LiteLlmGateway {
                     .header("User-Agent", VendorErrors.USER_AGENT)
                     .body(body).retrieve().toBodilessEntity();
         } catch (RestClientResponseException e) {
+            String m = VendorErrors.jsonMessage(e.getResponseBodyAsString());
             throw new VendorApiException(e.getStatusCode().value(),
-                    "LiteLLM returned " + e.getStatusCode().value() + ": " + VendorErrors.message(e.getResponseBodyAsString()));
+                    "LiteLLM returned " + e.getStatusCode().value() + (m == null ? "" : ": " + m));
         } catch (ResourceAccessException e) {
             throw new VendorApiException("Could not reach LiteLLM at " + url + ": " + e.getMessage(), e);
         }

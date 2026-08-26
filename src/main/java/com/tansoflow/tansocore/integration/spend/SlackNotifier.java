@@ -58,7 +58,9 @@ public class SlackNotifier {
                     .toBodilessEntity();
             return true;
         } catch (RuntimeException e) {
-            log.warn("Slack webhook post failed for account {}: {}", accountId, e.getMessage());
+            // The message would carry the webhook URL, which is the secret.
+            log.warn("Slack webhook post failed for account {}: {}{}", accountId, e.getClass().getSimpleName(),
+                    e instanceof org.springframework.web.client.RestClientResponseException r ? " " + r.getStatusCode().value() : "");
             return false;
         }
     }

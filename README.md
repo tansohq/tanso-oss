@@ -424,6 +424,7 @@ supply them via environment variables. The common ones:
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
+| `APP_SPEND_OUTBOUND_ALLOW_PRIVATE` | Whether operator-typed URLs (LiteLLM proxy, webhook) may point at private ranges (default `true` — a self-hosted proxy lives there). Loopback and link-local (cloud metadata) are always refused. Set `false` on a multi-tenant install |
 | `APP_SPEND_ALERT_FROM` | Sender for alert emails and the weekly digest, via Resend (`APP_RESEND_API_KEY`); default `Tanso <alerts@your-domain.com>` |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for

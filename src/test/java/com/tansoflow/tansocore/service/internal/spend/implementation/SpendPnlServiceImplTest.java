@@ -73,7 +73,7 @@ class SpendPnlServiceImplTest {
         f.setName("AI Search");
         lenient().when(featureRepository.findByIdAndAccountId(featureId, account)).thenReturn(Optional.of(f));
         // revenue and cost arrive in dollars
-        lenient().when(eventRepository.sumRevenueAndCostByFeature(eq(account), eq(List.of(featureId)), any(), any(), any()))
+        lenient().when(eventRepository.sumRevenueAndCostByFeature(eq(account), eq(List.of(featureId)), any(), any(), any(), any()))
                 .thenReturn(List.<Object[]>of(new Object[]{featureId, new BigDecimal("1250.00"), new BigDecimal("310.50")}));
         lenient().when(allocationService.allocate(eq(account.toString()), any(), any())).thenReturn(SpendAllocationReportDto.builder().rows(List.of(
                 SpendAllocationReportDto.AllocationRow.builder().unitId(search.getId().toString()).name("AI search").totalCents(new BigDecimal("42000")).build(),
@@ -115,11 +115,30 @@ class SpendPnlServiceImplTest {
 
     @Test
     void featureWithNoEventsReadsAsZeroRevenueNotMissing() {
-        when(eventRepository.sumRevenueAndCostByFeature(eq(account), any(), any(), any(), any())).thenReturn(List.of());
+        when(eventRepository.sumRevenueAndCostByFeature(eq(account), any(), any(), any(), any(), any())).thenReturn(List.of());
         when(outcomeService.report(eq(account.toString()), any(), any())).thenReturn(SpendOutcomeReportDto.builder().rows(List.of()).build());
         SpendPnlReportDto.PnlRow row = service.report(account.toString(), null, null).getRows().get(0);
         assertEquals(0, BigDecimal.ZERO.compareTo(row.getRevenueCents()));
         assertEquals(0, new BigDecimal("-42000").compareTo(row.getNetCents()));
         assertNull(row.getBuildPerOutcomeCents());
+    }
+
+    @Test
+    void nestedLinkedProjectIsNotDoubleCountedInTotals() {
+        UUID childFeature = UUID.randomUUID();
+        SpendUnit child = unit("Search ranking", SpendUnitType.PROJECT, childFeature);
+        child.setParentId(search.getId());
+        when(unitRepository.findAllByAccountIdOrderByNameAsc(account)).thenReturn(List.of(search, child, orphan));
+        Feature f = new Feature();
+        f.setKey("ranking");
+        f.setName("Ranking");
+        when(featureRepository.findByIdAndAccountId(childFeature, account)).thenReturn(Optional.of(f));
+        when(allocationService.allocate(eq(account.toString()), any(), any())).thenReturn(SpendAllocationReportDto.builder().rows(List.of(
+                SpendAllocationReportDto.AllocationRow.builder().unitId(search.getId().toString()).name("AI search").totalCents(new BigDecimal("42000")).build(),
+                SpendAllocationReportDto.AllocationRow.builder().unitId(child.getId().toString()).name("Search ranking").totalCents(new BigDecimal("12000")).build()
+        )).build());
+        SpendPnlReportDto r = service.report(account.toString(), LocalDate.of(2026, 8, 1), LocalDate.of(2026, 8, 26));
+        assertEquals(2, r.getRows().size(), "the child still gets its own row");
+        assertEquals(0, new BigDecimal("42000").compareTo(r.getTotalBuildCents()), "42000 already contains the child's 12000");
     }
 }

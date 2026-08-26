@@ -144,6 +144,9 @@ function invalidateAllocation(queryClient: ReturnType<typeof useQueryClient>) {
   queryClient.invalidateQueries({ queryKey: ["spend-rules"] })
   queryClient.invalidateQueries({ queryKey: ["spend-allocation"] })
   queryClient.invalidateQueries({ queryKey: ["spend-budget"] })
+  queryClient.invalidateQueries({ queryKey: ["spend-pnl"] })
+  queryClient.invalidateQueries({ queryKey: ["outcome-report"] })
+  queryClient.invalidateQueries({ queryKey: ["spend-digest"] })
 }
 
 export function useCreateSpendUnit() {
@@ -168,7 +171,9 @@ export function useUpdateSpendUnit() {
           type: input.type,
           name: input.name,
           email: input.email,
+          githubLogin: input.githubLogin,
           parentId: input.parentId,
+          featureId: input.featureId,
         }),
       }),
     onSuccess: () => invalidateAllocation(queryClient),
@@ -250,8 +255,11 @@ export function useDeleteSpendBudget() {
       apiFetch<void>(`/api/v1/spend/units/${unitId}/budget`, {
         method: "DELETE",
       }),
-    onSuccess: (_d, unitId) =>
-      queryClient.invalidateQueries({ queryKey: ["spend-budget", unitId] }),
+    onSuccess: (_d, unitId) => {
+      // The GET now 404s; a refetch would keep the old data on screen.
+      queryClient.removeQueries({ queryKey: ["spend-budget", unitId] })
+      queryClient.invalidateQueries({ queryKey: ["spend-digest"] })
+    },
   })
 }
 
@@ -367,6 +375,8 @@ export function useUpdateSpendSettings() {
       queryClient.invalidateQueries({ queryKey: ["spend-settings"] })
       queryClient.invalidateQueries({ queryKey: ["spend-usage"] })
       queryClient.invalidateQueries({ queryKey: ["spend-allocation"] })
+      queryClient.invalidateQueries({ queryKey: ["outcome-report"] })
+      queryClient.invalidateQueries({ queryKey: ["spend-pnl"] })
     },
   })
 }

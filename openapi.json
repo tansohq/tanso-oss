@@ -322,7 +322,7 @@
                 "tags": [
                     "Spend \u2014 Units & Attribution"
                 ],
-                "summary": "Rename or re-parent a unit",
+                "summary": "Update a unit: name, parent, person fields, feature link",
                 "operationId": "updateUnit",
                 "parameters": [
                     {
@@ -8488,7 +8488,9 @@
                     },
                     "reason": {
                         "type": "string",
-                        "description": "Why \u2014 shown on the budget and in the digest."
+                        "description": "Why \u2014 shown on the budget and in the digest.",
+                        "maxLength": 255,
+                        "minLength": 0
                     }
                 },
                 "required": [

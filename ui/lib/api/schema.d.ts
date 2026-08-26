@@ -34,7 +34,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rename or re-parent a unit */
+        /** Update a unit: name, parent, person fields, feature link */
         put: operations["updateUnit"];
         post?: never;
         /** Remove a unit (its rules and budget go with it; children move up) */

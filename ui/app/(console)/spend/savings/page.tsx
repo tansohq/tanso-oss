@@ -61,7 +61,8 @@ export default function SpendSavingsPage() {
     return (
       <p className="text-sm text-muted-foreground">
         The build side is switched off on this install
-        (APP_MODULES_BUILD_ENABLED=false).
+        (APP_MODULES_BUILD_ENABLED=false) — or the console&apos;s API base URL
+        does not reach it.
       </p>
     )
   }

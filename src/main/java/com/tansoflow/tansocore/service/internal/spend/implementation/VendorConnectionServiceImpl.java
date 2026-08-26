@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.service.internal.spend.implementation;
 
+import com.tansoflow.tansocore.util.OutboundUrlPolicy;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.VendorConnection;
 import com.tansoflow.tansocore.integration.spend.VendorUsagePuller;
@@ -46,6 +47,7 @@ import java.util.UUID;
 @ConditionalOnProperty(name = "app.modules.build.enabled", havingValue = "true", matchIfMissing = true)
 public class VendorConnectionServiceImpl implements VendorConnectionService {
     private final VendorConnectionRepository vendorConnectionRepository;
+    private final OutboundUrlPolicy outboundUrlPolicy;
     private final VendorUsageBucketRepository vendorUsageBucketRepository;
     private final VendorActorMetricRepository vendorActorMetricRepository;
     private final AccountRepository accountRepository;
@@ -55,7 +57,9 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
                                        VendorUsageBucketRepository vendorUsageBucketRepository,
                                        VendorActorMetricRepository vendorActorMetricRepository,
                                        AccountRepository accountRepository,
-                                       List<VendorUsagePuller> pullers) {
+                                       List<VendorUsagePuller> pullers,
+                                      OutboundUrlPolicy outboundUrlPolicy) {
+        this.outboundUrlPolicy = outboundUrlPolicy;
         this.vendorConnectionRepository = vendorConnectionRepository;
         this.vendorUsageBucketRepository = vendorUsageBucketRepository;
         this.vendorActorMetricRepository = vendorActorMetricRepository;
@@ -84,6 +88,9 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
         }
         if (forProvider != null && !forProvider.requiresScope()) {
             scope = null;   // means nothing for this provider; storing it would only mislead the list
+        }
+        if (request.getProvider() == VendorProvider.LITELLM) {
+            scope = outboundUrlPolicy.check(scope, "The LiteLLM proxy URL");
         }
         String label = request.getLabel().trim();
         for (VendorConnection existing : vendorConnectionRepository.findAllByAccountIdOrderByCreatedAtAsc(account.getId())) {
@@ -149,7 +156,7 @@ public class VendorConnectionServiceImpl implements VendorConnectionService {
     }
 
     static String hintOf(String adminKey) {
-        return adminKey.length() <= 4 ? adminKey : adminKey.substring(adminKey.length() - 4);
+        return adminKey.length() <= 4 ? "" : adminKey.substring(adminKey.length() - 4);
     }
 
     private static VendorConnectionDto toDto(VendorConnection connection) {
