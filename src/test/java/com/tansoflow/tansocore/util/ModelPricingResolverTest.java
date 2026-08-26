@@ -266,4 +266,24 @@ class ModelPricingResolverTest {
         mp.setOutputCostPerMillion(BigDecimal.valueOf(15.0));
         return mp;
     }
+
+    @org.junit.jupiter.api.Test
+    void cacheAgesOutSoSqlEditsToPricingAreSeen() throws Exception {
+        com.tansoflow.tansocore.repository.ModelPricingRepository repo = org.mockito.Mockito.mock(com.tansoflow.tansocore.repository.ModelPricingRepository.class);
+        com.tansoflow.tansocore.entity.ModelPricing p = new com.tansoflow.tansocore.entity.ModelPricing();
+        p.setModel("m-1");
+        p.setProvider("anthropic");
+        p.setInputCostPerMillion(java.math.BigDecimal.ONE);
+        p.setOutputCostPerMillion(java.math.BigDecimal.TEN);
+        org.mockito.Mockito.when(repo.findById("m-1")).thenReturn(java.util.Optional.of(p));
+        ModelPricingResolver resolver = new ModelPricingResolver(repo);
+        resolver.resolve("m-1");
+        resolver.resolve("m-1");
+        org.mockito.Mockito.verify(repo, org.mockito.Mockito.times(1)).findById("m-1");
+        java.lang.reflect.Field f = ModelPricingResolver.class.getDeclaredField("loadedAt");
+        f.setAccessible(true);
+        f.set(resolver, System.currentTimeMillis() - ModelPricingResolver.TTL_MILLIS - 1);
+        resolver.resolve("m-1");
+        org.mockito.Mockito.verify(repo, org.mockito.Mockito.times(2)).findById("m-1");
+    }
 }

@@ -39,11 +39,17 @@ public class ModelPricingResolver {
 
     private final ConcurrentMap<String, Optional<ResolvedPricing>> resolutionCache = new ConcurrentHashMap<>();
     private volatile Map<String, List<String>> knownModelsByProvider = null;
+    /** Pricing is edited by SQL, not through an endpoint, so nothing can call invalidateCache(); age it out instead. */
+    static final long TTL_MILLIS = 10 * 60 * 1000L;
+    private volatile long loadedAt = System.currentTimeMillis();
 
     public record ResolvedPricing(ModelPricing pricing, boolean fuzzyMatched) {}
 
     public ResolvedPricing resolve(String modelName) {
         if (modelName == null || modelName.isBlank()) return null;
+        if (System.currentTimeMillis() - loadedAt > TTL_MILLIS) {
+            invalidateCache();
+        }
 
         Optional<ResolvedPricing> cached = resolutionCache.get(modelName);
         if (cached != null) {
@@ -93,6 +99,7 @@ public class ModelPricingResolver {
     public void invalidateCache() {
         knownModelsByProvider = null;
         resolutionCache.clear();
+        loadedAt = System.currentTimeMillis();
     }
 
     private Map<String, List<String>> loadKnownModels() {

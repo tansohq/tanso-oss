@@ -420,7 +420,7 @@ supply them via environment variables. The common ones:
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
-| `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) |
+| `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Spend group |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
