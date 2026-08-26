@@ -271,11 +271,13 @@ export default function SpendSavingsPage() {
                 },
                 {
                   onSuccess: setResult,
-                  onError: (e) =>
+                  onError: (e) => {
+                    setResult(null)
                     toast.add({
                       title: "Simulation failed",
                       description: e.message,
-                    }),
+                    })
+                  },
                 }
               )
             }}
@@ -349,7 +351,11 @@ export default function SpendSavingsPage() {
               <div>
                 <div className="text-xs text-muted-foreground">Difference</div>
                 <div className="text-xl tabular-nums">
-                  {result.deltaCents <= 0 ? "−" : "+"}
+                  {result.deltaCents === 0
+                    ? ""
+                    : result.deltaCents < 0
+                      ? "−"
+                      : "+"}
                   {formatCents(Math.abs(result.deltaCents))}
                 </div>
               </div>
