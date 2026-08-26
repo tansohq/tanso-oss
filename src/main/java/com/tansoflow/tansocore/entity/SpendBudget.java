@@ -65,6 +65,24 @@ public class SpendBudget {
     @Column(name = "monthly_mode", nullable = false, length = 16)
     private BudgetMode monthlyMode = BudgetMode.ALERT;
 
+    /** A temporary lift of the monthly ceiling: applies while now < bumpExpiresAt, then the standing ceiling is back. */
+    @Column(name = "bump_monthly_cents", precision = 18, scale = 2)
+    private BigDecimal bumpMonthlyCents;
+
+    @Column(name = "bump_expires_at")
+    private Instant bumpExpiresAt;
+
+    @Column(name = "bump_reason", length = 255)
+    private String bumpReason;
+
+    public boolean bumpActive(Instant now) {
+        return bumpMonthlyCents != null && bumpExpiresAt != null && now.isBefore(bumpExpiresAt);
+    }
+
+    public BigDecimal effectiveMonthlyCents(Instant now) {
+        return bumpActive(now) ? bumpMonthlyCents : monthlyCents;
+    }
+
     /** Where a Block budget was pushed as a hard limit ("litellm:team:backend"), when, or why it could not be. */
     @Column(name = "enforced_at")
     private Instant enforcedAt;

@@ -238,6 +238,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/units/{unitId}/budget/bump": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Lift the monthly ceiling until a date
+         * @description The standing ceiling is untouched and applies again when the bump expires; a Block budget is re-pushed to the gateway both times.
+         */
+        post: operations["bump"];
+        /** End a bump early */
+        delete: operations["clearBump"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/rules": {
         parameters: {
             query?: never;
@@ -250,6 +271,26 @@ export interface paths {
         put?: never;
         /** Map a vendor workspace, key or actor onto a unit */
         post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/reports/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What if this traffic had gone to another model
+         * @description The matched tokens re-priced at the target model's rates. Advice only — Tanso never routes.
+         */
+        post: operations["simulate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -350,6 +391,26 @@ export interface paths {
          * @description CSV with a header row. Required columns: description, amount (major units, e.g. dollars). Optional: kind (TOKEN, SEAT, TOOL, OTHER), model, quantity. periodEnd is inclusive.
          */
         post: operations["importCsv_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/digest/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send the weekly digest now
+         * @description To Slack, the webhook and the alert emails, whichever are configured. Monday 08:00 UTC otherwise, when enabled in settings.
+         */
+        post: operations["sendDigest"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1299,6 +1360,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/savings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What prompt caching is worth
+         * @description Per model: the input-side cost as billed against the same tokens with no cache. Defaults to the last 30 days.
+         */
+        get: operations["savings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/reports/reconcile": {
         parameters: {
             query?: never;
@@ -1339,6 +1420,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/spend/reports/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The price book
+         * @description Every model with a price, for the simulator's target list.
+         */
+        get: operations["models"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/spend/reports/allocation": {
         parameters: {
             query?: never;
@@ -1351,6 +1452,26 @@ export interface paths {
          * @description [from, to). Defaults to the last 30 days. Rules apply at report time.
          */
         get: operations["allocation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/spend/digest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview the weekly digest
+         * @description Last seven full UTC days against the seven before, per unit, with budget standing.
+         */
+        get: operations["digest"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2183,6 +2304,14 @@ export interface components {
             dailyResetsAt?: string;
             /** Format: date-time */
             monthlyResetsAt?: string;
+            /** @description The monthly ceiling in force right now: the bump while it lasts, else monthlyCents. */
+            effectiveMonthlyCents?: number;
+            bumpMonthlyCents?: number;
+            /** Format: date-time */
+            bumpExpiresAt?: string;
+            bumpReason?: string;
+            /** @description What the gateway itself has counted this month for the LiteLLM team/key/user this unit's rules name — the number LiteLLM enforces max_budget against, priced by its own model map. Null when the unit has no LiteLLM rule. */
+            gatewaySpentCents?: number;
             /** @description Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only. */
             enforcementTarget?: string;
             /** Format: date-time */
@@ -2195,6 +2324,14 @@ export interface components {
             workerNotice?: string;
             /** @description Slack incoming webhook URL (https://hooks.slack.com/services/…). Stored encrypted. Empty string removes it; null leaves it alone. */
             slackWebhookUrl?: string;
+            /** @description Generic webhook URL (https). Every alert and digest is POSTed as JSON with X-Tanso-Event. Stored encrypted. Empty string removes it; null leaves it alone. */
+            webhookUrl?: string;
+            /** @description Signing secret: requests carry X-Tanso-Signature: sha256=HMAC-SHA256(secret, body). Empty string removes it; null leaves it alone. */
+            webhookSecret?: string;
+            /** @description Comma-separated recipients for alerts and the digest. Empty string removes them; null leaves them alone. */
+            alertEmails?: string;
+            /** @description Send the weekly digest on Monday 08:00 UTC. */
+            digestEnabled?: boolean;
         };
         /** @description Generic API response wrapper */
         ApiResponseSpendSettingsDto: {
@@ -2211,6 +2348,11 @@ export interface components {
             workerNotice?: string;
             /** @description A Slack incoming webhook is stored for alerts. The URL itself is never returned. */
             slackConfigured?: boolean;
+            /** @description A generic webhook URL is stored. Never returned. */
+            webhookConfigured?: boolean;
+            webhookSigned?: boolean;
+            alertEmails?: string;
+            digestEnabled?: boolean;
         };
         ReplaceVendorKeyRequest: {
             /** @description The new vendor admin key. Stored encrypted; never returned. */
@@ -2231,7 +2373,7 @@ export interface components {
             label?: string;
             /** @description Last four characters of the admin key. The key itself is never returned. */
             keyHint?: string;
-            /** @description Provider scope: the GitHub organization for Copilot. Null otherwise. */
+            /** @description Provider scope: the GitHub organization for Copilot, the proxy URL for LiteLLM. Null for providers that have none. */
             scope?: string;
             /** @enum {string} */
             status?: "ACTIVE" | "ERROR";
@@ -2351,13 +2493,24 @@ export interface components {
             /** Format: int32 */
             imported?: number;
         };
+        SpendBudgetBumpRequest: {
+            /** @description The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling. */
+            monthlyCents: number;
+            /**
+             * Format: date-time
+             * @description When the bump ends and the standing ceiling applies again.
+             */
+            expiresAt: string;
+            /** @description Why — shown on the budget and in the digest. */
+            reason?: string;
+        };
         SpendAttributionRuleRequest: {
             spendUnitId: string;
             /** @enum {string} */
             provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
             /** @enum {string} */
             matchKind: "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR";
-            /** @description Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id). */
+            /** @description Vendor workspace/project id (LiteLLM: team_id), API key id (LiteLLM: the key), or actor (Claude Code email / OpenAI user id / LiteLLM user_id). */
             matchValue: string;
             /**
              * Format: int32
@@ -2383,6 +2536,59 @@ export interface components {
             matchValue?: string;
             /** Format: int32 */
             priority?: number;
+        };
+        SpendRouteSimulationRequest: {
+            /**
+             * Format: date
+             * @description Inclusive; default 30 days back.
+             */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive; default tomorrow.
+             */
+            to?: string;
+            /** @description The model whose traffic to re-price, as it appears on the usage report. */
+            fromModel: string;
+            /** @description A model in the price book. */
+            toModel: string;
+            /** @description Only traffic from this vendor workspace / project / team id. Null = all. */
+            workspaceId?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendRouteSimulationDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendRouteSimulationDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SpendRouteSimulationDto: {
+            /** Format: date */
+            from?: string;
+            /** Format: date */
+            to?: string;
+            fromModel?: string;
+            toModel?: string;
+            workspaceId?: string;
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /** Format: int64 */
+            requests?: number;
+            /** @description What the matched traffic cost by the price book. */
+            currentCents?: number;
+            /** @description The same tokens at the target model's rates. */
+            simulatedCents?: number;
+            /** @description simulated − current; negative is a saving. */
+            deltaCents?: number;
+            /** @description Things the number does not know: quality, latency, token-count drift between tokenizers, missing cache rates. */
+            caveats?: string[];
         };
         OutcomeRequest: {
             /** @enum {string} */
@@ -2527,6 +2733,47 @@ export interface components {
             createdAt?: string;
             lines?: components["schemas"]["Line"][];
         };
+        /** @description Generic API response wrapper */
+        ApiResponseSpendDigestDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendDigestDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        DeliveryDto: {
+            /** @description SENT, FAILED or NOT_CONFIGURED */
+            slack?: string;
+            webhook?: string;
+            email?: string;
+        };
+        DigestRow: {
+            unitId?: string;
+            name?: string;
+            cents?: number;
+            previousCents?: number;
+            /** @description Month-to-date against the effective monthly ceiling; null when the unit has no monthly budget. */
+            monthlySpentCents?: number;
+            monthlyLimitCents?: number;
+            bumpReason?: string;
+        };
+        SpendDigestDto: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive.
+             */
+            to?: string;
+            totalCents?: number;
+            previousTotalCents?: number;
+            unattributedCents?: number;
+            /** Format: int32 */
+            alertsFired?: number;
+            rows?: components["schemas"]["DigestRow"][];
+            /** @description Set by POST /digest/send: what happened on each channel. */
+            delivery?: components["schemas"]["DeliveryDto"];
+        };
         CreateVendorConnectionRequest: {
             /** @enum {string} */
             provider: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
@@ -2534,7 +2781,7 @@ export interface components {
             label: string;
             /** @description Vendor admin key. Stored encrypted; never returned. */
             adminKey: string;
-            /** @description Required for COPILOT: the GitHub organization name. Ignored by other providers. */
+            /** @description Copilot: the GitHub organization (required). LiteLLM: the proxy URL, e.g. https://llm.internal:4000 (required). Other providers: ignored and not stored. */
             scope?: string;
         };
         /** @description Generic API response wrapper */
@@ -2550,7 +2797,7 @@ export interface components {
             spendUnitId?: string;
             unitName?: string;
             /** @enum {string} */
-            kind?: "THRESHOLD" | "BREACH" | "SPIKE";
+            kind?: "THRESHOLD" | "BREACH" | "SPIKE" | "PROJECTED";
             /** @enum {string} */
             period?: "DAY" | "WEEK" | "MONTH" | "TOTAL";
             /** Format: date-time */
@@ -4030,6 +4277,50 @@ export interface components {
             meteredCostCents?: number;
         };
         /** @description Generic API response wrapper */
+        ApiResponseSpendSavingsReportDto: {
+            /** @description Response data */
+            data?: components["schemas"]["SpendSavingsReportDto"];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        SavingsRow: {
+            /** @enum {string} */
+            provider?: "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM";
+            model?: string;
+            /** Format: int64 */
+            uncachedInputTokens?: number;
+            /** Format: int64 */
+            cacheReadTokens?: number;
+            /** Format: int64 */
+            cacheCreationTokens?: number;
+            /** Format: int64 */
+            outputTokens?: number;
+            /** @description cacheRead / (uncached + cacheRead + cacheWrite), 0–1. */
+            cacheShare?: number;
+            /** @description Input-side cost as billed: uncached at the input rate, cache reads and writes at their rates. */
+            inputCostCents?: number;
+            /** @description The same input tokens with no cache: everything at the input rate. */
+            noCacheCostCents?: number;
+            /** @description noCacheCostCents − inputCostCents. Negative when cache writes cost more than the reads saved. */
+            savedCents?: number;
+            priced?: boolean;
+            /** @description False when the price book has no cache rates for the model — the row then assumes cache tokens cost the input rate, i.e. zero saving. */
+            cacheRatesKnown?: boolean;
+        };
+        SpendSavingsReportDto: {
+            /** Format: date */
+            from?: string;
+            /**
+             * Format: date
+             * @description Exclusive.
+             */
+            to?: string;
+            totals?: components["schemas"]["SavingsRow"];
+            byModel?: components["schemas"]["SavingsRow"][];
+            unpricedModels?: string[];
+        };
+        /** @description Generic API response wrapper */
         ApiResponseSpendReconcileReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendReconcileReportDto"];
@@ -4107,6 +4398,22 @@ export interface components {
             totalSpendCents?: number;
             /** @description Total spend over total outcomes; null when there are no outcomes. */
             costPerOutcomeCents?: number;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseListPriceBookModelDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PriceBookModelDto"][];
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PriceBookModelDto: {
+            provider?: string;
+            model?: string;
+            inputCostPerMillion?: number;
+            outputCostPerMillion?: number;
+            cacheReadCostPerMillion?: number;
+            cacheWriteCostPerMillion?: number;
         };
         AllocationRow: {
             unitId?: string;
@@ -5309,6 +5616,54 @@ export interface operations {
             };
         };
     };
+    bump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendBudgetBumpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
+    clearBump: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                unitId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendBudgetDto"];
+                };
+            };
+        };
+    };
     listRules: {
         parameters: {
             query?: never;
@@ -5349,6 +5704,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendAttributionRuleDto"];
+                };
+            };
+        };
+    };
+    simulate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendRouteSimulationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendRouteSimulationDto"];
                 };
             };
         };
@@ -5538,6 +5917,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVendorInvoiceDto"];
+                };
+            };
+        };
+    };
+    sendDigest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendDigestDto"];
                 };
             };
         };
@@ -7423,6 +7822,29 @@ export interface operations {
             };
         };
     };
+    savings: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendSavingsReportDto"];
+                };
+            };
+        };
+    };
     reconcile: {
         parameters: {
             query?: {
@@ -7473,6 +7895,26 @@ export interface operations {
             };
         };
     };
+    models: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListPriceBookModelDto"];
+                };
+            };
+        };
+    };
     allocation: {
         parameters: {
             query?: {
@@ -7494,6 +7936,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseSpendAllocationReportDto"];
+                };
+            };
+        };
+    };
+    digest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSpendDigestDto"];
                 };
             };
         };

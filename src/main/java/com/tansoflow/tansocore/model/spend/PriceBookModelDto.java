@@ -15,15 +15,20 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend;
 
-public enum ExternalApiKeyType {
-    STRIPE_API_KEY,
+import lombok.Builder;
+import lombok.Getter;
 
-    // Stripe webhook signing secret type
-    WEBHOOK_SECRET_SIGNING,
-    // Slack incoming webhook URL for spend alerts
-    SLACK_SPEND_WEBHOOK,
-    SPEND_WEBHOOK,
-    SPEND_WEBHOOK_SECRET,
+import java.math.BigDecimal;
+
+@Getter
+@Builder
+public class PriceBookModelDto {
+    private String provider;
+    private String model;
+    private BigDecimal inputCostPerMillion;
+    private BigDecimal outputCostPerMillion;
+    private BigDecimal cacheReadCostPerMillion;
+    private BigDecimal cacheWriteCostPerMillion;
 }

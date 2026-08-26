@@ -20,6 +20,7 @@ package com.tansoflow.tansocore.service.internal.spend.implementation;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.ExternalApiKey;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyEntityName;
+import com.tansoflow.tansocore.integration.spend.SpendNotifier;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyType;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
 import com.tansoflow.tansocore.model.spend.SpendSettingsDto;
@@ -61,9 +62,31 @@ public class SpendSettingsServiceImpl implements SpendSettingsService {
             }
             setting.setSpendPersonLevelEnabled(request.getPersonLevelEnabled());
         }
+        if (request.getAlertEmails() != null) {
+            String emails = String.join(", ", SpendNotifier.recipients(request.getAlertEmails()));
+            for (String e : SpendNotifier.recipients(emails)) {
+                if (!e.contains("@")) {
+                    throw new IllegalArgumentException("Not an email address: " + e);
+                }
+            }
+            setting.setSpendAlertEmails(emails.isEmpty() ? null : emails);
+        }
+        if (request.getDigestEnabled() != null) {
+            setting.setSpendDigestEnabled(request.getDigestEnabled());
+        }
         accountSettingRepository.save(setting);
+        UUID id = UUID.fromString(accountId);
+        if (request.getWebhookUrl() != null) {
+            String url = request.getWebhookUrl().trim();
+            if (!url.isEmpty() && !url.startsWith("https://") && !url.startsWith("http://")) {
+                throw new IllegalArgumentException("The webhook URL must start with https:// (or http:// on a private network)");
+            }
+            storeSecret(id, ExternalApiKeyType.SPEND_WEBHOOK, ExternalApiKeyEntityName.WEBHOOK, url);
+        }
+        if (request.getWebhookSecret() != null) {
+            storeSecret(id, ExternalApiKeyType.SPEND_WEBHOOK_SECRET, ExternalApiKeyEntityName.WEBHOOK, request.getWebhookSecret().trim());
+        }
         if (request.getSlackWebhookUrl() != null) {
-            UUID id = UUID.fromString(accountId);
             ExternalApiKey row = externalApiKeyRepository
                     .findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.SLACK_SPEND_WEBHOOK.name(), id);
             String url = request.getSlackWebhookUrl().trim();
@@ -89,6 +112,25 @@ public class SpendSettingsServiceImpl implements SpendSettingsService {
         return toDto(setting);
     }
 
+    private void storeSecret(UUID account, ExternalApiKeyType type, ExternalApiKeyEntityName entity, String value) {
+        ExternalApiKey row = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(type.name(), account);
+        if (value.isEmpty()) {
+            if (row != null) {
+                externalApiKeyRepository.delete(row);
+            }
+            return;
+        }
+        if (row == null) {
+            row = new ExternalApiKey();
+            row.setAccount(account);
+            row.setExternalApiEntityName(entity.name());
+            row.setKeyType(type.name());
+            row.setIsActive(true);
+        }
+        row.setKeyValue(value);
+        externalApiKeyRepository.save(row);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public boolean personLevelEnabled(String accountId) {
@@ -107,7 +149,13 @@ public class SpendSettingsServiceImpl implements SpendSettingsService {
     private SpendSettingsDto toDto(AccountSetting setting) {
         boolean slack = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(
                 ExternalApiKeyType.SLACK_SPEND_WEBHOOK.name(), setting.getId()) != null;
+        boolean webhook = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(
+                ExternalApiKeyType.SPEND_WEBHOOK.name(), setting.getId()) != null;
+        boolean signed = externalApiKeyRepository.findExternalApiKeyByKeyTypeAndAccount(
+                ExternalApiKeyType.SPEND_WEBHOOK_SECRET.name(), setting.getId()) != null;
         return SpendSettingsDto.builder()
+                .webhookConfigured(webhook).webhookSigned(signed)
+                .alertEmails(setting.getSpendAlertEmails()).digestEnabled(setting.isSpendDigestEnabled())
                 .personLevelEnabled(setting.isSpendPersonLevelEnabled())
                 .workerNotice(setting.getSpendWorkerNotice())
                 .slackConfigured(slack)

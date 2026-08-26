@@ -224,7 +224,7 @@ export default function SpendConnectionsPage() {
           data={connections.data ?? []}
           isLoading={connections.isPending}
           emptyTitle="No vendors connected"
-          emptyDescription="Connect an Anthropic or OpenAI admin key, a Cursor admin key or a Copilot token to start pulling internal spend."
+          emptyDescription="Connect an Anthropic or OpenAI admin key, a Cursor admin key, a Copilot token or a LiteLLM proxy to start pulling internal spend."
         />
       )}
       <Sheet open={open} onOpenChange={setOpen}>

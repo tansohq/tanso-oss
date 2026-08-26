@@ -6,7 +6,8 @@ export type {
 
 // Report shapes are hand-written on purpose: the generated schema marks every field optional,
 // which would push null-handling into every cell. Keep in step with model/spend/*.java.
-export type VendorProvider = "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT"
+export type VendorProvider =
+  "ANTHROPIC" | "OPENAI" | "CURSOR" | "COPILOT" | "LITELLM"
 
 export interface VendorInvoiceLineDto {
   description: string
@@ -99,7 +100,7 @@ export interface SpendReconcileReportDto {
 // ---- phase 2: allocate + control
 export type SpendUnitType = "TEAM" | "PERSON" | "PROJECT"
 export type AttributionMatchKind = "WORKSPACE_ID" | "API_KEY_ID" | "ACTOR"
-export type SpendAlertKind = "THRESHOLD" | "BREACH" | "SPIKE"
+export type SpendAlertKind = "THRESHOLD" | "BREACH" | "SPIKE" | "PROJECTED"
 export type BudgetMode = "ALERT" | "BLOCK"
 
 export interface SpendUnitDto {
@@ -151,6 +152,11 @@ export interface SpendBudgetDto {
   monthlySpentCents: number
   dailyResetsAt?: string
   monthlyResetsAt?: string
+  effectiveMonthlyCents?: number | null
+  gatewaySpentCents?: number | null
+  bumpMonthlyCents?: number | null
+  bumpExpiresAt?: string | null
+  bumpReason?: string | null
   enforcementTarget?: string | null
   enforcedAt?: string | null
   enforcementError?: string | null
@@ -175,6 +181,35 @@ export interface SpendSettingsDto {
   personLevelEnabled: boolean
   workerNotice?: string | null
   slackConfigured: boolean
+  webhookConfigured: boolean
+  webhookSigned: boolean
+  alertEmails?: string | null
+  digestEnabled: boolean
+}
+
+export interface SpendDigestRow {
+  unitId: string
+  name: string
+  cents: number
+  previousCents: number
+  monthlySpentCents?: number | null
+  monthlyLimitCents?: number | null
+  bumpReason?: string | null
+}
+
+export interface SpendDigestDto {
+  from: string
+  to: string
+  totalCents: number
+  previousTotalCents: number
+  unattributedCents: number
+  alertsFired: number
+  rows: SpendDigestRow[]
+  delivery?: {
+    slack: "SENT" | "FAILED" | "NOT_CONFIGURED"
+    webhook: "SENT" | "FAILED" | "NOT_CONFIGURED"
+    email: "SENT" | "FAILED" | "NOT_CONFIGURED"
+  } | null
 }
 
 // ---- phase 3: outcomes
@@ -233,4 +268,55 @@ export interface SpendOutcomeReportDto {
   unattributedOutcomes: number
   totalSpendCents: number
   costPerOutcomeCents?: number | null
+}
+
+// ---- phase 7: savings + route simulator
+
+export interface SavingsRow {
+  provider?: VendorProvider
+  model?: string | null
+  uncachedInputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  outputTokens: number
+  cacheShare: number
+  inputCostCents: number
+  noCacheCostCents: number
+  savedCents: number
+  priced: boolean
+  cacheRatesKnown: boolean
+}
+
+export interface SpendSavingsReportDto {
+  from: string
+  to: string
+  totals: SavingsRow
+  byModel: SavingsRow[]
+  unpricedModels: string[]
+}
+
+export interface SpendRouteSimulationDto {
+  from: string
+  to: string
+  fromModel: string
+  toModel: string
+  workspaceId?: string | null
+  uncachedInputTokens: number
+  cacheReadTokens: number
+  cacheCreationTokens: number
+  outputTokens: number
+  requests?: number | null
+  currentCents: number
+  simulatedCents: number
+  deltaCents: number
+  caveats: string[]
+}
+
+export interface PriceBookModelDto {
+  provider: string
+  model: string
+  inputCostPerMillion: number
+  outputCostPerMillion: number
+  cacheReadCostPerMillion?: number | null
+  cacheWriteCostPerMillion?: number | null
 }

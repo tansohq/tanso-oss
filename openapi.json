@@ -1123,6 +1123,87 @@
                 ]
             }
         },
+        "/api/v1/spend/units/{unitId}/budget/bump": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Lift the monthly ceiling until a date",
+                "description": "The standing ceiling is untouched and applies again when the bump expires; a Block budget is re-pushed to the gateway both times.",
+                "operationId": "bump",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendBudgetBumpRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "End a bump early",
+                "operationId": "clearBump",
+                "parameters": [
+                    {
+                        "name": "unitId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendBudgetDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/rules": {
             "get": {
                 "tags": [
@@ -1171,6 +1252,43 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseSpendAttributionRuleDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/reports/simulate": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "What if this traffic had gone to another model",
+                "description": "The matched tokens re-priced at the target model's rates. Advice only \u2014 Tanso never routes.",
+                "operationId": "simulate",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendRouteSimulationRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendRouteSimulationDto"
                                 }
                             }
                         }
@@ -1499,6 +1617,33 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseVendorInvoiceDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/digest/send": {
+            "post": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Send the weekly digest now",
+                "description": "To Slack, the webhook and the alert emails, whichever are configured. Monday 08:00 UTC otherwise, when enabled in settings.",
+                "operationId": "sendDigest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendDigestDto"
                                 }
                             }
                         }
@@ -5028,6 +5173,53 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/savings": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "What prompt caching is worth",
+                "description": "Per model: the input-side cost as billed against the same tokens with no cache. Defaults to the last 30 days.",
+                "operationId": "savings",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendSavingsReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/reports/reconcile": {
             "get": {
                 "tags": [
@@ -5126,6 +5318,33 @@
                 ]
             }
         },
+        "/api/v1/spend/reports/models": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Reports"
+                ],
+                "summary": "The price book",
+                "description": "Every model with a price, for the simulator's target list.",
+                "operationId": "models",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseListPriceBookModelDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/spend/reports/allocation": {
             "get": {
                 "tags": [
@@ -5163,6 +5382,33 @@
                             "*/*": {
                                 "schema": {
                                     "$ref": "#/components/schemas/ApiResponseSpendAllocationReportDto"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/spend/digest": {
+            "get": {
+                "tags": [
+                    "Spend \u2014 Budgets & Alerts"
+                ],
+                "summary": "Preview the weekly digest",
+                "description": "Last seven full UTC days against the seven before, per unit, with budget standing.",
+                "operationId": "digest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSpendDigestDto"
                                 }
                             }
                         }
@@ -7728,6 +7974,24 @@
                         "type": "string",
                         "format": "date-time"
                     },
+                    "effectiveMonthlyCents": {
+                        "type": "number",
+                        "description": "The monthly ceiling in force right now: the bump while it lasts, else monthlyCents."
+                    },
+                    "bumpMonthlyCents": {
+                        "type": "number"
+                    },
+                    "bumpExpiresAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "bumpReason": {
+                        "type": "string"
+                    },
+                    "gatewaySpentCents": {
+                        "type": "number",
+                        "description": "What the gateway itself has counted this month for the LiteLLM team/key/user this unit's rules name \u2014 the number LiteLLM enforces max_budget against, priced by its own model map. Null when the unit has no LiteLLM rule."
+                    },
                     "enforcementTarget": {
                         "type": "string",
                         "description": "Where a Block budget is enforced as a hard limit (e.g. litellm:team:backend); null when advisory only."
@@ -7754,6 +8018,22 @@
                     "slackWebhookUrl": {
                         "type": "string",
                         "description": "Slack incoming webhook URL (https://hooks.slack.com/services/\u2026). Stored encrypted. Empty string removes it; null leaves it alone."
+                    },
+                    "webhookUrl": {
+                        "type": "string",
+                        "description": "Generic webhook URL (https). Every alert and digest is POSTed as JSON with X-Tanso-Event. Stored encrypted. Empty string removes it; null leaves it alone."
+                    },
+                    "webhookSecret": {
+                        "type": "string",
+                        "description": "Signing secret: requests carry X-Tanso-Signature: sha256=HMAC-SHA256(secret, body). Empty string removes it; null leaves it alone."
+                    },
+                    "alertEmails": {
+                        "type": "string",
+                        "description": "Comma-separated recipients for alerts and the digest. Empty string removes them; null leaves them alone."
+                    },
+                    "digestEnabled": {
+                        "type": "boolean",
+                        "description": "Send the weekly digest on Monday 08:00 UTC."
                     }
                 }
             },
@@ -7791,6 +8071,19 @@
                     "slackConfigured": {
                         "type": "boolean",
                         "description": "A Slack incoming webhook is stored for alerts. The URL itself is never returned."
+                    },
+                    "webhookConfigured": {
+                        "type": "boolean",
+                        "description": "A generic webhook URL is stored. Never returned."
+                    },
+                    "webhookSigned": {
+                        "type": "boolean"
+                    },
+                    "alertEmails": {
+                        "type": "string"
+                    },
+                    "digestEnabled": {
+                        "type": "boolean"
                     }
                 }
             },
@@ -7852,7 +8145,7 @@
                     },
                     "scope": {
                         "type": "string",
-                        "description": "Provider scope: the GitHub organization for Copilot. Null otherwise."
+                        "description": "Provider scope: the GitHub organization for Copilot, the proxy URL for LiteLLM. Null for providers that have none."
                     },
                     "status": {
                         "type": "string",
@@ -8127,6 +8420,28 @@
                     }
                 }
             },
+            "SpendBudgetBumpRequest": {
+                "type": "object",
+                "properties": {
+                    "monthlyCents": {
+                        "type": "number",
+                        "description": "The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling."
+                    },
+                    "expiresAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When the bump ends and the standing ceiling applies again."
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why \u2014 shown on the budget and in the digest."
+                    }
+                },
+                "required": [
+                    "expiresAt",
+                    "monthlyCents"
+                ]
+            },
             "SpendAttributionRuleRequest": {
                 "type": "object",
                 "properties": {
@@ -8154,7 +8469,7 @@
                     },
                     "matchValue": {
                         "type": "string",
-                        "description": "Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id).",
+                        "description": "Vendor workspace/project id (LiteLLM: team_id), API key id (LiteLLM: the key), or actor (Claude Code email / OpenAI user id / LiteLLM user_id).",
                         "maxLength": 255,
                         "minLength": 0
                     },
@@ -8224,6 +8539,120 @@
                     "priority": {
                         "type": "integer",
                         "format": "int32"
+                    }
+                }
+            },
+            "SpendRouteSimulationRequest": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Inclusive; default 30 days back."
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive; default tomorrow."
+                    },
+                    "fromModel": {
+                        "type": "string",
+                        "description": "The model whose traffic to re-price, as it appears on the usage report.",
+                        "minLength": 1
+                    },
+                    "toModel": {
+                        "type": "string",
+                        "description": "A model in the price book.",
+                        "minLength": 1
+                    },
+                    "workspaceId": {
+                        "type": "string",
+                        "description": "Only traffic from this vendor workspace / project / team id. Null = all."
+                    }
+                },
+                "required": [
+                    "fromModel",
+                    "toModel"
+                ]
+            },
+            "ApiResponseSpendRouteSimulationDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendRouteSimulationDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SpendRouteSimulationDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "fromModel": {
+                        "type": "string"
+                    },
+                    "toModel": {
+                        "type": "string"
+                    },
+                    "workspaceId": {
+                        "type": "string"
+                    },
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "requests": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "currentCents": {
+                        "type": "number",
+                        "description": "What the matched traffic cost by the price book."
+                    },
+                    "simulatedCents": {
+                        "type": "number",
+                        "description": "The same tokens at the target model's rates."
+                    },
+                    "deltaCents": {
+                        "type": "number",
+                        "description": "simulated \u2212 current; negative is a saving."
+                    },
+                    "caveats": {
+                        "type": "array",
+                        "description": "Things the number does not know: quality, latency, token-count drift between tokenizers, missing cache rates.",
+                        "items": {
+                            "type": "string"
+                        }
                     }
                 }
             },
@@ -8629,6 +9058,105 @@
                     }
                 }
             },
+            "ApiResponseSpendDigestDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendDigestDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "DeliveryDto": {
+                "type": "object",
+                "properties": {
+                    "slack": {
+                        "type": "string",
+                        "description": "SENT, FAILED or NOT_CONFIGURED"
+                    },
+                    "webhook": {
+                        "type": "string"
+                    },
+                    "email": {
+                        "type": "string"
+                    }
+                }
+            },
+            "DigestRow": {
+                "type": "object",
+                "properties": {
+                    "unitId": {
+                        "type": "string"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "cents": {
+                        "type": "number"
+                    },
+                    "previousCents": {
+                        "type": "number"
+                    },
+                    "monthlySpentCents": {
+                        "type": "number",
+                        "description": "Month-to-date against the effective monthly ceiling; null when the unit has no monthly budget."
+                    },
+                    "monthlyLimitCents": {
+                        "type": "number"
+                    },
+                    "bumpReason": {
+                        "type": "string"
+                    }
+                }
+            },
+            "SpendDigestDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive."
+                    },
+                    "totalCents": {
+                        "type": "number"
+                    },
+                    "previousTotalCents": {
+                        "type": "number"
+                    },
+                    "unattributedCents": {
+                        "type": "number"
+                    },
+                    "alertsFired": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "rows": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/DigestRow"
+                        }
+                    },
+                    "delivery": {
+                        "$ref": "#/components/schemas/DeliveryDto",
+                        "description": "Set by POST /digest/send: what happened on each channel."
+                    }
+                }
+            },
             "CreateVendorConnectionRequest": {
                 "type": "object",
                 "properties": {
@@ -8655,7 +9183,7 @@
                     },
                     "scope": {
                         "type": "string",
-                        "description": "Required for COPILOT: the GitHub organization name. Ignored by other providers.",
+                        "description": "Copilot: the GitHub organization (required). LiteLLM: the proxy URL, e.g. https://llm.internal:4000 (required). Other providers: ignored and not stored.",
                         "maxLength": 200,
                         "minLength": 0
                     }
@@ -8706,7 +9234,8 @@
                         "enum": [
                             "THRESHOLD",
                             "BREACH",
-                            "SPIKE"
+                            "SPIKE",
+                            "PROJECTED"
                         ]
                     },
                     "period": {
@@ -12195,6 +12724,112 @@
                     }
                 }
             },
+            "ApiResponseSpendSavingsReportDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/SpendSavingsReportDto",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "SavingsRow": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string",
+                        "enum": [
+                            "ANTHROPIC",
+                            "OPENAI",
+                            "CURSOR",
+                            "COPILOT",
+                            "LITELLM"
+                        ]
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "uncachedInputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheReadTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheCreationTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "outputTokens": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "cacheShare": {
+                        "type": "number",
+                        "description": "cacheRead / (uncached + cacheRead + cacheWrite), 0\u20131."
+                    },
+                    "inputCostCents": {
+                        "type": "number",
+                        "description": "Input-side cost as billed: uncached at the input rate, cache reads and writes at their rates."
+                    },
+                    "noCacheCostCents": {
+                        "type": "number",
+                        "description": "The same input tokens with no cache: everything at the input rate."
+                    },
+                    "savedCents": {
+                        "type": "number",
+                        "description": "noCacheCostCents \u2212 inputCostCents. Negative when cache writes cost more than the reads saved."
+                    },
+                    "priced": {
+                        "type": "boolean"
+                    },
+                    "cacheRatesKnown": {
+                        "type": "boolean",
+                        "description": "False when the price book has no cache rates for the model \u2014 the row then assumes cache tokens cost the input rate, i.e. zero saving."
+                    }
+                }
+            },
+            "SpendSavingsReportDto": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string",
+                        "format": "date"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date",
+                        "description": "Exclusive."
+                    },
+                    "totals": {
+                        "$ref": "#/components/schemas/SavingsRow"
+                    },
+                    "byModel": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/SavingsRow"
+                        }
+                    },
+                    "unpricedModels": {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
             "ApiResponseSpendReconcileReportDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -12383,6 +13018,52 @@
                     "costPerOutcomeCents": {
                         "type": "number",
                         "description": "Total spend over total outcomes; null when there are no outcomes."
+                    }
+                }
+            },
+            "ApiResponseListPriceBookModelDto": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "type": "array",
+                        "description": "Response data",
+                        "items": {
+                            "$ref": "#/components/schemas/PriceBookModelDto"
+                        }
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error"
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PriceBookModelDto": {
+                "type": "object",
+                "properties": {
+                    "provider": {
+                        "type": "string"
+                    },
+                    "model": {
+                        "type": "string"
+                    },
+                    "inputCostPerMillion": {
+                        "type": "number"
+                    },
+                    "outputCostPerMillion": {
+                        "type": "number"
+                    },
+                    "cacheReadCostPerMillion": {
+                        "type": "number"
+                    },
+                    "cacheWriteCostPerMillion": {
+                        "type": "number"
                     }
                 }
             },

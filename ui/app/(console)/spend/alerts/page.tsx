@@ -19,8 +19,14 @@ import { formatCents } from "@/features/spend/format"
 import {
   useAckSpendAlert,
   useEvaluateBudgets,
+  useSendSpendDigest,
 } from "@/features/spend/mutations"
-import { isBuildSideOff, useSpendAlerts } from "@/features/spend/queries"
+import {
+  isBuildSideOff,
+  useSpendAlerts,
+  useSpendDigest,
+  useSpendSettings,
+} from "@/features/spend/queries"
 import type { SpendAlertKind } from "@/features/spend/types"
 
 const kindVariant: Record<
@@ -30,6 +36,7 @@ const kindVariant: Record<
   THRESHOLD: "secondary",
   BREACH: "destructive",
   SPIKE: "default",
+  PROJECTED: "secondary",
 }
 
 export default function SpendAlertsPage() {
@@ -37,6 +44,9 @@ export default function SpendAlertsPage() {
   const alerts = useSpendAlerts(tab === "open")
   const ack = useAckSpendAlert()
   const evaluate = useEvaluateBudgets()
+  const digest = useSpendDigest()
+  const sendDigest = useSendSpendDigest()
+  const settings = useSpendSettings()
 
   if (isBuildSideOff(alerts.error)) {
     return (
@@ -164,6 +174,76 @@ export default function SpendAlertsPage() {
           )}
         </TableBody>
       </Table>
+      <section className="mt-4 rounded-lg border p-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="text-base font-semibold">Weekly digest</h2>
+            <p className="text-sm text-muted-foreground">
+              {digest.data
+                ? `${digest.data.from} to ${digest.data.to} (exclusive): ${formatCents(digest.data.totalCents)} vs ${formatCents(digest.data.previousTotalCents)} the week before; ${digest.data.alertsFired} alert${digest.data.alertsFired === 1 ? "" : "s"} fired.`
+                : "Last seven full days against the seven before, per unit."}{" "}
+              {settings.data?.digestEnabled
+                ? "Goes out Monday 08:00 UTC."
+                : "Not scheduled — switch it on under Teams → Settings to send it Monday 08:00 UTC."}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            disabled={sendDigest.isPending}
+            onClick={() =>
+              sendDigest.mutate(undefined, {
+                onSuccess: (sent) => {
+                  const d = sent.delivery
+                  const word = (o?: string) =>
+                    o === "SENT" ? "sent" : o === "FAILED" ? "failed" : "off"
+                  const anyFailed =
+                    d && [d.slack, d.webhook, d.email].includes("FAILED")
+                  toast.add({
+                    title: anyFailed ? "Digest partly sent" : "Digest sent",
+                    description: d
+                      ? `Slack ${word(d.slack)} · webhook ${word(d.webhook)} · email ${word(d.email)}`
+                      : undefined,
+                  })
+                },
+                onError: (e) =>
+                  toast.add({ title: "Send failed", description: e.message }),
+              })
+            }
+          >
+            Send now
+          </Button>
+        </div>
+        {digest.data && digest.data.rows.length > 0 && (
+          <Table className="mt-3">
+            <TableHeader>
+              <TableRow>
+                <TableHead>Unit</TableHead>
+                <TableHead className="text-right">This week</TableHead>
+                <TableHead className="text-right">Week before</TableHead>
+                <TableHead>Month to date</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {digest.data.rows.map((r) => (
+                <TableRow key={r.unitId}>
+                  <TableCell>{r.name}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatCents(r.cents)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatCents(r.previousCents)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {r.monthlyLimitCents != null
+                      ? `${formatCents(r.monthlySpentCents ?? 0)} of ${formatCents(r.monthlyLimitCents)}${r.bumpReason ? ` (bumped: ${r.bumpReason})` : ""}`
+                      : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
     </>
   )
 }

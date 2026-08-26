@@ -20,7 +20,7 @@ package com.tansoflow.tansocore.service.internal.spend.implementation;
 import com.tansoflow.tansocore.entity.SpendAlert;
 import com.tansoflow.tansocore.entity.SpendBudget;
 import com.tansoflow.tansocore.entity.SpendUnit;
-import com.tansoflow.tansocore.integration.spend.SlackNotifier;
+import com.tansoflow.tansocore.integration.spend.SpendNotifier;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.model.spend.SpendAlertDto;
 import com.tansoflow.tansocore.model.spend.SpendAllocationReportDto;
@@ -55,6 +55,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -68,7 +69,9 @@ class SpendBudgetServiceImplTest {
     @Mock private SpendAlertRepository alertRepository;
     @Mock private SpendUnitRepository unitRepository;
     @Mock private SpendAllocationService allocationService;
-    @Mock private SlackNotifier slackNotifier;
+    @Mock private com.tansoflow.tansocore.repository.SpendAttributionRuleRepository ruleRepository;
+    @Mock private com.tansoflow.tansocore.repository.VendorUsageBucketRepository bucketRepository;
+    @Mock private SpendNotifier notifier;
     @Mock private com.tansoflow.tansocore.service.internal.spend.GatewayEnforcementService gatewayEnforcement;
 
     private final Instant now = Instant.parse("2026-08-25T14:00:00Z");
@@ -79,7 +82,7 @@ class SpendBudgetServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, slackNotifier, gatewayEnforcement,
+        service = new SpendBudgetServiceImpl(budgetRepository, alertRepository, unitRepository, allocationService, ruleRepository, bucketRepository, notifier, gatewayEnforcement,
                 Clock.fixed(now, ZoneOffset.UTC));
         unit = new SpendUnit();
         unit.setId(UUID.randomUUID());
@@ -126,7 +129,7 @@ class SpendBudgetServiceImplTest {
         assertEquals(BudgetPeriod.DAY, fired.get(0).getPeriod());
         assertEquals(Instant.parse("2026-08-25T00:00:00Z"), fired.get(0).getWindowStart());
         assertTrue(fired.get(0).getMessage().contains("85%"));
-        verify(slackNotifier).post(eq(accountId), anyString());
+        verify(notifier).notify(eq(accountId), eq("spend.alert"), anyString(), anyString(), isNull(), any());
 
         // same window, already recorded → silent
         when(alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(unit.getId(), SpendAlertKind.THRESHOLD, BudgetPeriod.DAY,
@@ -220,5 +223,64 @@ class SpendBudgetServiceImplTest {
         when(budgetRepository.findAllByAccountId(accountId)).thenReturn(List.of());
         assertEquals(0, service.evaluate(accountId.toString()).size());
         verify(allocationService, never()).allocate(anyString(), any(), any());
+    }
+
+    @Test
+    void projectedOverspendFiresOncePastAFifthOfTheMonth() {
+        // 2026-08-25T14:00 is 79% through August; $170 so far projects to ~$214 against a $200 ceiling
+        budget.setAlertThreshold(90);
+        when(budgetRepository.findAllByAccountId(accountId)).thenReturn(List.of(budget));
+        spend("100", "17000", "700");
+        when(alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(any(), any(), any(), any())).thenReturn(false);
+
+        List<SpendAlertDto> fired = service.evaluate(accountId.toString());
+
+        assertEquals(1, fired.size(), fired.stream().map(f -> f.getKind() + ": " + f.getMessage()).toList().toString());
+        assertEquals(SpendAlertKind.PROJECTED, fired.get(0).getKind());
+        assertEquals(BudgetPeriod.MONTH, fired.get(0).getPeriod());
+        assertTrue(fired.get(0).getMessage().contains("on pace for $214."), fired.get(0).getMessage());
+
+        when(alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(unit.getId(), SpendAlertKind.PROJECTED, BudgetPeriod.MONTH,
+                Instant.parse("2026-08-01T00:00:00Z"))).thenReturn(true);
+        assertEquals(0, service.evaluate(accountId.toString()).size());
+    }
+
+    @Test
+    void bumpLiftsTheCeilingUntilItExpiresThenTheStandingOneIsBack() {
+        when(budgetRepository.findBySpendUnitIdAndAccountId(unit.getId(), accountId)).thenReturn(java.util.Optional.of(budget));
+        when(unitRepository.findByIdAndAccountId(unit.getId(), accountId)).thenReturn(java.util.Optional.of(unit));
+        when(budgetRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        spend("100", "25000", "700");
+
+        com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest low = new com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest();
+        low.setMonthlyCents(new BigDecimal("15000"));
+        low.setExpiresAt(now.plusSeconds(86400));
+        assertThrows(IllegalArgumentException.class, () -> service.bump(accountId.toString(), unit.getId().toString(), low));
+
+        com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest req = new com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest();
+        req.setMonthlyCents(new BigDecimal("30000"));
+        req.setExpiresAt(now.plusSeconds(86400));
+        req.setReason("launch week");
+        SpendBudgetDto dto = service.bump(accountId.toString(), unit.getId().toString(), req);
+        assertEquals(new BigDecimal("30000"), dto.getEffectiveMonthlyCents());
+        assertEquals(new BigDecimal("20000"), dto.getMonthlyCents(), "the standing ceiling is untouched");
+        assertEquals("launch week", dto.getBumpReason());
+        verify(gatewayEnforcement).apply(budget);
+
+        // $250 of a $300 bump: nothing fires at 83% with the default 80%... threshold does. Check the bump was the limit used.
+        when(budgetRepository.findAllByAccountId(accountId)).thenReturn(List.of(budget));
+        when(alertRepository.existsBySpendUnitIdAndKindAndPeriodAndWindowStart(any(), any(), any(), any())).thenReturn(false);
+        List<SpendAlertDto> fired = service.evaluate(accountId.toString());
+        assertTrue(fired.stream().anyMatch(f -> f.getKind() == SpendAlertKind.THRESHOLD && f.getLimitCents().compareTo(new BigDecimal("30000")) == 0),
+                fired.stream().map(f -> f.getKind() + " " + f.getLimitCents()).toList().toString());
+        assertTrue(fired.stream().noneMatch(f -> f.getKind() == SpendAlertKind.BREACH));
+
+        // expired → evaluate drops the bump, re-pushes the gateway, and the standing ceiling is breached
+        budget.setBumpExpiresAt(now.minusSeconds(1));
+        fired = service.evaluate(accountId.toString());
+        assertEquals(null, budget.getBumpMonthlyCents());
+        assertEquals(null, budget.getBumpReason());
+        verify(gatewayEnforcement, times(2)).apply(budget);
+        assertTrue(fired.stream().anyMatch(f -> f.getKind() == SpendAlertKind.BREACH && f.getLimitCents().compareTo(new BigDecimal("20000")) == 0));
     }
 }

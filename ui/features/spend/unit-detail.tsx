@@ -28,6 +28,8 @@ import { toast } from "@/components/ui/toast"
 import { formatCents, providerLabel } from "./format"
 import {
   useCreateSpendRule,
+  useBumpSpendBudget,
+  useClearSpendBudgetBump,
   useDeleteSpendBudget,
   useDeleteSpendRule,
   usePutSpendBudget,
@@ -68,6 +70,11 @@ export function UnitDetail({
   const budget = useSpendBudget(unit.id)
   const putBudget = usePutSpendBudget()
   const deleteBudget = useDeleteSpendBudget()
+  const bumpBudget = useBumpSpendBudget()
+  const clearBump = useClearSpendBudgetBump()
+  const [bumpAmount, setBumpAmount] = useState("")
+  const [bumpUntil, setBumpUntil] = useState("")
+  const [bumpReason, setBumpReason] = useState("")
 
   const [provider, setProvider] = useState<VendorProvider>("ANTHROPIC")
   const [matchKind, setMatchKind] =
@@ -261,11 +268,17 @@ export function UnitDetail({
                 value={matchValue}
                 onChange={(e) => setMatchValue(e.target.value)}
                 placeholder={
-                  matchKind === "ACTOR"
-                    ? "alice@acme.com"
-                    : matchKind === "API_KEY_ID"
-                      ? "apikey_01…"
-                      : "wrkspc_01… / proj_…"
+                  provider === "LITELLM"
+                    ? matchKind === "WORKSPACE_ID"
+                      ? "team_id, e.g. backend"
+                      : matchKind === "API_KEY_ID"
+                        ? "the virtual key (sk-…)"
+                        : "user_id"
+                    : matchKind === "ACTOR"
+                      ? "alice@acme.com"
+                      : matchKind === "API_KEY_ID"
+                        ? "apikey_01…"
+                        : "wrkspc_01… / proj_…"
                 }
               />
             </Field>
@@ -304,14 +317,53 @@ export function UnitDetail({
               <div className="text-xs text-muted-foreground">This month</div>
               <div className="tabular-nums">
                 {formatCents(budget.data.monthlySpentCents)}
-                {budget.data.monthlyCents != null &&
-                  ` / ${formatCents(budget.data.monthlyCents)}`}
+                {budget.data.effectiveMonthlyCents != null &&
+                  ` / ${formatCents(budget.data.effectiveMonthlyCents)}`}
               </div>
             </div>
+            {budget.data.bumpMonthlyCents != null &&
+              budget.data.bumpExpiresAt && (
+                <div className="col-span-2 text-xs">
+                  Bumped to {formatCents(budget.data.bumpMonthlyCents)} until{" "}
+                  {new Date(budget.data.bumpExpiresAt)
+                    .toISOString()
+                    .replace("T", " ")
+                    .slice(0, 16)}{" "}
+                  UTC
+                  {budget.data.bumpReason ? ` — ${budget.data.bumpReason}` : ""}
+                  .{" "}
+                  <button
+                    type="button"
+                    className="underline"
+                    disabled={clearBump.isPending}
+                    onClick={() =>
+                      clearBump.mutate(unit.id, {
+                        onSuccess: () => toast.add({ title: "Bump ended" }),
+                        onError: (e) =>
+                          toast.add({
+                            title: "Could not end the bump",
+                            description: e.message,
+                          }),
+                      })
+                    }
+                  >
+                    End now
+                  </button>
+                </div>
+              )}
             {budget.data.enforcementTarget && (
               <div className="col-span-2 text-xs text-muted-foreground">
                 Enforced at {budget.data.enforcementTarget} — the gateway
                 refuses requests past the monthly ceiling.
+              </div>
+            )}
+            {budget.data.gatewaySpentCents != null && (
+              <div className="col-span-2 text-xs text-muted-foreground">
+                LiteLLM itself counts{" "}
+                {formatCents(budget.data.gatewaySpentCents)} this month for the
+                team/key/user this unit&apos;s rules name — priced by its own
+                model map, and the number it enforces against. The figure above
+                is by Tanso&apos;s price book.
               </div>
             )}
             {budget.data.enforcementError && (
@@ -452,6 +504,86 @@ export function UnitDetail({
             </div>
           </FieldGroup>
         </form>
+        {hasBudget && budget.data?.monthlyCents != null && (
+          <form
+            className="mt-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              const cents = Math.round(Number(bumpAmount) * 100)
+              if (!bumpAmount.trim() || Number.isNaN(cents) || !bumpUntil) {
+                toast.add({ title: "Enter an amount and an end date" })
+                return
+              }
+              bumpBudget.mutate(
+                {
+                  unitId: unit.id,
+                  monthlyCents: cents,
+                  expiresAt: new Date(bumpUntil + "T23:59:59Z").toISOString(),
+                  reason: bumpReason.trim() || undefined,
+                },
+                {
+                  onSuccess: () => {
+                    setBumpAmount("")
+                    setBumpReason("")
+                    toast.add({ title: "Ceiling bumped" })
+                  },
+                  onError: (e) =>
+                    toast.add({ title: "Bump failed", description: e.message }),
+                }
+              )
+            }}
+          >
+            <h4 className="mb-1 text-sm font-medium">Temporary bump</h4>
+            <p className="mb-2 text-xs text-muted-foreground">
+              Lift the monthly ceiling until a date — a launch, a migration —
+              without touching the standing number. It drops off on its own.
+            </p>
+            <FieldGroup>
+              <div className="grid grid-cols-3 gap-3">
+                <Field>
+                  <FieldLabel htmlFor="bump-amount">Monthly ($)</FieldLabel>
+                  <Input
+                    id="bump-amount"
+                    inputMode="decimal"
+                    value={bumpAmount}
+                    onChange={(e) => setBumpAmount(e.target.value)}
+                    placeholder={String(
+                      Math.round((budget.data.monthlyCents * 1.5) / 100)
+                    )}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="bump-until">Until (UTC)</FieldLabel>
+                  <Input
+                    id="bump-until"
+                    type="date"
+                    value={bumpUntil}
+                    onChange={(e) => setBumpUntil(e.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="bump-reason">Reason</FieldLabel>
+                  <Input
+                    id="bump-reason"
+                    value={bumpReason}
+                    onChange={(e) => setBumpReason(e.target.value)}
+                    placeholder="Launch week"
+                  />
+                </Field>
+              </div>
+              <div>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  disabled={bumpBudget.isPending}
+                >
+                  {bumpBudget.isPending && <Spinner data-icon="inline-start" />}
+                  Bump
+                </Button>
+              </div>
+            </FieldGroup>
+          </form>
+        )}
       </section>
     </div>
   )

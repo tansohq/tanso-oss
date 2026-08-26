@@ -21,7 +21,10 @@ import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.spend.SpendAlertDto;
 import com.tansoflow.tansocore.model.spend.SpendBudgetDto;
+import com.tansoflow.tansocore.model.spend.SpendDigestDto;
+import com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest;
 import com.tansoflow.tansocore.model.spend.request.SpendBudgetRequest;
+import com.tansoflow.tansocore.service.internal.spend.SpendDigestService;
 import com.tansoflow.tansocore.service.internal.spend.SpendBudgetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -52,6 +55,7 @@ import java.util.List;
 @Tag(name = "Spend — Budgets & Alerts", description = "Daily and monthly ceilings per unit, and what they said")
 public class SpendBudgetController {
     private final SpendBudgetService spendBudgetService;
+    private final SpendDigestService spendDigestService;
 
     @GetMapping("/units/{unitId}/budget")
     @Operation(summary = "Read a unit's budget and where it stands", security = @SecurityRequirement(name = "Bearer"))
@@ -71,6 +75,34 @@ public class SpendBudgetController {
     public ResponseEntity<ApiResponse<Void>> delete(@AuthenticationPrincipal UserContext userContext, @PathVariable String unitId) {
         spendBudgetService.deleteBudget(userContext.getAccountId(), unitId);
         return ResponseEntity.ok(ApiResponse.<Void>builder().success(true).build());
+    }
+
+    @PostMapping("/units/{unitId}/budget/bump")
+    @Operation(summary = "Lift the monthly ceiling until a date", description = "The standing ceiling is untouched and applies again when the bump expires; a Block budget is re-pushed to the gateway both times.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendBudgetDto>> bump(@AuthenticationPrincipal UserContext userContext, @PathVariable String unitId,
+                                                           @Valid @RequestBody SpendBudgetBumpRequest request) {
+        return ok(spendBudgetService.bump(userContext.getAccountId(), unitId, request));
+    }
+
+    @DeleteMapping("/units/{unitId}/budget/bump")
+    @Operation(summary = "End a bump early", security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendBudgetDto>> clearBump(@AuthenticationPrincipal UserContext userContext, @PathVariable String unitId) {
+        return ok(spendBudgetService.clearBump(userContext.getAccountId(), unitId));
+    }
+
+    @GetMapping("/digest")
+    @Operation(summary = "Preview the weekly digest", description = "Last seven full UTC days against the seven before, per unit, with budget standing.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendDigestDto>> digest(@AuthenticationPrincipal UserContext userContext) {
+        return ok(spendDigestService.build(userContext.getAccountId()));
+    }
+
+    @PostMapping("/digest/send")
+    @Operation(summary = "Send the weekly digest now", description = "To Slack, the webhook and the alert emails, whichever are configured. Monday 08:00 UTC otherwise, when enabled in settings.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<SpendDigestDto>> sendDigest(@AuthenticationPrincipal UserContext userContext) {
+        return ok(spendDigestService.send(userContext.getAccountId()));
     }
 
     @PostMapping("/budgets/evaluate")

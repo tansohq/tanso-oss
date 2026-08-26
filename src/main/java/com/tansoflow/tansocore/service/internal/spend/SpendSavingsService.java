@@ -15,15 +15,21 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.service.internal.spend;
 
-public enum ExternalApiKeyType {
-    STRIPE_API_KEY,
+import com.tansoflow.tansocore.model.spend.PriceBookModelDto;
+import com.tansoflow.tansocore.model.spend.SpendRouteSimulationDto;
+import com.tansoflow.tansocore.model.spend.SpendSavingsReportDto;
+import com.tansoflow.tansocore.model.spend.request.SpendRouteSimulationRequest;
 
-    // Stripe webhook signing secret type
-    WEBHOOK_SECRET_SIGNING,
-    // Slack incoming webhook URL for spend alerts
-    SLACK_SPEND_WEBHOOK,
-    SPEND_WEBHOOK,
-    SPEND_WEBHOOK_SECRET,
+import java.time.LocalDate;
+import java.util.List;
+
+public interface SpendSavingsService {
+    SpendSavingsReportDto savings(String accountId, LocalDate from, LocalDate to);
+
+    SpendRouteSimulationDto simulate(String accountId, SpendRouteSimulationRequest request);
+
+    /** The price book, so a simulator can offer real targets. */
+    List<PriceBookModelDto> models();
 }

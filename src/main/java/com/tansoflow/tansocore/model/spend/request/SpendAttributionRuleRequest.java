@@ -35,7 +35,7 @@ public class SpendAttributionRuleRequest {
     private AttributionMatchKind matchKind;
     @NotBlank
     @Size(max = 255)
-    @Schema(description = "Vendor workspace/project id, API key id, or actor (Claude Code email / OpenAI user id).")
+    @Schema(description = "Vendor workspace/project id (LiteLLM: team_id), API key id (LiteLLM: the key), or actor (Claude Code email / OpenAI user id / LiteLLM user_id).")
     private String matchValue;
     @Schema(description = "Lower wins when several rules match one row. Default 100.")
     private Integer priority;

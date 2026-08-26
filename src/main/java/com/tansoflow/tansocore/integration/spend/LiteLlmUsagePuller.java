@@ -125,6 +125,31 @@ public class LiteLlmUsagePuller implements VendorUsagePuller {
         return out;
     }
 
+    @Override
+    public List<ActorMetricRecord> pullActorMetrics(String adminKey, String scope, LocalDate from, LocalDate toExclusive) {
+        JsonNode rows = get(adminKey, base(scope) + "/spend/logs?start_date=" + from + "&end_date=" + toExclusive.minusDays(1) + "&summarize=false");
+        Map<String, int[]> perActorDay = new LinkedHashMap<>();
+        for (JsonNode r : rows.isArray() ? rows : rows.path("data")) {
+            String start = r.path("startTime").asText(null);
+            String actor = actor(r);
+            if (start == null || actor.isEmpty()) {
+                continue;
+            }
+            LocalDate day = parseDay(start);
+            if (day.isBefore(from) || !day.isBefore(toExclusive)) {
+                continue;
+            }
+            perActorDay.computeIfAbsent(day + "|" + actor, k -> new int[1])[0]++;
+        }
+        List<ActorMetricRecord> out = new ArrayList<>();
+        for (Map.Entry<String, int[]> e : perActorDay.entrySet()) {
+            String[] k = e.getKey().split("\\|", 2);
+            out.add(new ActorMetricRecord(LocalDate.parse(k[0]), k[1], "litellm", null, e.getValue()[0],
+                    null, null, null, null, null, null, null, null, null));
+        }
+        return out;
+    }
+
     /** Prefer the end-user the caller passed; fall back to the internal user who owns the key. */
     private static String actor(JsonNode r) {
         String endUser = text(r, "end_user");

@@ -41,6 +41,6 @@ public class CreateVendorConnectionRequest {
     private String adminKey;
 
     @Size(max = 200)
-    @Schema(description = "Required for COPILOT: the GitHub organization name. Ignored by other providers.")
+    @Schema(description = "Copilot: the GitHub organization (required). LiteLLM: the proxy URL, e.g. https://llm.internal:4000 (required). Other providers: ignored and not stored.")
     private String scope;
 }

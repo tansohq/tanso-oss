@@ -21,5 +21,7 @@ package com.tansoflow.tansocore.model.spend.type;
 public enum SpendAlertKind {
     THRESHOLD,
     BREACH,
-    SPIKE
+    SPIKE,
+    /** Month-to-date pace lands above the monthly ceiling before the month ends. */
+    PROJECTED
 }

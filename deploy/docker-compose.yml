@@ -27,6 +27,8 @@ services:
       # Required — the app fails to start without it (no insecure default shipped)
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set — e.g. openssl rand -base64 48}
       APP_SECRETS_KEY: ${APP_SECRETS_KEY:?APP_SECRETS_KEY must be set — e.g. openssl rand -base64 48; it encrypts stored Stripe and vendor admin keys}
+      APP_RESEND_API_KEY: ${APP_RESEND_API_KEY:-}
+      APP_SPEND_ALERT_FROM: ${APP_SPEND_ALERT_FROM:-Tanso <alerts@your-domain.com>}
       STRIPE_API_KEY: ${STRIPE_API_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       # Optional MCP server for AI agents — both must be true to expose /mcp

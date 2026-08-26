@@ -17,6 +17,7 @@ import {
   Settings,
   Users,
   Wallet,
+  PiggyBank,
 } from "lucide-react"
 
 import {
@@ -53,6 +54,7 @@ const spendNav = [
   { title: "Teams", href: "/spend/teams", icon: Users },
   { title: "Alerts", href: "/spend/alerts", icon: Bell },
   { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
+  { title: "Savings", href: "/spend/savings", icon: PiggyBank },
   { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
   { title: "Connections", href: "/spend/connections", icon: Wallet },
 ]

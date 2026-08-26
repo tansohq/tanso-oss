@@ -15,15 +15,23 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.api.external;
+package com.tansoflow.tansocore.model.spend.request;
 
-public enum ExternalApiKeyType {
-    STRIPE_API_KEY,
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
 
-    // Stripe webhook signing secret type
-    WEBHOOK_SECRET_SIGNING,
-    // Slack incoming webhook URL for spend alerts
-    SLACK_SPEND_WEBHOOK,
-    SPEND_WEBHOOK,
-    SPEND_WEBHOOK_SECRET,
+import java.math.BigDecimal;
+import java.time.Instant;
+
+@Data
+public class SpendBudgetBumpRequest {
+    @NotNull
+    @Schema(description = "The monthly ceiling in cents while the bump lasts. Must be above the standing ceiling.")
+    private BigDecimal monthlyCents;
+    @NotNull
+    @Schema(description = "When the bump ends and the standing ceiling applies again.")
+    private Instant expiresAt;
+    @Schema(description = "Why — shown on the budget and in the digest.")
+    private String reason;
 }

@@ -233,9 +233,11 @@ export default function SpendUsagePage() {
                 <CardHeader>
                   <CardTitle>By person</CardTitle>
                   <CardDescription>
-                    Claude Code actors, OpenAI users, Cursor and Copilot seats.
-                    Tokens here are already inside the totals above; "Sessions"
-                    is events for Cursor and CLI sessions for Copilot.
+                    Claude Code actors, OpenAI users, Cursor and Copilot seats,
+                    LiteLLM users (or the end-user the caller passed). Tokens
+                    here are already inside the totals above; "Sessions" is
+                    events for Cursor, CLI sessions for Copilot, requests for
+                    LiteLLM.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="overflow-x-auto">

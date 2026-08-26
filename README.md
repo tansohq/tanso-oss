@@ -293,7 +293,16 @@ It works from the vendor's admin API, not a proxy in your request path:
    **spike** when a unit has spent at least $5 today and more than twice its
    trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
-   Slack incoming webhook if one is stored under Spend settings. Tanso is not
+   Slack incoming webhook, a generic webhook (JSON, `X-Tanso-Event`, and
+   `X-Tanso-Signature: sha256=HMAC(secret, body)` when a secret is set) and
+   the alert emails, whichever are stored under Spend settings. A
+   **projected** alert fires once a month when the month-to-date pace lands
+   above the ceiling (never in the first fifth of the month). A **temporary
+   bump** lifts a unit's monthly ceiling until a date — launch week — without
+   touching the standing number; it drops off on its own and is re-pushed to
+   the gateway both ways. A **weekly digest** (Monday 08:00 UTC, opt-in) sends
+   last week's spend per unit against the week before, with budget standing,
+   to the same channels; preview or send it from Spend → Alerts. Tanso is not
    in the request path, so on its own a "Block" budget cannot stop a request —
    its alert says so. **Gateway mode**: connect a LiteLLM proxy and add a
    LiteLLM rule to the unit (its team id, key or user); a Block budget is then
@@ -301,7 +310,17 @@ It works from the vendor's admin API, not a proxy in your request path:
    budget card shows where it is enforced, and the proxy refuses requests past
    the ceiling. Switching the budget back to Alert clears the limit. The
    proxy's spend logs are pulled like any other vendor, with the team, key
-   and user LiteLLM already resolved per request.
+   and user LiteLLM already resolved per request. Two clocks, though: Tanso
+   measures the budget on its price book, LiteLLM enforces against its own
+   model map — the card shows both figures so the drift is visible.
+
+6. **Spend → Savings**: what prompt caching is worth — per model, the
+   input-side cost as billed against the same tokens with no cache (cache-read
+   share, cache writes, $ saved; models without cache rates read as zero and
+   say so) — and a **route simulator**: pick a model's traffic, a target from
+   the price book and optionally a workspace, and see the same tokens at the
+   target's rates with the caveats spelled out (tokenizer drift, no cache
+   rates, quality not modelled). Advice only; Tanso never routes.
 
 <img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
@@ -351,7 +370,9 @@ API: `/api/v1/spend/connections`, `/api/v1/spend/reports/{usage,reconcile,alloca
 `/api/v1/spend/rules`, `/api/v1/spend/alerts` (+ `/{id}/ack`),
 `POST /api/v1/spend/budgets/evaluate`, `/api/v1/spend/settings`,
 `/api/v1/spend/outcome-sources`, `/api/v1/spend/outcomes`,
-`/api/v1/spend/reports/outcomes` (console JWT only).
+`/api/v1/spend/reports/outcomes`, `/api/v1/spend/reports/savings`,
+`POST /api/v1/spend/reports/simulate`, `/api/v1/spend/reports/models`
+(console JWT only).
 `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` (and `_GITHUB_` /
 `_LINEAR_`) point the pulls at a gateway or proxy instead of the vendor; a
 LiteLLM connection carries its own proxy URL. Next:
@@ -375,7 +396,7 @@ supply them via environment variables. The common ones:
 | `JWT_SECRET` | Signing secret for UI session tokens |
 | `APP_SECRETS_KEY` | Encrypts stored integration credentials (Stripe keys, vendor admin keys) at rest. Required. Startup refuses a key that does not decrypt what is stored; to rotate, `DELETE FROM external_api_keys` and `UPDATE vendor_connections SET admin_key=''`, then reconnect |
 | `STRIPE_API_KEY` / `STRIPE_WEBHOOK_SECRET` | Stripe integration |
-| `RESEND_API_KEY` | Transactional email |
+| `APP_RESEND_API_KEY` | Transactional email via Resend — spend alerts and the weekly digest. Empty with recipients configured = the email leg reports FAILED on every send (logged with the reason) |
 | `OPENAI_API_KEY` | AI features (optional) |
 | `APP_WEBHOOK_ENDPOINT` | Public Stripe webhook URL |
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
@@ -385,6 +406,7 @@ supply them via environment variables. The common ones:
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
+| `APP_SPEND_ALERT_FROM` | Sender for alert emails and the weekly digest, via Resend (`APP_RESEND_API_KEY`); default `Tanso <alerts@your-domain.com>` |
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.

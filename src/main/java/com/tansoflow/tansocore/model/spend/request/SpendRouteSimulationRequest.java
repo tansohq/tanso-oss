@@ -15,24 +15,26 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.spend;
+package com.tansoflow.tansocore.model.spend.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import lombok.Builder;
-import lombok.Getter;
+import jakarta.validation.constraints.NotBlank;
+import lombok.Data;
 
-@Getter
-@Builder
-public class SpendSettingsDto {
-    @Schema(description = "Whether spend may be attributed to named people (PERSON units, the by-person view).")
-    private boolean personLevelEnabled;
-    @Schema(description = "What staff were told about spend attribution. Required to enable person level.")
-    private String workerNotice;
-    @Schema(description = "A Slack incoming webhook is stored for alerts. The URL itself is never returned.")
-    private boolean slackConfigured;
-    @Schema(description = "A generic webhook URL is stored. Never returned.")
-    private boolean webhookConfigured;
-    private boolean webhookSigned;
-    private String alertEmails;
-    private boolean digestEnabled;
+import java.time.LocalDate;
+
+@Data
+public class SpendRouteSimulationRequest {
+    @Schema(description = "Inclusive; default 30 days back.")
+    private LocalDate from;
+    @Schema(description = "Exclusive; default tomorrow.")
+    private LocalDate to;
+    @NotBlank
+    @Schema(description = "The model whose traffic to re-price, as it appears on the usage report.")
+    private String fromModel;
+    @NotBlank
+    @Schema(description = "A model in the price book.")
+    private String toModel;
+    @Schema(description = "Only traffic from this vendor workspace / project / team id. Null = all.")
+    private String workspaceId;
 }

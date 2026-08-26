@@ -19,6 +19,7 @@ package com.tansoflow.tansocore.service.internal.spend;
 
 import com.tansoflow.tansocore.model.spend.SpendAlertDto;
 import com.tansoflow.tansocore.model.spend.SpendBudgetDto;
+import com.tansoflow.tansocore.model.spend.request.SpendBudgetBumpRequest;
 import com.tansoflow.tansocore.model.spend.request.SpendBudgetRequest;
 
 import java.util.List;
@@ -29,6 +30,11 @@ public interface SpendBudgetService {
     SpendBudgetDto putBudget(String accountId, String unitId, SpendBudgetRequest request);
 
     void deleteBudget(String accountId, String unitId);
+
+    /** Lifts the monthly ceiling until a date; the standing ceiling is untouched and returns on its own. */
+    SpendBudgetDto bump(String accountId, String unitId, SpendBudgetBumpRequest request);
+
+    SpendBudgetDto clearBump(String accountId, String unitId);
 
     /** Checks every budget on the account against the current day and month and fires what crossed. Returns what fired. */
     List<SpendAlertDto> evaluate(String accountId);
