@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.credit.CreditFeatureWeightDto;
 import com.tansoflow.tansocore.model.credit.CreditGrantDto;
@@ -67,6 +68,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/monetization/credits")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Credits", description = "Credit pool management operations")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CreditController {
     private final CreditService creditService;
     private final CreditWeightService creditWeightService;

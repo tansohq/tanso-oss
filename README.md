@@ -4,9 +4,10 @@
 
 # Tanso Core
 
-**Open-source monetization engine for B2B AI products** — for teams that sell
-credits or usage and whose inference costs are big enough that margin per
-customer is a real question.
+**Open-source cost and pricing engine for AI products.** See what your teams
+spend on AI, by team, project and person, reconciled to the vendor's invoice.
+See what each customer costs you to serve, and price on it. One ledger, both
+directions.
 
 [Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Next.js example](#try-the-five-credit-nextjs-example) · [Features](#features) · [Agents & MCP](#agents--mcp) · [API & SDKs](#api-reference--sdks) · [Contributing](CONTRIBUTING.md) · [Docs](https://tanso.mintlify.app/introduction)
 
@@ -19,11 +20,19 @@ customer is a real question.
 
 ## Why Tanso
 
-Every metered event carries its cost: input/output tokens, model, provider,
-and what that usage cost you — alongside what you billed for it. Billing tools
-meter usage but don't know your costs; observability tools know your costs but
-don't bill. Tanso does both in one ledger, so you can see margin per customer,
-per feature, per model.
+People want to see where the AI money goes, and today it is split across a
+vendor bill that only shows a total, a billing tool that meters usage but
+doesn't know your costs, and an observability tool that knows your costs but
+doesn't bill. Tanso puts both directions on one ledger.
+
+For the AI you sell, every metered event carries its cost: input/output tokens,
+model, provider, and what that usage cost you, next to what you billed for it.
+Margin per customer, per feature, per model falls out of the same ledger that
+bills. For the AI you buy, usage and cost are pulled from the vendors' own admin
+APIs (Anthropic, OpenAI, Cursor, GitHub Copilot, LiteLLM), reconciled to the
+invoice, allocated to teams and projects, capped, and joined to what shipped.
+No proxy, no agent on laptops, no prompts collected. See
+[Internal AI spend](#internal-ai-spend).
 
 The same ledger enforces in real time: entitlement checks, usage caps, and
 credit limits are applied when the event is ingested, not reconciled at
@@ -244,17 +253,51 @@ psql "postgresql://dev_user:dev_pass@localhost:5432/core_db" \
 
 ---
 
-## Internal AI spend (build side)
+## Run one half
 
-The engine has two halves. The **serve side** — everything above — answers what
-it costs to serve each customer. The **build side** answers what your own AI
-spend is: the Anthropic and OpenAI bills for your engineers and agents.
+Both halves ship in the same container and read the same store, and either
+one can be switched off. Nothing about the other half needs to be set up
+first.
 
-<img src=".github/assets/screenshots/spend-usage.png" alt="Spend → Usage — internal AI usage by model, by person, by day; price-book cost next to the vendor's report" width="800" />
+**Internal spend only** (what your teams spend on Anthropic, OpenAI, Cursor,
+Copilot, LiteLLM):
+
+```bash
+# deploy/.env
+APP_MODULES_MONETIZATION_ENABLED=false
+```
+
+Plans, customers, credits, invoices, the client API, Stripe and the billing
+jobs are off. Their routes answer `404` with `"code": "module_disabled"`, the
+console opens on Internal spend, and Stripe keys are never asked for. Then:
+`setup.sh` for a login, **Internal spend → Connections** to store one vendor
+admin key, **Sync now**, and Reconcile fills in. Turn monetization on later by
+flipping the flag; the store already has everything it needs.
+
+**Monetization only** (metering, credits, entitlements, billing, margin per
+customer):
+
+```bash
+# deploy/.env
+APP_MODULES_BUILD_ENABLED=false
+```
+
+The vendor connectors, spend reports and their hourly jobs are off and the
+console hides Internal spend.
+
+Feature P&L is the one report that needs both.
+
+## Internal AI spend
+
+The engine has two halves. **Monetization**, everything above, answers what
+it costs to serve each customer. **Internal spend** answers what your own AI
+costs: the Anthropic and OpenAI bills for your engineers and agents.
+
+<img src=".github/assets/screenshots/spend-usage.png" alt="Internal spend → Usage — internal AI usage by model, by person, by day; price-book cost next to the vendor's report" width="800" />
 
 It works from the vendor's admin API, not a proxy in your request path:
 
-1. **Spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`),
+1. **Internal spend → Connections**: store an Anthropic admin key (`sk-ant-admin01-…`),
    an OpenAI admin key, a Cursor admin API key (Enterprise; sent as HTTP
    Basic with the key as username; Cursor caps a window at 30 days, so a
    longer sync is pulled in 30-day chunks), a GitHub token with the *View
@@ -266,20 +309,20 @@ It works from the vendor's admin API, not a proxy in your request path:
    characters are ever shown. **Check key** makes one call to prove it works;
    **Sync now** pulls the last 30 days. An hourly job re-pulls the last three
    days after that (vendor reports lag by up to an hour).
-2. **Spend → Usage**: tokens and cost by model, by day, and by person, two
+2. **Internal spend → Usage**: tokens and cost by model, by day, and by person, two
    ways — what the price book (`model_pricing`) says the tokens should cost
    and what the vendor's own cost report says. The by-person view also shows
    what each vendor reports per seat: Claude Code sessions, commits, PRs and
    tool accept/reject; Cursor accepted lines, accepts/rejects and requests;
    Copilot interactions, accepted code and AI credits. Anthropic reports
    people only for Claude Code; OpenAI only for user-scoped keys.
-3. **Spend → Reconcile**: per vendor and period, metered vs vendor-reported
+3. **Internal spend → Reconcile**: per vendor and period, metered vs vendor-reported
    vs invoiced, with the two variances. Import the bill as a CSV with a header
    row — `description, amount` (dollars), optional `kind` (TOKEN, SEAT, TOOL,
    OTHER), `model`, `quantity`. An invoice only counts toward a window it sits
    entirely inside.
 
-4. **Spend → Teams**: units (teams, projects, and — once switched on — people,
+4. **Internal spend → Teams**: units (teams, projects, and — once switched on — people,
    nested however you like) and attribution rules that map a vendor workspace
    or project id, an API key id, or an actor onto a unit. Rules apply at
    report time, so editing one re-allocates history; when several rules match
@@ -289,7 +332,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    measure that total. Each unit can carry a budget: a small **daily**
    ceiling that catches a runaway agent and a **monthly** one for the real
    number (UTC calendar windows), with an alert threshold (default 80%).
-5. **Spend → Alerts**: threshold and breach alerts on each ceiling, plus a
+5. **Internal spend → Alerts**: threshold and breach alerts on each ceiling, plus a
    **spike** when a unit has spent at least $5 today and more than twice its
    trailing-seven-day daily average — each once per window,
    checked after every sync and hourly; acknowledge to clear. Posted to a
@@ -302,7 +345,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    touching the standing number; it drops off on its own and is re-pushed to
    the gateway both ways. A **weekly digest** (Monday 08:00 UTC, opt-in) sends
    last week's spend per unit against the week before, with budget standing,
-   to the same channels; preview or send it from Spend → Alerts. Tanso is not
+   to the same channels; preview or send it from Internal spend → Alerts. Tanso is not
    in the request path, so on its own a "Block" budget cannot stop a request —
    its alert says so. **Gateway mode**: connect a LiteLLM proxy and add a
    LiteLLM rule to the unit (its team id, key or user); a Block budget is then
@@ -314,7 +357,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    measures the budget on its price book, LiteLLM enforces against its own
    model map — the card shows both figures so the drift is visible.
 
-6. **Spend → Savings**: what prompt caching is worth — per model, the
+6. **Internal spend → Savings**: what prompt caching is worth — per model, the
    input-side cost as billed against the same tokens with no cache (cache-read
    share, cache writes, $ saved; models without cache rates read as zero and
    say so) — and a **route simulator**: pick a model's traffic, a target from
@@ -322,7 +365,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    target's rates with the caveats spelled out (tokenizer drift, no cache
    rates, quality not modelled). Advice only; Tanso never routes.
 
-7. **Spend → P&L**: the join the two halves exist for. Link a *project*
+7. **Internal spend → P&L**: the join the two halves exist for. Link a *project*
    unit to the serve-side feature it shipped (Teams → the project → Feature),
    and the report puts the project's AI build cost (its attributed spend, with
    descendants) next to that feature's revenue and serving cost from the
@@ -332,19 +375,19 @@ It works from the vendor's admin API, not a proxy in your request path:
    make the serve margin equal the revenue. Projects with no feature are
    listed, not hidden.
 
-<img src=".github/assets/screenshots/spend-teams.png" alt="Spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
+<img src=".github/assets/screenshots/spend-teams.png" alt="Internal spend → Teams — allocation to projects, teams and people, with roll-up and the person's Claude Code estimate kept separate" width="800" />
 
-<img src=".github/assets/screenshots/spend-alerts.png" alt="Spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
+<img src=".github/assets/screenshots/spend-alerts.png" alt="Internal spend → Alerts — daily breach and monthly threshold alerts, once per window" width="800" />
 
-<img src=".github/assets/screenshots/spend-gateway-budget.png" alt="Spend → Teams — a Block budget enforced at LiteLLM, bumped for launch week, with the gateway's own count beside Tanso's" width="800" />
+<img src=".github/assets/screenshots/spend-gateway-budget.png" alt="Internal spend → Teams — a Block budget enforced at LiteLLM, bumped for launch week, with the gateway's own count beside Tanso's" width="800" />
 
-<img src=".github/assets/screenshots/spend-digest.png" alt="Spend → Alerts — the weekly digest: last week per unit against the week before, month-to-date against the ceiling" width="800" />
+<img src=".github/assets/screenshots/spend-digest.png" alt="Internal spend → Alerts — the weekly digest: last week per unit against the week before, month-to-date against the ceiling" width="800" />
 
-<img src=".github/assets/screenshots/spend-savings.png" alt="Spend → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
+<img src=".github/assets/screenshots/spend-savings.png" alt="Internal spend → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
 
-<img src=".github/assets/screenshots/spend-pnl.png" alt="Spend → P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
+<img src=".github/assets/screenshots/spend-pnl.png" alt="Internal spend → P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
 
-6. **Spend → Outcomes**: shipped work next to what it cost. Connect GitHub
+6. **Internal spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
    have any CI job post one: `POST /api/v1/client/outcomes` with the tenant
    `sk_` key (or `/api/v1/spend/outcomes` with a console JWT) and a body of
@@ -364,7 +407,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    cost per merged PR, per team, per month. Pulled hourly for the last three
    days; re-pulls upsert.
 
-<img src=".github/assets/screenshots/spend-outcomes.png" alt="Spend → Outcomes — merged PRs and completed issues next to allocated spend: cost per outcome per unit" width="800" />
+<img src=".github/assets/screenshots/spend-outcomes.png" alt="Internal spend → Outcomes — merged PRs and completed issues next to allocated spend: cost per outcome per unit" width="800" />
 
 Person-level attribution is **off by default**. Attributing spend to a named
 employee is a monitoring capability (in Germany a works council can veto it);
@@ -399,7 +442,7 @@ Jira as an outcome source.
 
 An Anthropic admin key can administer your whole org (there is no read-only
 scope on Console admin keys), so use a dedicated reporting org where you can.
-Set `APP_MODULES_BUILD_ENABLED=false` to run a serve-side-only install.
+Each half runs on its own: `APP_MODULES_MONETIZATION_ENABLED=false` for internal spend only, `APP_MODULES_BUILD_ENABLED=false` for monetization only. See [Run one half](#run-one-half).
 
 ## Configuration
 
@@ -420,8 +463,9 @@ supply them via environment variables. The common ones:
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
+| `APP_MODULES_MONETIZATION_ENABLED` | Monetization — plans, features, customers, subscriptions, credits, invoices, the client API, Stripe and the billing jobs (`true` by default; `false` for an internal-spend-only install: those routes answer 404 `module_disabled` and the console shows Internal spend alone). |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Spend group |
-| `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where the build side pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
+| `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where internal spend pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |
 | `APP_SPEND_OUTBOUND_ALLOW_PRIVATE` | Whether operator-typed URLs (LiteLLM proxy, webhook) may point at private ranges (default `true` — a self-hosted proxy lives there). Loopback and link-local (cloud metadata) are always refused. Set `false` on a multi-tenant install |

@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query"
 
-import { ApiError, apiFetch, queryString } from "@/lib/api/client"
+import { apiFetch, isModuleOff, queryString } from "@/lib/api/client"
 import type {
   OutcomeDto,
   OutcomeSourceDto,
@@ -21,13 +21,9 @@ import type {
   SpendPnlReportDto,
 } from "./types"
 
-/** True when the build side is switched off (APP_MODULES_BUILD_ENABLED=false): the server says so with a code, so a wrong API URL is not mistaken for it. */
+/** True when internal spend is switched off (APP_MODULES_BUILD_ENABLED=false): the server says so with a code, so a wrong API URL is not mistaken for it. */
 export function isBuildSideOff(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.status === 404 &&
-    error.code === "module_disabled"
-  )
+  return isModuleOff(error)
 }
 
 export function useVendorConnections() {

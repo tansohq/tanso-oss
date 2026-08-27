@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.client.ClientPlanFeatureLinkedDto;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -46,6 +47,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/plans")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Plan", description = "Plan operations for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class PlanClientController {
     private final ClientPlanService clientPlanService;
 

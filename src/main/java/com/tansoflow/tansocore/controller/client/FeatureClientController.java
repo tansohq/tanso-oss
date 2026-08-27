@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.feature.FeatureDto;
 import com.tansoflow.tansocore.model.response.ApiResponse;
@@ -47,6 +48,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/features")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Feature", description = "Feature catalog operations for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class FeatureClientController {
     private final FeatureService featureService;
 

@@ -185,7 +185,7 @@ export function UnitForm({
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              The serve-side feature this project built. Spend → P&amp;L puts
+              The monetization feature this project built. Internal spend → P&amp;L puts
               the project&apos;s build cost next to what the feature earns.
             </p>
           </Field>

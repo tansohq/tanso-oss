@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.monetization;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.monetization.PlanFeatureRuleDto;
 import com.tansoflow.tansocore.model.monetization.request.PlanFeatureLinkedDiffRequest;
@@ -51,6 +52,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/monetization/rules")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Monetization Rules", description = "Operations for managing monetization rules (linking plans and features)")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class MonetizationRulesController {
     private final PlanFeatureRuleService planFeatureRuleService;
 

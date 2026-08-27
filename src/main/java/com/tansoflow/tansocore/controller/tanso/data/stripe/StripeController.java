@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.data.stripe;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.integration.stripe.StripeService;
@@ -50,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/data/stripe")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Stripe Data", description = "Operations for managing Stripe integration and keys")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class StripeController {
     private final StripeService stripeService;
     private final AccountService accountService;

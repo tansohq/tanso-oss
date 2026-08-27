@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.stripe.exception.StripeException;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.AccountSetting;
@@ -59,6 +60,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/client/billing")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Billing", description = "Billing operations for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class BillingClientController {
     private final InvoiceService invoiceService;
     private final SubscriptionService subscriptionService;

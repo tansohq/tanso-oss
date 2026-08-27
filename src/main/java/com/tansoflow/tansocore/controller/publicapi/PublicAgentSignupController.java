@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.publicapi;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.signup.AgentSignupResponse;
 import com.tansoflow.tansocore.model.signup.request.AgentSignupRequest;
@@ -38,6 +39,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/public/v1/catalog")
 @Tag(name = "Public Catalog", description = "Machine-readable pricing for buying agents — no authentication")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class PublicAgentSignupController {
 
     private final AgentSignupService agentSignupService;

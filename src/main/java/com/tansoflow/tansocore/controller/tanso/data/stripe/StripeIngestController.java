@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.data.stripe;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.integration.stripe.StripeWebhook;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -40,6 +41,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 @RequestMapping("/public")
 @Tag(name = "Stripe Ingest", description = "Public endpoints for ingesting data from Stripe webhooks")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class StripeIngestController {
     private final StripeWebhook stripeWebhook;
 

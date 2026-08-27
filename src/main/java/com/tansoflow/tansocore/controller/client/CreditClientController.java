@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.client.ClientCreditGrantDto;
@@ -52,6 +53,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/credits")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Client Credit", description = "Credit pool operations for client applications")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CreditClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final com.tansoflow.tansocore.service.client.CreditPurchaseService creditPurchaseService;

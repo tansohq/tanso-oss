@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
@@ -56,6 +57,7 @@ import java.util.List;
 @RequestMapping("/api/v1/client/customers/{customerReferenceId}/keys")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Customer API Keys", description = "Issue and manage customer-scoped API keys for end-customer agents")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CustomerApiKeyClientController {
 
     private final CustomerApiKeyService customerApiKeyService;

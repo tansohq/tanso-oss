@@ -37,6 +37,7 @@ services:
       SPRING_AI_MCP_SERVER_ENABLED: ${SPRING_AI_MCP_SERVER_ENABLED:-false}
       # Anonymous daily instance ping — set false to opt out (payload documented in README)
       TANSO_TELEMETRY_ENABLED: ${TANSO_TELEMETRY_ENABLED:-true}
+      APP_MODULES_MONETIZATION_ENABLED: ${APP_MODULES_MONETIZATION_ENABLED:-true}
       APP_MODULES_BUILD_ENABLED: ${APP_MODULES_BUILD_ENABLED:-true}
       APP_SPEND_ANTHROPIC_BASE_URL: ${APP_SPEND_ANTHROPIC_BASE_URL:-https://api.anthropic.com}
       APP_SPEND_OPENAI_BASE_URL: ${APP_SPEND_OPENAI_BASE_URL:-https://api.openai.com}

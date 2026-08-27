@@ -78,7 +78,7 @@ export default function SpendOutcomesPage() {
   if (isBuildSideOff(sources.error)) {
     return (
       <p className="text-sm text-muted-foreground">
-        The build side is switched off on this install
+        Internal spend is switched off on this install
         (APP_MODULES_BUILD_ENABLED=false).
       </p>
     )
@@ -220,7 +220,7 @@ export default function SpendOutcomesPage() {
                     colSpan={8}
                     className="text-center text-muted-foreground"
                   >
-                    No units yet. Create teams under Spend → Teams first.
+                    No units yet. Create teams under Internal spend → Teams first.
                   </TableCell>
                 </TableRow>
               )}

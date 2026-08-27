@@ -10,6 +10,7 @@ import {
   GitMerge,
   LogOut,
   Package,
+  Plug,
   Puzzle,
   ReceiptText,
   Repeat,
@@ -32,41 +33,53 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar"
 import { clearToken, getClaims } from "@/lib/auth"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
+import { usePortfolio } from "@/features/analytics/queries"
+import { isModuleOff } from "@/lib/api/client"
 
-const catalogNav = [
+// Monetization: the AI you sell. Plans, credits, margin per customer.
+const monetizationNav = [
   { title: "Plans", href: "/plans", icon: Package },
   { title: "Features", href: "/features", icon: Puzzle },
-]
-
-const customersNav = [
   { title: "Customers", href: "/customers", icon: Users },
   { title: "Subscriptions", href: "/subscriptions", icon: Repeat },
   { title: "Credits", href: "/credits", icon: Coins },
   { title: "Invoices", href: "/invoices", icon: ReceiptText },
+  { title: "Events", href: "/events", icon: Activity },
 ]
 
-const usageNav = [{ title: "Events", href: "/events", icon: Activity }]
-
-const spendNav = [
-  { title: "Usage", href: "/spend/usage", icon: Gauge },
+// Internal spend: the AI you buy. Connections first, since nothing else here
+// shows anything until a vendor is connected. P&L needs both halves, so it
+// is hidden when monetization is off.
+const internalSpendNav = [
+  { title: "Connections", href: "/spend/connections", icon: Plug },
+  { title: "Spend", href: "/spend/usage", icon: Wallet },
   { title: "Teams", href: "/spend/teams", icon: Users },
   { title: "Alerts", href: "/spend/alerts", icon: Bell },
-  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
   { title: "Savings", href: "/spend/savings", icon: PiggyBank },
-  { title: "P&L", href: "/spend/pnl", icon: Landmark },
   { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
-  { title: "Connections", href: "/spend/connections", icon: Wallet },
+  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
+  { title: "P&L", href: "/spend/pnl", icon: Landmark },
 ]
 
 export function AppSidebar() {
   const pathname = usePathname()
   const router = useRouter()
+  const { isMobile, setOpenMobile } = useSidebar()
   const email = getClaims()?.email
   const vendorConnections = useVendorConnections()
   const buildSideOff = isBuildSideOff(vendorConnections.error)
+  const portfolio = usePortfolio()
+  const monetizationOff = isModuleOff(portfolio.error)
+
+  // On mobile the sidebar is a sheet; a tap on a link should close it.
+  function closeMobile() {
+    if (isMobile) setOpenMobile(false)
+  }
 
   function isActive(href: string) {
     return href === "/" ? pathname === "/" : pathname.startsWith(href)
@@ -75,6 +88,21 @@ export function AppSidebar() {
   function logout() {
     clearToken()
     router.replace("/login")
+  }
+
+  function renderItems(items: typeof monetizationNav) {
+    return items.map((item) => (
+      <SidebarMenuItem key={item.href}>
+        <SidebarMenuButton
+          render={<Link href={item.href} />}
+          isActive={isActive(item.href)}
+          onClick={closeMobile}
+        >
+          <item.icon />
+          {item.title}
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    ))
   }
 
   return (
@@ -88,94 +116,44 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  render={<Link href="/" />}
-                  isActive={isActive("/")}
-                >
-                  <Gauge />
-                  Overview
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Catalog</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {catalogNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(item.href)}
-                  >
-                    <item.icon />
-                    {item.title}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Customers</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {customersNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(item.href)}
-                  >
-                    <item.icon />
-                    {item.title}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        <SidebarGroup>
-          <SidebarGroupLabel>Usage</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {usageNav.map((item) => (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton
-                    render={<Link href={item.href} />}
-                    isActive={isActive(item.href)}
-                  >
-                    <item.icon />
-                    {item.title}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-        {!buildSideOff && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Spend</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {spendNav.map((item) => (
-                  <SidebarMenuItem key={item.href}>
+        {!monetizationOff && (
+          <>
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
                     <SidebarMenuButton
-                      render={<Link href={item.href} />}
-                      isActive={isActive(item.href)}
+                      render={<Link href="/" />}
+                      isActive={isActive("/")}
+                      onClick={closeMobile}
                     >
-                      <item.icon />
-                      {item.title}
+                      <Gauge />
+                      Overview
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+            <SidebarGroup>
+              <SidebarGroupLabel>Monetization</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>{renderItems(monetizationNav)}</SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
+        )}
+        {!buildSideOff && (
+          <>
+            {!monetizationOff && <SidebarSeparator />}
+            <SidebarGroup>
+              <SidebarGroupLabel>Internal spend</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {renderItems(monetizationOff ? internalSpendNav.filter((i) => i.href !== "/spend/pnl") : internalSpendNav)}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </>
         )}
       </SidebarContent>
       <SidebarFooter>
@@ -184,6 +162,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               render={<Link href="/settings" />}
               isActive={isActive("/settings")}
+              onClick={closeMobile}
             >
               <Settings />
               Settings

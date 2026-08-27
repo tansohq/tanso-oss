@@ -60,7 +60,7 @@ export default function SpendAlertsPage() {
   if (isBuildSideOff(alerts.error)) {
     return (
       <p className="text-sm text-muted-foreground">
-        The build side is switched off on this install
+        Internal spend is switched off on this install
         (APP_MODULES_BUILD_ENABLED=false).
       </p>
     )

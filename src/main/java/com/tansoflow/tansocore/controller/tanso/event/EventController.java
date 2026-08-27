@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.tanso.event;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.event.events.EventDto;
 import com.tansoflow.tansocore.model.event.events.EventGroupDto;
@@ -52,6 +53,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/tanso/events")
 @PreAuthorize("hasRole('TANSO_UI')")
 @Tag(name = "Event", description = "Event management for Tanso")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class EventController {
     private final EventService eventService;
 

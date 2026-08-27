@@ -60,7 +60,7 @@ export default function SpendSavingsPage() {
   if (isBuildSideOff(report.error)) {
     return (
       <p className="text-sm text-muted-foreground">
-        The build side is switched off on this install
+        Internal spend is switched off on this install
         (APP_MODULES_BUILD_ENABLED=false).
       </p>
     )
@@ -292,9 +292,13 @@ export default function SpendSavingsPage() {
                 placeholder="claude-opus-4-1"
               />
               <datalist id="sim-models-seen">
-                {(data?.byModel ?? []).map((r) =>
-                  r.model ? <option key={r.model} value={r.model} /> : null
-                )}
+                {[
+                  ...new Set(
+                    (data?.byModel ?? []).flatMap((r) => (r.model ? [r.model] : []))
+                  ),
+                ].map((model) => (
+                  <option key={model} value={model} />
+                ))}
               </datalist>
             </div>
             <div className="grid gap-1">

@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.controller.client;
 
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.entity.CheckoutSession;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
@@ -50,6 +51,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/client/checkout-sessions")
 @PreAuthorize("hasRole('CLIENT')")
 @Tag(name = "Checkout Sessions", description = "Poll the outcome of hosted checkout flows")
+@ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class CheckoutSessionClientController {
 
     private final CheckoutSessionRepository checkoutSessionRepository;
