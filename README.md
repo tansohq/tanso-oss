@@ -18,6 +18,10 @@ directions.
 
 </div>
 
+<div align="center">
+<img src=".github/assets/two-directions.svg" alt="Vendor admin APIs and customer usage events both feed one ledger: internal spend reconciles to the invoice, monetization prices per customer." width="900" />
+</div>
+
 ## Why Tanso
 
 People want to see where the AI money goes, and today it is split across a
@@ -43,28 +47,38 @@ not the source of truth.
 
 ## Features
 
-- **Identity & workspaces** — accounts (tenants), users, and role-based access.
-- **Product catalog** — define features and bundle them into plans.
-- **Monetization rules** — link features to plans with flat, usage-based, or
-  graduated (tiered) pricing.
-- **Subscriptions** — full lifecycle: subscribe, upgrade with proration, and
-  cancel immediately or at end of period.
-- **Usage & metering** — high-throughput, idempotent event ingestion.
-- **Entitlements** — low-latency gating of capabilities based on subscription state.
-- **Credits** — prepaid credit pools per customer, with grants, deductions,
-  expirations, and full transaction history.
-- **Credit weights (tariff)** — server-side table mapping usage units to
-  credits per feature and model, with scheduled effective times, a console
-  editor, and a pre-flight credit quote on entitlement checks.
-- **Credit price book** — the second pricing dial: what one credit costs to
-  buy, per denomination, with the same scheduled-publish mechanics as
-  weights. Purchased top-ups are stamped with the price in force at sale
-  time, entitlement quotes carry the money equivalent, and a client
-  endpoint exposes current prices for paywall and top-up screens.
-- **Billing & payments** — invoice generation and cycle rollover, synchronized
-  with [Stripe](https://stripe.com).
-- **Agent-native (MCP)** — an optional MCP server so AI agents can operate the
-  platform directly, with an explicit consent gate on actions that spend money.
+Two halves, one ledger. Run either alone (see [Run one half](#run-one-half)) or both together.
+
+**Monetization** — the AI you sell
+
+| | |
+|---|---|
+| **Identity & workspaces** | Accounts (tenants), users, and role-based access. |
+| **Product catalog** | Define features and bundle them into plans. |
+| **Monetization rules** | Link features to plans with flat, usage-based, or graduated (tiered) pricing. |
+| **Subscriptions** | Full lifecycle: subscribe, upgrade with proration, and cancel immediately or at end of period. |
+| **Usage & metering** | High-throughput, idempotent event ingestion. |
+| **Entitlements** | Low-latency gating of capabilities based on subscription state. |
+| **Credits** | Prepaid credit pools per customer, with grants, deductions, expirations, and full transaction history. |
+| **Credit weights (tariff)** | Server-side table mapping usage units to credits per feature and model, with scheduled effective times, a console editor, and a pre-flight credit quote on entitlement checks. |
+| **Credit price book** | The second pricing dial: what one credit costs to buy, per denomination, with the same scheduled-publish mechanics as weights. Purchased top-ups are stamped with the price in force at sale time, entitlement quotes carry the money equivalent, and a client endpoint exposes current prices for paywall and top-up screens. |
+| **Billing & payments** | Invoice generation and cycle rollover, synchronized with [Stripe](https://stripe.com). |
+| **Agent-native (MCP)** | An optional MCP server so AI agents can operate the platform directly, with an explicit consent gate on actions that spend money. |
+
+**Internal spend** — the AI you buy
+
+| | |
+|---|---|
+| **Vendor connections** | Anthropic, OpenAI, Cursor, GitHub Copilot, LiteLLM — pull usage and cost from each vendor's own admin API on a schedule, no proxy in the request path. |
+| **Reconcile** | Metered, vendor-reported and invoiced side by side per provider, so you see which one moved. |
+| **Teams & allocation** | Rules map a vendor workspace, key or actor onto a team or project, with roll-up; whatever no rule claims lands in an explicit Unattributed row. |
+| **Budgets & alerts** | A daily ceiling for runaway agents, a monthly one for the real number, and threshold/breach/spike/projected alerts to Slack, webhook, or email. |
+| **Gateway enforcement** | Connect a LiteLLM proxy and a Block budget is pushed to it as a hard `max_budget`. |
+| **Outcomes** | Merged PRs and completed issues joined to the spend that produced them — cost per outcome, and the AI-assisted share. |
+| **Savings & route simulator** | What prompt caching saved per model, and what the same tokens would cost on another model. |
+| **Feature P&L** | A project's AI build cost next to the revenue and serving cost of the feature it shipped — the report that needs both halves. |
+
+See [Internal AI spend](#internal-ai-spend) for the full walkthrough.
 
 ## Tech stack
 
