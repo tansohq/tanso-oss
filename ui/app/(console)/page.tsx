@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import { isModuleOff } from "@/lib/api/client"
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts"
 
@@ -35,6 +34,7 @@ import { formatCurrency, formatNumber } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type { CustomerAnalyticsDto, ModelSummaryDto } from "@/lib/api/types"
 import { CustomerDetailSheet, ModelDetailSheet } from "@/features/analytics/detail-sheets"
+import { BuildSpendCard } from "@/features/analytics/build-spend-card"
 import { GettingStartedCard } from "@/features/analytics/getting-started-card"
 import { useModelsAnalytics, usePortfolio, useRevenueBridge } from "@/features/analytics/queries"
 
@@ -49,12 +49,8 @@ function churnBadgeVariant(risk: string | undefined) {
 }
 
 export default function OverviewPage() {
-  const router = useRouter()
   const portfolio = usePortfolio()
   const monetizationOff = isModuleOff(portfolio.error)
-  useEffect(() => {
-    if (monetizationOff) router.replace("/spend/usage")
-  }, [monetizationOff, router])
   const bridge = useRevenueBridge()
   const models = useModelsAnalytics()
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerAnalyticsDto | null>(null)
@@ -73,6 +69,20 @@ export default function OverviewPage() {
       ? new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(p.periodStart))
       : "",
   }))
+
+  if (monetizationOff) {
+    return (
+      <>
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
+          <p className="text-sm text-muted-foreground">
+            What your AI costs. Monetization is switched off on this install.
+          </p>
+        </div>
+        <BuildSpendCard />
+      </>
+    )
+  }
 
   if (portfolio.isPending) {
     return (
@@ -93,9 +103,11 @@ export default function OverviewPage() {
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
         <p className="text-sm text-muted-foreground">
-          Revenue, cost, and margin across your portfolio.
+          What your AI costs to build, and what it earns when you sell it.
         </p>
       </div>
+
+      <BuildSpendCard />
 
       <GettingStartedCard />
 

@@ -29,7 +29,8 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
-import { daysAgo, formatCents } from "@/features/spend/format"
+import { formatCents } from "@/features/spend/format"
+import { useSpendRange } from "@/features/spend/range-context"
 import {
   useDeleteOutcomeSource,
   useProbeOutcomeSource,
@@ -56,7 +57,7 @@ const kindLabel: Record<string, string> = {
 }
 
 export default function SpendOutcomesPage() {
-  const [range] = useState({ from: daysAgo(29), to: daysAgo(-1) })
+  const range = useSpendRange()
   const sources = useOutcomeSources()
   const units = useSpendUnits()
   const report = useOutcomeReport(range.from, range.to)

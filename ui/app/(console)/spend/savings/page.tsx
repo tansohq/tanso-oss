@@ -4,6 +4,8 @@ import { useState } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import {
   Card,
   CardContent,
@@ -11,8 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
 import {
-  daysAgo,
   formatCents,
   formatTokens,
   providerLabel,
@@ -35,19 +34,11 @@ import {
   useSpendSavings,
 } from "@/features/spend/queries"
 import type { SpendRouteSimulationDto } from "@/features/spend/types"
+import { useSpendRange } from "@/features/spend/range-context"
+import { UsageTabs } from "@/features/spend/usage-tabs"
 
 export default function SpendSavingsPage() {
-  const [range, setRange] = useState({ from: daysAgo(29), to: daysAgo(-1) })
-  const [draft, setDraft] = useState(range)
-  const commit = () => {
-    if (
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.from) &&
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.to) &&
-      draft.from < draft.to
-    ) {
-      setRange(draft)
-    }
-  }
+  const range = useSpendRange()
   const report = useSpendSavings(range.from, range.to)
   const models = usePriceBookModels()
   const simulate = useSimulateRoute()
@@ -76,31 +67,9 @@ export default function SpendSavingsPage() {
             another model. Advice from the price book — Tanso never routes.
           </p>
         </div>
-        <div className="flex items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor="savings-from">From</Label>
-            <Input
-              id="savings-from"
-              type="date"
-              value={draft.from}
-              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="savings-to">To (exclusive)</Label>
-            <Input
-              id="savings-to"
-              type="date"
-              value={draft.to}
-              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
-        </div>
       </div>
+
+      <UsageTabs />
 
       {report.error && !isBuildSideOff(report.error) && (
         <Alert variant="destructive">

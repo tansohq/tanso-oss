@@ -1,6 +1,5 @@
 "use client"
 
-import { useState } from "react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -10,8 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -20,21 +17,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { daysAgo, formatCents } from "@/features/spend/format"
+import { formatCents } from "@/features/spend/format"
+import { useSpendRange } from "@/features/spend/range-context"
 import { isBuildSideOff, useSpendPnl } from "@/features/spend/queries"
 
 export default function SpendPnlPage() {
-  const [range, setRange] = useState({ from: daysAgo(29), to: daysAgo(-1) })
-  const [draft, setDraft] = useState(range)
-  const commit = () => {
-    if (
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.from) &&
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.to) &&
-      draft.from < draft.to
-    ) {
-      setRange(draft)
-    }
-  }
+  const range = useSpendRange()
   const report = useSpendPnl(range.from, range.to)
   const data = report.data
 
@@ -60,30 +48,6 @@ export default function SpendPnlPage() {
             earns from customers, in the same window. Link a project to its
             feature under Teams.
           </p>
-        </div>
-        <div className="flex items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor="pnl-from">From</Label>
-            <Input
-              id="pnl-from"
-              type="date"
-              value={draft.from}
-              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="pnl-to">To (exclusive)</Label>
-            <Input
-              id="pnl-to"
-              type="date"
-              value={draft.to}
-              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
         </div>
       </div>
 

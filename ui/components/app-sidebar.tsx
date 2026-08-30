@@ -1,10 +1,12 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
   Activity,
   Bell,
+  ChevronRight,
   Coins,
   Gauge,
   GitMerge,
@@ -18,7 +20,6 @@ import {
   Settings,
   Users,
   Wallet,
-  PiggyBank,
   Landmark,
 } from "lucide-react"
 
@@ -40,6 +41,20 @@ import { clearToken, getClaims } from "@/lib/auth"
 import { isBuildSideOff, useVendorConnections } from "@/features/spend/queries"
 import { usePortfolio } from "@/features/analytics/queries"
 import { isModuleOff } from "@/lib/api/client"
+import { cn } from "@/lib/utils"
+
+// Internal spend: the AI you buy. Connections first, since every other page
+// here is an empty shell until a vendor is connected — and it stays first
+// afterwards, because that is where a connection's ERROR status surfaces.
+const internalSpendNav = [
+  { title: "Connections", href: "/spend/connections", icon: Plug },
+  { title: "Usage", href: "/spend/usage", icon: Wallet },
+  { title: "Teams", href: "/spend/teams", icon: Users },
+  { title: "Alerts", href: "/spend/alerts", icon: Bell },
+  { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
+  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
+  { title: "Feature P&L", href: "/spend/pnl", icon: Landmark },
+]
 
 // Monetization: the AI you sell. Plans, credits, margin per customer.
 const monetizationNav = [
@@ -52,19 +67,26 @@ const monetizationNav = [
   { title: "Events", href: "/events", icon: Activity },
 ]
 
-// Internal spend: the AI you buy. Connections first, since nothing else here
-// shows anything until a vendor is connected. P&L needs both halves, so it
-// is hidden when monetization is off.
-const internalSpendNav = [
-  { title: "Connections", href: "/spend/connections", icon: Plug },
-  { title: "Spend", href: "/spend/usage", icon: Wallet },
-  { title: "Teams", href: "/spend/teams", icon: Users },
-  { title: "Alerts", href: "/spend/alerts", icon: Bell },
-  { title: "Savings", href: "/spend/savings", icon: PiggyBank },
-  { title: "Reconcile", href: "/spend/reconcile", icon: Scale },
-  { title: "Outcomes", href: "/spend/outcomes", icon: GitMerge },
-  { title: "P&L", href: "/spend/pnl", icon: Landmark },
-]
+// Which groups the operator left open, remembered across visits. Reading
+// localStorage in the initializer is safe here: the console layout renders
+// nothing until it has checked for a token, so the sidebar only ever mounts
+// on the client.
+function useGroupOpen(key: string, defaultOpen: boolean) {
+  const storageKey = `tanso.sidebar.${key}`
+  const [open, setOpen] = useState(() => {
+    const stored = localStorage.getItem(storageKey)
+    return stored === null ? defaultOpen : stored === "true"
+  })
+
+  function toggle() {
+    setOpen((current) => {
+      localStorage.setItem(storageKey, String(!current))
+      return !current
+    })
+  }
+
+  return [open, toggle] as const
+}
 
 export function AppSidebar() {
   const pathname = usePathname()
@@ -75,6 +97,21 @@ export function AppSidebar() {
   const buildSideOff = isBuildSideOff(vendorConnections.error)
   const portfolio = usePortfolio()
   const monetizationOff = isModuleOff(portfolio.error)
+
+  const [spendStored, toggleSpend] = useGroupOpen("internal-spend", true)
+  // Collapsed by default: internal spend is the front door. When the build
+  // side is off there is nothing else to show, so monetization opens instead.
+  const [monetizationStored, toggleMonetization] = useGroupOpen(
+    "monetization",
+    buildSideOff
+  )
+
+  // A collapsed group must still show the page you are on, or the active item
+  // is invisible while you are standing on it.
+  const inSpend = pathname.startsWith("/spend")
+  const spendOpen = spendStored || inSpend
+  const monetizationOpen =
+    monetizationStored || (!inSpend && pathname !== "/" && !isActive("/settings"))
 
   // On mobile the sidebar is a sheet; a tap on a link should close it.
   function closeMobile() {
@@ -90,7 +127,7 @@ export function AppSidebar() {
     router.replace("/login")
   }
 
-  function renderItems(items: typeof monetizationNav) {
+  function renderItems(items: typeof internalSpendNav) {
     return items.map((item) => (
       <SidebarMenuItem key={item.href}>
         <SidebarMenuButton
@@ -105,6 +142,21 @@ export function AppSidebar() {
     ))
   }
 
+  function renderGroupLabel(label: string, open: boolean, toggle: () => void) {
+    return (
+      <SidebarGroupLabel
+        render={<button type="button" onClick={toggle} />}
+        className="w-full cursor-pointer justify-between hover:text-sidebar-foreground"
+        aria-expanded={open}
+      >
+        {label}
+        <ChevronRight
+          className={cn("transition-transform duration-200", open && "rotate-90")}
+        />
+      </SidebarGroupLabel>
+    )
+  }
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -116,42 +168,52 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  render={<Link href="/" />}
+                  isActive={isActive("/")}
+                  onClick={closeMobile}
+                >
+                  <Gauge />
+                  Overview
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+        {!buildSideOff && (
+          <SidebarGroup>
+            {renderGroupLabel("Internal spend", spendOpen, toggleSpend)}
+            {spendOpen && (
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {renderItems(
+                    monetizationOff
+                      ? internalSpendNav.filter((i) => i.href !== "/spend/pnl")
+                      : internalSpendNav
+                  )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            )}
+          </SidebarGroup>
+        )}
         {!monetizationOff && (
           <>
+            {!buildSideOff && <SidebarSeparator />}
             <SidebarGroup>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      render={<Link href="/" />}
-                      isActive={isActive("/")}
-                      onClick={closeMobile}
-                    >
-                      <Gauge />
-                      Overview
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-            <SidebarGroup>
-              <SidebarGroupLabel>Monetization</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>{renderItems(monetizationNav)}</SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
-        )}
-        {!buildSideOff && (
-          <>
-            {!monetizationOff && <SidebarSeparator />}
-            <SidebarGroup>
-              <SidebarGroupLabel>Internal spend</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {renderItems(monetizationOff ? internalSpendNav.filter((i) => i.href !== "/spend/pnl") : internalSpendNav)}
-                </SidebarMenu>
-              </SidebarGroupContent>
+              {renderGroupLabel(
+                "Monetization",
+                monetizationOpen,
+                toggleMonetization
+              )}
+              {monetizationOpen && (
+                <SidebarGroupContent>
+                  <SidebarMenu>{renderItems(monetizationNav)}</SidebarMenu>
+                </SidebarGroupContent>
+              )}
             </SidebarGroup>
           </>
         )}

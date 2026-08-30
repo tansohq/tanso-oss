@@ -371,7 +371,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    measures the budget on its price book, LiteLLM enforces against its own
    model map — the card shows both figures so the drift is visible.
 
-6. **Internal spend → Savings**: what prompt caching is worth — per model, the
+6. **Internal spend → Usage → Savings**: what prompt caching is worth — per model, the
    input-side cost as billed against the same tokens with no cache (cache-read
    share, cache writes, $ saved; models without cache rates read as zero and
    say so) — and a **route simulator**: pick a model's traffic, a target from
@@ -379,7 +379,7 @@ It works from the vendor's admin API, not a proxy in your request path:
    target's rates with the caveats spelled out (tokenizer drift, no cache
    rates, quality not modelled). Advice only; Tanso never routes.
 
-7. **Internal spend → P&L**: the join the two halves exist for. Link a *project*
+7. **Internal spend → Feature P&L**: the join the two halves exist for. Link a *project*
    unit to the serve-side feature it shipped (Teams → the project → Feature),
    and the report puts the project's AI build cost (its attributed spend, with
    descendants) next to that feature's revenue and serving cost from the
@@ -397,9 +397,9 @@ It works from the vendor's admin API, not a proxy in your request path:
 
 <img src=".github/assets/screenshots/spend-digest.png" alt="Internal spend → Alerts — the weekly digest: last week per unit against the week before, month-to-date against the ceiling" width="800" />
 
-<img src=".github/assets/screenshots/spend-savings.png" alt="Internal spend → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
+<img src=".github/assets/screenshots/spend-savings.png" alt="Internal spend → Usage → Savings — what prompt caching saved per model, and a route simulation of the same tokens on another model" width="800" />
 
-<img src=".github/assets/screenshots/spend-pnl.png" alt="Internal spend → P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
+<img src=".github/assets/screenshots/spend-pnl.png" alt="Internal spend → Feature P&L — a project's AI build cost next to the revenue and serving cost of the feature it shipped" width="800" />
 
 6. **Internal spend → Outcomes**: shipped work next to what it cost. Connect GitHub
    (merged pull requests per repo) or Linear (completed issues per team), or
@@ -478,7 +478,7 @@ supply them via environment variables. The common ones:
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
 | `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_MONETIZATION_ENABLED` | Monetization — plans, features, customers, subscriptions, credits, invoices, the client API, Stripe and the billing jobs (`true` by default; `false` for an internal-spend-only install: those routes answer 404 `module_disabled` and the console shows Internal spend alone). |
-| `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Spend group |
+| `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Internal spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Internal spend group |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where internal spend pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
 | `APP_SPEND_GITHUB_BASE_URL` / `APP_SPEND_LINEAR_BASE_URL` | Where outcomes (and Copilot metrics) are pulled from (defaults: api.github.com, api.linear.app/graphql) |
 | `APP_SPEND_CURSOR_BASE_URL` | Where Cursor usage is pulled from (default api.cursor.com) |

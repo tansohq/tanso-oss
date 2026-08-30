@@ -1,8 +1,11 @@
 "use client"
 
-import { useState } from "react"
+
+import Link from "next/link"
+import { ArrowRight } from "lucide-react"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -10,8 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import {
   Table,
   TableBody,
@@ -21,7 +22,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
-  daysAgo,
   formatCents,
   formatTokens,
   providerLabel,
@@ -30,23 +30,15 @@ import {
   isBuildSideOff,
   useSpendSettings,
   useSpendUsage,
+  useVendorConnections,
 } from "@/features/spend/queries"
 import { formatNumber } from "@/lib/format"
+import { useSpendRange } from "@/features/spend/range-context"
+import { UsageTabs } from "@/features/spend/usage-tabs"
 
 export default function SpendUsagePage() {
-  const [range, setRange] = useState({ from: daysAgo(29), to: daysAgo(-1) })
-  const [draft, setDraft] = useState(range)
-  // Date inputs emit every partial value while typing a year; only a complete,
-  // ordered range reaches the query key.
-  const commit = () => {
-    if (
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.from) &&
-      /^\d{4}-\d{2}-\d{2}$/.test(draft.to) &&
-      draft.from < draft.to
-    ) {
-      setRange(draft)
-    }
-  }
+  const range = useSpendRange()
+  const connections = useVendorConnections()
   const report = useSpendUsage(range.from, range.to)
   const settings = useSpendSettings()
   const data = report.data
@@ -63,33 +55,29 @@ export default function SpendUsagePage() {
             book and by the vendor&apos;s own report.
           </p>
         </div>
-        <div className="flex items-end gap-2">
-          <div className="grid gap-1">
-            <Label htmlFor="usage-from">From</Label>
-            <Input
-              id="usage-from"
-              type="date"
-              value={draft.from}
-              onChange={(e) => setDraft({ ...draft, from: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
-          <div className="grid gap-1">
-            <Label htmlFor="usage-to">To (exclusive)</Label>
-            <Input
-              id="usage-to"
-              type="date"
-              value={draft.to}
-              onChange={(e) => setDraft({ ...draft, to: e.target.value })}
-              onBlur={commit}
-              onKeyDown={(e) => e.key === "Enter" && commit()}
-            />
-          </div>
-        </div>
       </div>
 
-      {isBuildSideOff(report.error) ? (
+      <UsageTabs />
+
+      {!connections.isPending &&
+      !isBuildSideOff(connections.error) &&
+      (connections.data ?? []).length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>No vendors connected</CardTitle>
+            <CardDescription>
+              Connect Anthropic, OpenAI, Cursor, Copilot or a LiteLLM proxy and
+              sync a window — everything on this page fills in from what the
+              vendor reports.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button render={<Link href="/spend/connections" />}>
+              Connect a vendor <ArrowRight />
+            </Button>
+          </CardContent>
+        </Card>
+      ) : isBuildSideOff(report.error) ? (
         <p className="text-sm text-muted-foreground">
           Internal spend is switched off on this install
           (APP_MODULES_BUILD_ENABLED=false).
@@ -235,7 +223,7 @@ export default function SpendUsagePage() {
                   <CardDescription>
                     Claude Code actors, OpenAI users, Cursor and Copilot seats,
                     LiteLLM users (or the end-user the caller passed). Tokens
-                    here are already inside the totals above; "Sessions" is
+                    here are already inside the totals above; &ldquo;Sessions&rdquo; is
                     events for Cursor, CLI sessions for Copilot, requests for
                     LiteLLM.
                   </CardDescription>
