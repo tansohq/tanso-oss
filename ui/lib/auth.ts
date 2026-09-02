@@ -20,6 +20,13 @@ export type TokenClaims = {
   exp: number
 }
 
+/** A token we still hold but that has expired reads as signed out. */
+export function isTokenValid(): boolean {
+  const claims = getClaims()
+  if (!claims) return false
+  return claims.exp * 1000 > Date.now()
+}
+
 export function getClaims(): TokenClaims | null {
   const token = getToken()
   if (!token) return null
