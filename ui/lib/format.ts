@@ -19,3 +19,11 @@ export function formatDateTime(value: string | undefined | null): string {
     new Date(value),
   )
 }
+
+/** For values that are a calendar date, stored as a UTC-midnight instant. */
+export function formatUtcDate(value: string | undefined | null): string {
+  if (!value) return "—"
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeZone: "UTC" }).format(
+    new Date(value),
+  )
+}
