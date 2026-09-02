@@ -121,11 +121,11 @@ subscriptions, credits, invoices, events, and margin analytics:
 <img src=".github/assets/screenshots/margin-overview.png" alt="Overview — revenue, cost, and per-model margin" width="800" />
 <br /><em>Per-model margin from the same ledger that bills — a money-losing model shows up in red.</em>
 <br /><br />
-<img src=".github/assets/screenshots/weights.png" alt="Credit weights — tariff editor with observed cost per unit" width="800" />
-<br /><em>The credit tariff: weights next to observed cost per unit, with scheduled cutovers.</em>
+<img src=".github/assets/screenshots/weights.png" alt="Credit weights — the tariff editor, with a cutover scheduled ahead" width="800" />
+<br /><em>The credit tariff: how many credits one unit of usage burns, per feature and model — and the next change already dated.</em>
 <br /><br />
-<img src=".github/assets/screenshots/ledger.png" alt="Credit pool ledger — weighted deductions with running balances" width="800" />
-<br /><em>Every deduction auditable to the unit: weighted burns, grants, running balances.</em>
+<img src=".github/assets/screenshots/ledger.png" alt="Credit pool ledger — grants and deductions with running balances" width="800" />
+<br /><em>Every movement auditable to the unit: grants, burns, running balances, each tied to its event.</em>
 <br /><br />
 <img src=".github/assets/gifs/create-plan-attach-feature.gif" alt="Creating a plan and attaching a feature to it" width="800" />
 <br /><em>Creating a plan and attaching a feature — the full catalog flow, end to end.</em>
