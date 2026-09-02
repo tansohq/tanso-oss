@@ -311,13 +311,14 @@ VALUES
 -- Projects carry feature_id, which is the only link between build cost and
 -- the feature that revenue lands on. Docs bot has no feature on purpose so
 -- the unlinked-projects row is not empty.
-INSERT INTO spend_units (spend_unit_id, account_id, type, name, feature_id, created_at)
+-- Platform is the parent team, so project spend rolls up into one number.
+INSERT INTO spend_units (spend_unit_id, account_id, type, name, feature_id, parent_id, created_at)
 VALUES
-  ('b6666666-6666-4666-8666-111111111111', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Document Q&A',    'b1111111-1111-4111-8111-111111111111', NOW() - INTERVAL '120 days'),
-  ('b6666666-6666-4666-8666-222222222222', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Contract review', 'b1111111-1111-4111-8111-222222222222', NOW() - INTERVAL '120 days'),
-  ('b6666666-6666-4666-8666-333333333333', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Bulk classify',   'b1111111-1111-4111-8111-333333333333', NOW() - INTERVAL '120 days'),
-  ('b6666666-6666-4666-8666-444444444444', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Docs bot',        NULL,                                   NOW() - INTERVAL '60 days'),
-  ('b6666666-6666-4666-8666-aaaaaaaaaaaa', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'TEAM',    'Platform',        NULL,                                   NOW() - INTERVAL '120 days');
+  ('b6666666-6666-4666-8666-aaaaaaaaaaaa', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'TEAM',    'Platform',        NULL,                                   NULL,                                   NOW() - INTERVAL '120 days'),
+  ('b6666666-6666-4666-8666-111111111111', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Document Q&A',    'b1111111-1111-4111-8111-111111111111', 'b6666666-6666-4666-8666-aaaaaaaaaaaa', NOW() - INTERVAL '120 days'),
+  ('b6666666-6666-4666-8666-222222222222', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Contract review', 'b1111111-1111-4111-8111-222222222222', 'b6666666-6666-4666-8666-aaaaaaaaaaaa', NOW() - INTERVAL '120 days'),
+  ('b6666666-6666-4666-8666-333333333333', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Bulk classify',   'b1111111-1111-4111-8111-333333333333', 'b6666666-6666-4666-8666-aaaaaaaaaaaa', NOW() - INTERVAL '120 days'),
+  ('b6666666-6666-4666-8666-444444444444', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'PROJECT', 'Docs bot',        NULL,                                   'b6666666-6666-4666-8666-aaaaaaaaaaaa', NOW() - INTERVAL '60 days');
 
 INSERT INTO spend_attribution_rules (spend_attribution_rule_id, account_id, spend_unit_id, provider, match_kind, match_value, priority, created_at)
 VALUES
