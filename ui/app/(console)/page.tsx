@@ -66,7 +66,7 @@ export default function OverviewPage() {
   const bridgeData = (bridge.data?.periods ?? []).map((p) => ({
     ...p,
     label: p.periodStart
-      ? new Intl.DateTimeFormat("en-US", { month: "short" }).format(new Date(p.periodStart))
+      ? new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(p.periodStart))
       : "",
   }))
 
