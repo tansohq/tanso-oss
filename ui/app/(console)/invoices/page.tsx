@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/table"
 import { toast } from "@/components/ui/toast"
 import type { InvoiceDto } from "@/lib/api/types"
-import { formatCurrency, formatDate } from "@/lib/format"
+import { formatCurrency, formatUtcDate } from "@/lib/format"
 import { useInvoiceCheckoutLink, useMarkInvoicePaid } from "@/features/invoices/mutations"
 import { useInvoice, useInvoices } from "@/features/invoices/queries"
 
@@ -87,7 +87,7 @@ const columns: ColumnDef<InvoiceDto>[] = [
   {
     accessorKey: "dueDate",
     header: "Due",
-    cell: ({ row }) => formatDate(row.original.dueDate),
+    cell: ({ row }) => formatUtcDate(row.original.dueDate),
   },
 ]
 
@@ -127,7 +127,7 @@ export default function InvoicesPage() {
               {customerLabel(invoice ?? ({} as InvoiceDto))}
               {invoice?.subscription?.plan?.name ? ` · ${invoice.subscription.plan.name}` : ""}
               {" · due "}
-              {formatDate(invoice?.dueDate)}
+              {formatUtcDate(invoice?.dueDate)}
             </DialogDescription>
           </DialogHeader>
           {detail.isPending ? (
