@@ -125,6 +125,33 @@ ON CONFLICT (id) DO UPDATE SET
     metadata = EXCLUDED.metadata,
     modified_at = NOW();
 
+-- A published price for AI_CREDITS so the demo stack can exercise the credit
+-- purchase path. Without a price the first purchase attempt is a 400 asking the
+-- operator to publish one, which is correct but leaves the demo unable to buy.
+INSERT INTO credit_prices (
+    id,
+    account_id,
+    denomination,
+    currency,
+    price_per_credit,
+    effective_from,
+    created_by,
+    created_at
+)
+VALUES (
+    '77777777-7777-4777-8777-777777777777',
+    'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467',
+    'AI_CREDITS',
+    'USD',
+    0.100000,
+    NOW() - INTERVAL '1 day',
+    '0ab38d70-120e-4fce-9273-36496d1f2db7',
+    NOW()
+)
+ON CONFLICT (id) DO UPDATE SET
+    currency = EXCLUDED.currency,
+    price_per_credit = EXCLUDED.price_per_credit;
+
 INSERT INTO plan_feature_rules (
     id,
     plan_id,

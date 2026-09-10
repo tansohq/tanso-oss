@@ -45,6 +45,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.model.api.external.StripeMode;
+import com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto;
+import com.stripe.exception.StripeException;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
@@ -61,6 +65,8 @@ import java.util.UUID;
 public class SubscriptionClientController {
     private final CustomerAccessGuard customerAccessGuard;
     private final SubscriptionService subscriptionService;
+    private final com.tansoflow.tansocore.service.internal.account.AccountService accountService;
+    private final com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
 
     /** ck_ callers may only touch subscriptions belonging to their own customer. */
     private void requireOwnSubscription(UserContext userContext, String subscriptionId) {
@@ -84,6 +90,12 @@ public class SubscriptionClientController {
             + "without one, customer-key callers get 402 with a checkout URL and a pollable checkout session.", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a subscription"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
+                    "Payment required: the plan is paid and the customer has no usable payment method. "
+                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
+                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. Customer-scoped (ck_) keys only."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
+                    "planId is missing or names no plan on this account", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid plan or customer ID", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubscribedCustomerResponse>> createSubscription(@AuthenticationPrincipal UserContext userContext,
@@ -94,17 +106,40 @@ public class SubscriptionClientController {
         SubscribedCustomerResponse subscribedCustomerResponse =
                 subscriptionService.clientSubscribeCustomer(subscriptionRequest, userContext.getAccountId());
 
-        // Agent-facing 402: a checkout-URL-only outcome means "payment required, hand
-        // this to your principal". Tenant (sk_) callers keep the legacy 201 shape.
-        boolean checkoutOnly = subscribedCustomerResponse.getSubscription() == null
-                && subscribedCustomerResponse.getCheckoutUrl() != null;
-        HttpStatus status = checkoutOnly && userContext.isCustomerScoped()
+        // Pass-through billing leaves a paid plan as an inactive subscription plus a DUE invoice, and
+        // until now only the operator could mint the link to pay it. The subscribe transaction has
+        // committed by here, so the hosted invoice link can be created and handed to the agent.
+        if (userContext.isCustomerScoped()
+                && subscribedCustomerResponse.getCheckoutUrl() == null
+                && subscribedCustomerResponse.getInvoice() != null
+                && "DUE".equals(subscribedCustomerResponse.getInvoice().getStatus())) {
+            AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
+            if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
+                try {
+                    StripePaymentLinkDto link = stripeSyncService.syncNewInvoice(
+                            UUID.fromString(subscribedCustomerResponse.getInvoice().getId()),
+                            UUID.fromString(userContext.getAccountId()));
+                    subscribedCustomerResponse.setCheckoutUrl(link.getPaymentLink());
+                } catch (StripeException e) {
+                    throw new IllegalStateException("Could not create the Stripe payment link for invoice "
+                            + subscribedCustomerResponse.getInvoice().getId() + ": " + e.getMessage(), e);
+                }
+            }
+        }
+
+        // Agent-facing 402: a checkout URL with no active subscription means "payment required, hand
+        // this to your principal". Covers both the Stripe-driven path (no subscription yet) and the
+        // pass-through path (inactive subscription plus a DUE invoice). Tenant (sk_) callers keep 201.
+        var subscription = subscribedCustomerResponse.getSubscription();
+        boolean paymentRequired = subscribedCustomerResponse.getCheckoutUrl() != null
+                && (subscription == null || !Boolean.TRUE.equals(subscription.getIsActive()));
+        HttpStatus status = paymentRequired && userContext.isCustomerScoped()
                 ? HttpStatus.PAYMENT_REQUIRED
                 : HttpStatus.CREATED;
 
         ApiResponse<SubscribedCustomerResponse> apiResponse = ApiResponse.<SubscribedCustomerResponse>builder()
                 .data(subscribedCustomerResponse)
-                .success(!checkoutOnly || !userContext.isCustomerScoped())
+                .success(!paymentRequired || !userContext.isCustomerScoped())
                 .build();
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
     }

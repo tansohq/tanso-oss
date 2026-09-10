@@ -4,10 +4,11 @@
 
 # Tanso Core
 
-**Open-source cost and pricing engine for AI products.** See what your teams
-spend on AI, by team, project and person, reconciled to the vendor's invoice.
-See what each customer costs you to serve, and price on it. One ledger, both
-directions.
+**Bill AI usage. Know your margin.** Open-source billing for AI products.
+Every metered event carries what it cost you next to what you billed, so margin
+per customer, feature, and model comes from the same ledger that bills. The
+same ledger also tracks the AI your team buys, reconciled to the vendor's
+invoice, and gives your customers' agents an API to sign up and pay through.
 
 [Website](https://tansohq.com) · [Quick start](#quick-start-docker) · [Next.js example](#try-the-five-credit-nextjs-example) · [Features](#features) · [Agents & MCP](#agents--mcp) · [API & SDKs](#api-reference--sdks) · [Contributing](CONTRIBUTING.md) · [Docs](https://tanso.mintlify.app/introduction)
 

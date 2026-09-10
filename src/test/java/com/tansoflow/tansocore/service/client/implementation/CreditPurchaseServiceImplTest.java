@@ -26,6 +26,9 @@ import com.tansoflow.tansocore.model.credit.CreditGrantDto;
 import com.tansoflow.tansocore.model.credit.CreditPurchaseResult;
 import com.tansoflow.tansocore.model.credit.request.CreditGrantRequest;
 import com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest;
+import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.model.api.external.StripeMode;
+import com.tansoflow.tansocore.repository.AccountSettingRepository;
 import com.tansoflow.tansocore.repository.CheckoutSessionRepository;
 import com.tansoflow.tansocore.repository.CreditPoolRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
@@ -40,6 +43,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,12 +74,16 @@ class CreditPurchaseServiceImplTest {
     @Mock
     private CheckoutSessionRepository checkoutSessionRepository;
 
+    @Mock
+    private AccountSettingRepository accountSettingRepository;
+
     @InjectMocks
     private CreditPurchaseServiceImpl service;
 
     private final UUID accountId = UUID.randomUUID();
     private Customer customer;
     private CreditPool pool;
+    private AccountSetting settings;
 
     @BeforeEach
     void setUp() {
@@ -92,6 +100,9 @@ class CreditPurchaseServiceImplTest {
         pool.setCustomer(customer);
         pool.setDenomination("credits");
 
+        settings = new AccountSetting();
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        lenient().when(accountSettingRepository.findAccountSettingById(accountId)).thenReturn(settings);
         lenient().when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount("cust-1", accountId.toString()))
                 .thenReturn(customer);
         lenient().when(creditPoolRepository.findByIdAndAccountId(pool.getId(), accountId))
@@ -197,5 +208,76 @@ class CreditPurchaseServiceImplTest {
         assertThatThrownBy(() -> service.purchase(request(new BigDecimal("10"), "pm_1"), "cust-1", accountId.toString()))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("0.50");
+    }
+
+    @Test
+    void purchaseByDenominationCreatesThePoolOnFirstPurchase() throws Exception {
+        when(creditPoolRepository.findByCustomerIdAndAccountIdAndDenomination(customer.getId(), accountId, "credits"))
+                .thenReturn(Optional.empty());
+        when(creditPoolRepository.saveAndFlush(any(CreditPool.class))).thenAnswer(inv -> {
+            CreditPool created = inv.getArgument(0);
+            created.setId(UUID.randomUUID());
+            return created;
+        });
+        when(stripePaymentMethodService.createTopupCheckoutSession(eq(accountId), eq(customer.getId()),
+                eq(new BigDecimal("10.00")), eq("USD"), anyString(), any()))
+                .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout", "cs_new"));
+
+        CreditPurchaseRequest request = new CreditPurchaseRequest();
+        request.setDenomination("credits");
+        request.setCredits(new BigDecimal("1000"));
+
+        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString());
+
+        assertThat(result.isCompleted()).isFalse();
+        assertThat(result.getCheckoutUrl()).isEqualTo("https://checkout");
+        ArgumentCaptor<CreditPool> captor = ArgumentCaptor.forClass(CreditPool.class);
+        verify(creditPoolRepository).saveAndFlush(captor.capture());
+        assertThat(captor.getValue().getDenomination()).isEqualTo("credits");
+        assertThat(captor.getValue().getCustomer()).isSameAs(customer);
+        assertThat(captor.getValue().getCurrency()).isEqualTo("USD");
+    }
+
+    @Test
+    void purchaseWithSinglePoolNeedsNoIdentifier() throws Exception {
+        when(creditPoolRepository.findByCustomerIdAndAccountId(customer.getId(), accountId))
+                .thenReturn(List.of(pool));
+        when(stripePaymentMethodService.createTopupCheckoutSession(any(), any(), any(), anyString(), anyString(), any()))
+                .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout", "cs_one"));
+
+        CreditPurchaseRequest request = new CreditPurchaseRequest();
+        request.setCredits(new BigDecimal("1000"));
+
+        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString());
+
+        assertThat(result.getCheckoutUrl()).isEqualTo("https://checkout");
+        verify(creditPoolRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void purchaseWithoutPoolOrDenominationSaysWhatToSend() {
+        when(creditPoolRepository.findByCustomerIdAndAccountId(customer.getId(), accountId))
+                .thenReturn(List.of());
+
+        CreditPurchaseRequest request = new CreditPurchaseRequest();
+        request.setCredits(new BigDecimal("1000"));
+
+        assertThatThrownBy(() -> service.purchase(request, "cust-1", accountId.toString()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("denomination");
+    }
+
+    @Test
+    void purchaseWithoutPaymentProcessorRefusesWithAReasonInsteadOfCallingStripe() throws Exception {
+        settings.setStripeMode(StripeMode.NONE);
+
+        CreditPurchaseResult result = service.purchase(request(new BigDecimal("1000"), null),
+                "cust-1", accountId.toString());
+
+        assertThat(result.isCompleted()).isFalse();
+        assertThat(result.getCheckoutUrl()).isNull();
+        assertThat(result.getDeclineReason()).contains("payment processor");
+        verify(stripePaymentMethodService, never()).createTopupCheckoutSession(any(), any(), any(), anyString(), anyString(), any());
+        verify(creditService, never()).grantCredits(any(), anyString());
     }
 }

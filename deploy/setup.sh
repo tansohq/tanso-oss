@@ -39,6 +39,18 @@ docker compose exec -T postgres psql -q \
   < ../scripts/seed-developer-demo.sql
 echo "Developer demo ready."
 
+# The margin demo: paid plans, five customers on different margins, ninety days
+# of metered events, and the internal-spend side, so Overview and Feature P&L
+# open on real numbers instead of zeros. Set TANSO_SKIP_MARGIN_DEMO=1 to skip.
+if [ -z "${TANSO_SKIP_MARGIN_DEMO:-}" ]; then
+  echo "Seeding the margin demo..."
+  docker compose exec -T postgres psql -q \
+    -v ON_ERROR_STOP=1 \
+    -U "${POSTGRES_USER:-tanso}" -d "${POSTGRES_DB:-tanso}" \
+    < ../scripts/seed-margin-demo.sql
+  echo "Margin demo ready."
+fi
+
 # On schemas that still have the platform_mode column, it defaults to OBSERVE
 # (read-only mode), which blocks plan/subscription operations. Flip the seeded
 # account to FULL; on newer schemas without the column this is a no-op.
@@ -56,6 +68,7 @@ Tanso is running.
   API:      $API_URL
   Docs:     $API_URL/swagger-ui.html
   Demo:     demo-user has 5 AI_CREDITS for feature ai.chat
+  Console:  npm install && npm run dev:ui, then http://localhost:3000
 
 These are the dev-quickstart credentials from scripts/create-test-account.sql.
 Change them before exposing this instance to anything real.

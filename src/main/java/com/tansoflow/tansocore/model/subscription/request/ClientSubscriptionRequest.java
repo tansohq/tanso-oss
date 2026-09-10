@@ -17,11 +17,18 @@
  */
 package com.tansoflow.tansocore.model.subscription.request;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 @Data
 public class ClientSubscriptionRequest {
+    @Schema(description = "Plan to subscribe to. Accepts the plan key published as plans[].id in "
+            + "pricing.json (for example \"starter\") or the plan UUID.", example = "starter")
     private String planId;
+
+    @Schema(description = "Alias for planId, for callers that read plans[].id from pricing.json and "
+            + "think of it as a key.", example = "starter")
+    private String planKey;
 
     private String customerReferenceId;
 

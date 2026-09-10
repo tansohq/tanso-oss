@@ -288,6 +288,39 @@ class ClientEntitlementServiceImplTest {
         assertEquals(0, new BigDecimal("40").compareTo(response.getUsage().getUsed()));
         assertEquals(0, new BigDecimal("100").compareTo(response.getUsage().getLimit()));
         assertEquals(0, new BigDecimal("60").compareTo(response.getUsage().getRemaining()));
+        assertEquals(Boolean.FALSE, response.getUsage().getUnlimited());
+    }
+
+    @Test
+    void testCheckEntitlement_NoUsageLimit_SaysUnlimited() {
+        // A rule with no max_usage places no cap; the caller must be told so, not left with an absent limit.
+        Subscription subscription = createActiveSubscription();
+        PlanFeatureRule rule = createRuleWithMaxUsage(subscription, null);
+        rule.getValue().remove("max_usage");
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(referenceCustomerId, accountUuid))
+                .thenReturn(customer);
+        when(entitlementService.isEntitled(featureKey, customer)).thenReturn(true);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(subscription));
+        when(featureRepository.findByKeyAndAccountId(eq(featureKey), any(UUID.class)))
+                .thenReturn(Optional.of(feature));
+        when(planFeatureRuleRepository.findPlanFeatureRuleByPlan_IdAndFeature_Id(
+                subscription.getPlan().getId(), feature.getId()))
+                .thenReturn(rule);
+        when(eventRepository.sumUsageUnitsByCustomerAndFeatureIdSince(
+                eq(customer.getId()), eq(feature.getId()), isNull()))
+                .thenReturn(new BigDecimal("7"));
+        when(entitlementRepository.findFirstByCustomerAndFeatureKeyAndRevokedAtIsNullOrderByCreatedAtDesc(customer, featureKey))
+                .thenReturn(Optional.of(entitlement));
+
+        EntitlementResponse response = clientEntitlementService.checkEntitlement(referenceCustomerId, accountUuid, featureKey);
+
+        assertTrue(response.isAllowed());
+        assertNotNull(response.getUsage());
+        assertEquals(0, new BigDecimal("7").compareTo(response.getUsage().getUsed()));
+        assertNull(response.getUsage().getLimit());
+        assertEquals(Boolean.TRUE, response.getUsage().getUnlimited());
     }
 
     @Test
