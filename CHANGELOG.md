@@ -27,6 +27,13 @@ access, then stalled at pay on a 500.
   `NullPointerException`. It now answers 402 with `declineReason` and no
   `checkoutUrl`; `StripeClientFactory` fails with a message for every other
   path that reaches it without a key.
+- **Paid subscribe in pass-through mode hands back the invoice link.** When Tanso
+  handles billing and Stripe collects, a customer-key subscribe to a paid plan
+  created an inactive subscription and a DUE invoice with nothing to pay it
+  with; only the operator could mint the link. `POST /api/v1/client/subscriptions`
+  now answers 402 with the hosted invoice URL as `checkoutUrl`, alongside the
+  inactive subscription and the invoice, so the agent can hand the link to a
+  human and poll until `isActive`.
 - **Signup `nextSteps` carried a literal `{featureKey}` placeholder.** Replaced by
   `check_entitlement_template` plus a `check_entitlement_example` built from one
   of the plan's own features, and joined by `pricing`, `usage_summary`,
