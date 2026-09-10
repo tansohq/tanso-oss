@@ -84,6 +84,12 @@ public class SubscriptionClientController {
             + "without one, customer-key callers get 402 with a checkout URL and a pollable checkout session.", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a subscription"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
+                    "Payment required: the plan is paid and the customer has no usable payment method. "
+                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
+                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. Customer-scoped (ck_) keys only."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
+                    "planId is missing or names no plan on this account", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid plan or customer ID", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubscribedCustomerResponse>> createSubscription(@AuthenticationPrincipal UserContext userContext,

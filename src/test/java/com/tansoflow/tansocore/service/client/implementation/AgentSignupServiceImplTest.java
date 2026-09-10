@@ -34,6 +34,8 @@ import com.tansoflow.tansocore.repository.PlanRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService;
+import com.tansoflow.tansocore.model.feature.FeatureDto;
+import com.tansoflow.tansocore.service.internal.monetization.FeatureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -73,6 +75,9 @@ class AgentSignupServiceImplTest {
     @Mock
     private CustomerApiKeyService customerApiKeyService;
 
+    @Mock
+    private FeatureService featureService;
+
     @InjectMocks
     private AgentSignupServiceImpl service;
 
@@ -101,6 +106,9 @@ class AgentSignupServiceImplTest {
         lenient().when(accountRepository.findBySlug("acme")).thenReturn(Optional.of(account));
         lenient().when(accountSettingRepository.findAccountSettingById(accountId)).thenReturn(settings);
         lenient().when(planRepository.findById(planId)).thenReturn(Optional.of(plan));
+        FeatureDto chat = new FeatureDto();
+        chat.setKey("ai.chat");
+        lenient().when(featureService.retrieveFeaturesLinkedToPlan(plan)).thenReturn(List.of(chat));
         lenient().when(customerRepository.countAgentSignupsSince(eq(accountId), any())).thenReturn(0L);
         lenient().when(customerService.createCustomer(eq(accountId.toString()), any(CustomerRequest.class)))
                 .thenAnswer(inv -> {
@@ -132,7 +140,16 @@ class AgentSignupServiceImplTest {
         assertThat(response.getCustomerReferenceId()).startsWith("agent_");
         assertThat(response.getApiKey()).isEqualTo("ck_test_generated");
         assertThat(response.getPlan()).isEqualTo("free");
-        assertThat(response.getNextSteps()).containsKey("check_entitlement");
+        assertThat(response.getNextSteps())
+                .containsKeys("pricing", "check_entitlement_template", "check_entitlement_example",
+                        "record_usage", "usage_summary", "credit_balances", "buy_credits", "change_plan", "docs");
+        assertThat(response.getNextSteps().get("check_entitlement_example"))
+                .endsWith("/" + response.getCustomerReferenceId() + "/ai.chat")
+                .doesNotContain("{featureKey}");
+        assertThat(response.getNextSteps().get("pricing"))
+                .isEqualTo("https://billing.acme.ai/public/v1/catalog/acme/pricing.json");
+        assertThat(response.getNextSteps().get("change_plan"))
+                .isEqualTo("https://billing.acme.ai/api/v1/client/subscriptions");
 
         ArgumentCaptor<Customer> customerCaptor = ArgumentCaptor.forClass(Customer.class);
         verify(subscriptionService).subscribe(customerCaptor.capture(), eq(plan), eq(accountId.toString()));

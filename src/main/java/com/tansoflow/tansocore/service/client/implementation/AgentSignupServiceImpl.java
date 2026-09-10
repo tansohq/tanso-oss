@@ -19,6 +19,7 @@ package com.tansoflow.tansocore.service.client.implementation;
 
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.model.feature.FeatureDto;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.entity.Plan;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
@@ -42,6 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -58,6 +60,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
     private final CustomerService customerService;
     private final SubscriptionService subscriptionService;
     private final CustomerApiKeyService customerApiKeyService;
+    private final com.tansoflow.tansocore.service.internal.monetization.FeatureService featureService;
 
     @Override
     @Transactional
@@ -98,17 +101,34 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         log.info("Agent signup on account {}: customer {} subscribed to plan {}",
                 account.getId(), referenceId, plan.getKey());
 
+        // The plan's own features are the only feature keys this customer can legitimately check, so the
+        // example URL uses one instead of leaving the caller to guess.
+        String exampleFeatureKey = featureService.retrieveFeaturesLinkedToPlan(plan).stream()
+                .map(FeatureDto::getKey)
+                .filter(k -> k != null && !k.isBlank())
+                .findFirst()
+                .orElse(null);
+
+        Map<String, String> nextSteps = new LinkedHashMap<>();
+        nextSteps.put("base_url", baseUrl);
+        nextSteps.put("pricing", baseUrl + "/public/v1/catalog/" + slug + "/pricing.json");
+        nextSteps.put("check_entitlement_template", baseUrl + "/api/v1/client/entitlements/" + referenceId + "/{featureKey}");
+        if (exampleFeatureKey != null) {
+            nextSteps.put("check_entitlement_example", baseUrl + "/api/v1/client/entitlements/" + referenceId + "/" + exampleFeatureKey);
+        }
+        nextSteps.put("record_usage", baseUrl + "/api/v1/client/events");
+        nextSteps.put("usage_summary", baseUrl + "/api/v1/client/customers/" + referenceId + "/usage");
+        nextSteps.put("credit_balances", baseUrl + "/api/v1/client/credits/" + referenceId + "/pools");
+        nextSteps.put("buy_credits", baseUrl + "/api/v1/client/credits/purchases");
+        nextSteps.put("change_plan", baseUrl + "/api/v1/client/subscriptions");
+        nextSteps.put("docs", baseUrl + "/swagger-ui.html");
+
         return AgentSignupResponse.builder()
                 .customerReferenceId(referenceId)
                 .apiKey(key.getApiKey())
                 .apiKeyScopes(key.getScopes())
                 .plan(plan.getKey())
-                .nextSteps(Map.of(
-                        "base_url", baseUrl,
-                        "check_entitlement", baseUrl + "/api/v1/client/entitlements/" + referenceId + "/{featureKey}",
-                        "record_usage", baseUrl + "/api/v1/client/events",
-                        "credit_balances", baseUrl + "/api/v1/client/credits/" + referenceId + "/pools",
-                        "docs", baseUrl + "/swagger-ui.html"))
+                .nextSteps(nextSteps)
                 .build();
     }
 }

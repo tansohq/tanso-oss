@@ -20,6 +20,7 @@ package com.tansoflow.tansocore.integration.stripe;
 import com.stripe.StripeClient;
 import com.stripe.net.RequestOptions;
 import com.tansoflow.tansocore.model.api.external.ExternalApiKeyType;
+import com.tansoflow.tansocore.entity.ExternalApiKey;
 import com.tansoflow.tansocore.repository.ExternalApiKeyRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -33,9 +34,13 @@ public class StripeClientFactory {
     private final ExternalApiKeyRepository externalApiKeyRepository;
 
     private String apiKeyFor(UUID accountId) {
-        return externalApiKeyRepository
-                .findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.STRIPE_API_KEY.name(), accountId)
-                .getKeyValue();
+        ExternalApiKey key = externalApiKeyRepository
+                .findExternalApiKeyByKeyTypeAndAccount(ExternalApiKeyType.STRIPE_API_KEY.name(), accountId);
+        if (key == null || key.getKeyValue() == null || key.getKeyValue().isBlank()) {
+            // Every Stripe path used to NPE here on an instance with no key; say what is missing instead.
+            throw new IllegalStateException("No Stripe API key is configured for this account; connect Stripe in Settings before using hosted payments");
+        }
+        return key.getKeyValue();
     }
 
     public StripeClient forAccount(UUID accountId) {

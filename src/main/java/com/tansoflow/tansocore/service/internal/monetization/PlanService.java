@@ -43,6 +43,12 @@ public interface PlanService {
 
     Plan retrievePlan(Account account, UUID planUuid);
 
+    /**
+     * Resolves the plan identifier a client supplies, which may be the plan key published as
+     * plans[].id in pricing.json or the plan UUID.
+     */
+    Plan retrievePlanByIdOrKey(Account account, String planIdOrKey);
+
     PlanFeatureLinkedDto retrievePlanFeatureLinkByPlanUuid(String planUuid, String accountId);
 
     List<PlanFeatureLinkedDto> retrievePlanFeaturesMapByAccount(String accountUuid);

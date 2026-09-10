@@ -115,7 +115,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Override
     public SubscribedCustomerResponse clientSubscribeCustomer(ClientSubscriptionRequest request, String accountId) {
         Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(request.getCustomerReferenceId(), accountId);
-        Plan plan = planService.retrievePlan(customer.getAccount(), UUID.fromString(request.getPlanId()));
+        String planIdentifier = request.getPlanId() != null && !request.getPlanId().isBlank()
+                ? request.getPlanId()
+                : request.getPlanKey();
+        Plan plan = planService.retrievePlanByIdOrKey(customer.getAccount(), planIdentifier);
 
         return subscribe(customer, plan, accountId, request.getPaymentMethodId());
     }

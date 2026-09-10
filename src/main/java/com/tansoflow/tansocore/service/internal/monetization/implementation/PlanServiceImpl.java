@@ -178,6 +178,22 @@ public class PlanServiceImpl implements PlanService {
     }
 
     @Override
+    public Plan retrievePlanByIdOrKey(Account account, String planIdOrKey) {
+        if (planIdOrKey == null || planIdOrKey.isBlank()) {
+            throw new IllegalArgumentException("planId is required: pass the plan key published as plans[].id in pricing.json, or the plan UUID");
+        }
+        String identifier = planIdOrKey.trim();
+        try {
+            return retrievePlan(account, UUID.fromString(identifier));
+        } catch (IllegalArgumentException notAUuidOrNotFound) {
+            // pricing.json publishes plans[].id as the plan key, so that is what a client that read
+            // the catalog will send. Fall back to it before giving up.
+            return planRepository.findByKeyAndAccountId(identifier, account.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("Plan not found: " + identifier));
+        }
+    }
+
+    @Override
     public PlanFeatureLinkedDto retrievePlanFeatureLinkByPlanUuid(String planUuid, String accountId) {
         PlanFeatureLinkedDto planFeatureLinkedDto = new PlanFeatureLinkedDto();
 

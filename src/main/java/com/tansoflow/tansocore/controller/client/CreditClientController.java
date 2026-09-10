@@ -201,6 +201,16 @@ public class CreditClientController {
                     + "checkout URL and pollable checkout session when there is none or the charge is declined. "
                     + "Requires the 'purchase' scope on customer keys.",
             security = @SecurityRequirement(name = "Bearer"))
+    @ApiResponses(value = {
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Credits purchased and granted"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
+                    "Payment required: no usable payment method, or the off-session charge was declined. "
+                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
+                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. When the instance has no "
+                            + "payment processor at all, checkoutUrl is absent and declineReason says so."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
+                    "The pool could not be resolved, or no price is published for the denomination")
+    })
     public org.springframework.http.ResponseEntity<ApiResponse<com.tansoflow.tansocore.model.credit.CreditPurchaseResult>> purchaseCredits(
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.tansoflow.tansocore.auth.UserContext userContext,
             @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest request) {

@@ -69,6 +69,11 @@ public class EntitlementResponse {
         @Schema(description = "Maximum usage allowed by the plan")
         private BigDecimal limit;
 
+        @Schema(description = "True when the plan places no cap on this feature. Lets a caller tell "
+                + "'no limit applies' apart from 'the limit is unknown', which an absent limit alone "
+                + "cannot express.")
+        private Boolean unlimited;
+
         @Schema(description = "Remaining usage before the limit is hit")
         private BigDecimal remaining;
     }

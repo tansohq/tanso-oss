@@ -18,7 +18,6 @@
 package com.tansoflow.tansocore.model.credit.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
@@ -30,9 +29,15 @@ public class CreditPurchaseRequest {
     @Schema(description = "Customer reference. Optional for customer-scoped keys (their own).")
     private String customerReferenceId;
 
-    @NotBlank
-    @Schema(description = "Credit pool to top up (must belong to the customer)")
+    @Schema(description = "Credit pool to top up (must belong to the customer). Optional: omit it and "
+            + "supply a denomination, or omit both when the customer has exactly one pool.")
     private String creditPoolId;
+
+    @Schema(description = "Credit denomination to buy, as published in pricing.json under credits.currency_name "
+            + "(for example \"AI_CREDITS\"). Used when creditPoolId is omitted; the customer's pool for that "
+            + "denomination is created on first purchase if the operator has published a price for it.",
+            example = "AI_CREDITS")
+    private String denomination;
 
     @NotNull
     @Positive

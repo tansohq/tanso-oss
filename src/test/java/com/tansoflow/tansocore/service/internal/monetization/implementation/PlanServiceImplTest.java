@@ -41,6 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -236,5 +237,40 @@ class PlanServiceImplTest {
 
         // Verify
         assertTrue(result);
+    }
+
+    @Test
+    void retrievePlanByIdOrKey_AcceptsTheUuid() {
+        UUID planUuid = UUID.randomUUID();
+        planEntity.setId(planUuid);
+        when(planRepository.findByIdAndAccount(planUuid, account)).thenReturn(Optional.of(planEntity));
+
+        assertEquals(planEntity, planService.retrievePlanByIdOrKey(account, planUuid.toString()));
+    }
+
+    @Test
+    void retrievePlanByIdOrKey_AcceptsTheKeyPublishedInPricingJson() {
+        when(planRepository.findByKeyAndAccountId("test-plan", account.getId())).thenReturn(Optional.of(planEntity));
+
+        assertEquals(planEntity, planService.retrievePlanByIdOrKey(account, "test-plan"));
+        verify(planRepository, never()).findByIdAndAccount(any(), any());
+    }
+
+    @Test
+    void retrievePlanByIdOrKey_UnknownIdentifier_NamesIt() {
+        when(planRepository.findByKeyAndAccountId("platinum", account.getId())).thenReturn(Optional.empty());
+
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                planService.retrievePlanByIdOrKey(account, "platinum"));
+        assertEquals("Plan not found: platinum", exception.getMessage());
+    }
+
+    @Test
+    void retrievePlanByIdOrKey_Blank_SaysWhatToSend() {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () ->
+                planService.retrievePlanByIdOrKey(account, " "));
+        assertTrue(exception.getMessage().startsWith("planId is required"));
+
+        assertThrows(IllegalArgumentException.class, () -> planService.retrievePlanByIdOrKey(account, null));
     }
 }

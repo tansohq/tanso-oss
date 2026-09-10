@@ -344,6 +344,11 @@ public class ClientEntitlementServiceImpl implements ClientEntitlementService {
             if (usageInfo.limit() != null) {
                 usage.setLimit(usageInfo.limit());
                 usage.setRemaining(usageInfo.limit().subtract(usageInfo.used()).max(BigDecimal.ZERO));
+                usage.setUnlimited(false);
+            } else {
+                // An absent limit reads the same as an unknown one to a caller deciding whether to keep
+                // going, so say which it is.
+                usage.setUnlimited(true);
             }
             response.setUsage(usage);
         }

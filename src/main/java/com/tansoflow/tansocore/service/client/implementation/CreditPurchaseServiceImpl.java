@@ -28,6 +28,8 @@ import com.tansoflow.tansocore.model.credit.CreditPurchaseResult;
 import com.tansoflow.tansocore.model.credit.request.CreditGrantRequest;
 import com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.repository.AccountSettingRepository;
 import com.tansoflow.tansocore.repository.CheckoutSessionRepository;
 import com.tansoflow.tansocore.repository.CreditPoolRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
@@ -42,8 +44,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Slf4j
@@ -56,6 +60,7 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
     private final CustomerService customerService;
     private final StripePaymentMethodService stripePaymentMethodService;
     private final CheckoutSessionRepository checkoutSessionRepository;
+    private final AccountSettingRepository accountSettingRepository;
 
     @Override
     @Transactional
@@ -65,12 +70,7 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
         Customer customer = customerService
                 .retrieveCustomerByExternalClientCustomerIdAndAccount(customerReferenceId, accountId);
 
-        CreditPool pool = creditPoolRepository
-                .findByIdAndAccountId(UUID.fromString(request.getCreditPoolId()), accountUuid)
-                .orElseThrow(() -> new ResourceNotFoundException("Credit pool not found: " + request.getCreditPoolId()));
-        if (pool.getCustomer() == null || !pool.getCustomer().getId().equals(customer.getId())) {
-            throw new ResourceNotFoundException("Credit pool not found: " + request.getCreditPoolId());
-        }
+        CreditPool pool = resolvePool(request, customer, accountUuid);
 
         var price = creditPriceService.resolvePrice(accountUuid, pool.getDenomination(), Instant.now())
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -98,6 +98,23 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
 
         String description = request.getCredits().stripTrailingZeros().toPlainString()
                 + " " + pool.getDenomination() + " top-up";
+
+        // An instance with no payment processor cannot charge a card or mint a checkout URL. The
+        // subscription path already answers this case with a DUE invoice; the credit path used to
+        // reach Stripe and crash. Refuse with a reason the caller can act on instead.
+        AccountSetting settings = accountSettingRepository.findAccountSettingById(accountUuid);
+        if (settings == null || !settings.isStripeEnabled()) {
+            log.info("Credit purchase refused for customer {}: no payment processor configured on account {}",
+                    customer.getId(), accountUuid);
+            return CreditPurchaseResult.builder()
+                    .completed(false)
+                    .credits(request.getCredits())
+                    .pricePerCredit(price.pricePerCredit())
+                    .amountCharged(amount)
+                    .currency(price.currency())
+                    .declineReason("This instance has no payment processor configured, so credits cannot be bought here. Ask the operator to connect Stripe or to grant credits directly.")
+                    .build();
+        }
 
         try {
             if (paymentMethod != null) {
@@ -149,6 +166,73 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
         } catch (StripeException e) {
             throw new IllegalStateException("Stripe error during credit purchase: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * A customer that just signed up through the agent catalog owns no pool and has no way to learn a pool
+     * id, so the row id is optional: name a denomination instead, or nothing at all when there is only one
+     * pool to mean. A pool is created only for a denomination the operator has already priced.
+     */
+    private CreditPool resolvePool(CreditPurchaseRequest request, Customer customer, UUID accountUuid) {
+        if (request.getCreditPoolId() != null && !request.getCreditPoolId().isBlank()) {
+            UUID poolId;
+            try {
+                poolId = UUID.fromString(request.getCreditPoolId().trim());
+            } catch (IllegalArgumentException notAUuid) {
+                throw new IllegalArgumentException("creditPoolId must be a UUID; to buy by denomination send 'denomination' instead");
+            }
+            CreditPool pool = creditPoolRepository.findByIdAndAccountId(poolId, accountUuid)
+                    .orElseThrow(() -> new ResourceNotFoundException("Credit pool not found: " + request.getCreditPoolId()));
+            if (pool.getCustomer() == null || !pool.getCustomer().getId().equals(customer.getId())) {
+                throw new ResourceNotFoundException("Credit pool not found: " + request.getCreditPoolId());
+            }
+            return pool;
+        }
+
+        List<CreditPool> owned = creditPoolRepository.findByCustomerIdAndAccountId(
+                customer.getId(), accountUuid);
+        String denomination = request.getDenomination() != null && !request.getDenomination().isBlank()
+                ? request.getDenomination().trim()
+                : null;
+
+        if (denomination == null) {
+            if (owned.size() == 1) {
+                return owned.get(0);
+            }
+            if (owned.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "This customer has no credit pool yet. Send 'denomination' (the credits.currency_name "
+                                + "published in pricing.json) and the pool will be created on first purchase.");
+            }
+            throw new IllegalArgumentException(
+                    "This customer has several credit pools, so the purchase is ambiguous. Send 'denomination' ("
+                            + owned.stream().map(CreditPool::getDenomination).distinct().collect(Collectors.joining(", "))
+                            + ") or 'creditPoolId'.");
+        }
+
+        String wanted = denomination;
+        return creditPoolRepository
+                .findByCustomerIdAndAccountIdAndDenomination(customer.getId(), accountUuid, wanted)
+                .orElseGet(() -> createPoolForPricedDenomination(customer, accountUuid, wanted));
+    }
+
+    private CreditPool createPoolForPricedDenomination(Customer customer, UUID accountUuid, String denomination) {
+        var price = creditPriceService.resolvePrice(accountUuid, denomination, Instant.now())
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "No published price for denomination '" + denomination
+                                + "' — the operator must publish a price book entry before credits can be purchased"));
+        CreditPool pool = new CreditPool();
+        pool.setAccount(customer.getAccount());
+        pool.setCustomer(customer);
+        pool.setName(denomination + " - " + customer.getId());
+        pool.setDenomination(denomination);
+        pool.setCurrency(price.currency() != null ? price.currency() : "USD");
+        pool.setHardLimit(false);
+        pool.setRolloverPolicy("NONE");
+        pool = creditPoolRepository.saveAndFlush(pool);
+        log.info("Created credit pool '{}' for customer {} on first purchase of denomination {}",
+                pool.getName(), customer.getId(), denomination);
+        return pool;
     }
 
     private CreditGrantDto grantPurchasedCredits(CreditPurchaseRequest request, CreditPool pool,
