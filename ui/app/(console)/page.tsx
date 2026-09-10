@@ -203,7 +203,10 @@ export default function OverviewPage() {
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Two six-column tables cannot share a row on a laptop: at 1280px each card clips its last
+          columns and macOS hides the scrollbar, so the MRR column just looks cut off. Stack them
+          until there is room. */}
+      <div className="grid gap-4 2xl:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Margin by customer</CardTitle>
