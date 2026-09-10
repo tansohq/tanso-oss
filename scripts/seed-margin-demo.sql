@@ -17,7 +17,10 @@
 BEGIN;
 
 -- ---------------------------------------------------------------------------
--- Reset: drop anything this script created on a previous run.
+-- Reset: drop the rows only this script owns (events, invoices, subscriptions,
+-- entitlements, spend). Features, plans and customers are upserted instead of
+-- deleted, because a used stack may have real subscriptions or keys pointing at
+-- them and a re-run must never take those out from under it.
 -- ---------------------------------------------------------------------------
 
 DELETE FROM events
@@ -42,9 +45,6 @@ DELETE FROM spend_units WHERE spend_unit_id::text LIKE 'b6%';
 DELETE FROM entitlements WHERE entitlement_id::text LIKE 'b5%';
 DELETE FROM subscriptions WHERE subscription_id::text LIKE 'b4%';
 DELETE FROM plan_feature_rules WHERE id::text LIKE 'b2%';
-DELETE FROM customers WHERE customer_id::text LIKE 'b3%';
-DELETE FROM plans WHERE plan_id::text LIKE 'b2%';
-DELETE FROM features WHERE feature_id::text LIKE 'b1%';
 
 -- ---------------------------------------------------------------------------
 -- Features. Three things the demo product sells.
@@ -57,7 +57,15 @@ VALUES
   ('b1111111-1111-4111-8111-222222222222', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467',
    'Contract review', 'contract.review', 'Long-context review of a contract', true, false, '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW()),
   ('b1111111-1111-4111-8111-333333333333', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467',
-   'Bulk classify', 'bulk.classify', 'Cheap high-volume classification', true, false, '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW());
+   'Bulk classify', 'bulk.classify', 'Cheap high-volume classification', true, false, '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW())
+ON CONFLICT (feature_id) DO UPDATE SET
+  name = EXCLUDED.name,
+  key = EXCLUDED.key,
+  description = EXCLUDED.description,
+  is_enabled = EXCLUDED.is_enabled,
+  is_deleted = EXCLUDED.is_deleted,
+  metadata = EXCLUDED.metadata,
+  modified_at = EXCLUDED.modified_at;
 
 -- ---------------------------------------------------------------------------
 -- Plans. price_amount / interval_months is what the MRR tile sums.
@@ -70,7 +78,18 @@ VALUES
   ('b2222222-2222-4222-8222-222222222222', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467',
    'growth', 'Growth', 'Production usage with room to spike', 899.00, 1, 'IN_ADVANCE', 'USD', 'ACTIVE', '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW()),
   ('b2222222-2222-4222-8222-333333333333', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467',
-   'scale', 'Scale', 'High volume, long context, negotiated', 2400.00, 1, 'IN_ADVANCE', 'USD', 'ACTIVE', '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW());
+   'scale', 'Scale', 'High volume, long context, negotiated', 2400.00, 1, 'IN_ADVANCE', 'USD', 'ACTIVE', '{"demo":"margin"}', NOW() - INTERVAL '120 days', NOW())
+ON CONFLICT (plan_id) DO UPDATE SET
+  key = EXCLUDED.key,
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  price_amount = EXCLUDED.price_amount,
+  interval_months = EXCLUDED.interval_months,
+  billing_timing = EXCLUDED.billing_timing,
+  currency = EXCLUDED.currency,
+  status = EXCLUDED.status,
+  metadata = EXCLUDED.metadata,
+  modified_at = EXCLUDED.modified_at;
 
 -- ---------------------------------------------------------------------------
 -- Plan feature rules. The `cost` block is what turns the Costs tile from an
@@ -112,7 +131,14 @@ VALUES
   ('b3333333-3333-4333-8333-222222222222', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'contoso',   'Contoso',   'Research', 'platform@contoso.example', 'MANUAL', NOW() - INTERVAL '95 days', NOW()),
   ('b3333333-3333-4333-8333-333333333333', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'fabrikam',  'Fabrikam',  'Support', 'eng@fabrikam.example', 'MANUAL', NOW() - INTERVAL '80 days', NOW()),
   ('b3333333-3333-4333-8333-444444444444', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'tailwind',  'Tailwind',  'Ops', 'dev@tailwind.example', 'MANUAL', NOW() - INTERVAL '60 days', NOW()),
-  ('b3333333-3333-4333-8333-555555555555', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'globex',    'Globex',    'Data', 'api@globex.example', 'MANUAL', NOW() - INTERVAL '45 days', NOW());
+  ('b3333333-3333-4333-8333-555555555555', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'globex',    'Globex',    'Data', 'api@globex.example', 'MANUAL', NOW() - INTERVAL '45 days', NOW())
+ON CONFLICT (customer_id) DO UPDATE SET
+  external_client_customer_id = EXCLUDED.external_client_customer_id,
+  first_name = EXCLUDED.first_name,
+  last_name = EXCLUDED.last_name,
+  email = EXCLUDED.email,
+  source = EXCLUDED.source,
+  modified_at = EXCLUDED.modified_at;
 
 -- ---------------------------------------------------------------------------
 -- Subscriptions. Period is the current month so usage lands inside the window
