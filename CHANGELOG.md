@@ -3,6 +3,48 @@
 Notable changes to Tanso Core. Releases before 0.9.0 are recorded only as git
 tags; this file starts where the changelog does.
 
+## Unreleased
+
+Found by running an agent through the seven-stage funnel against the quickstart
+stack with `agent-ready`. The agent cleared discover, understand, signup and
+access, then stalled at pay on a 500.
+
+### Fixed
+
+- **Subscribe by the plan key pricing.json publishes.** `POST /api/v1/client/subscriptions`
+  demanded the plan UUID, which appears nowhere an agent can read, while
+  `pricing.json` publishes `plans[].id` as the plan key. Sending the key reached
+  `UUID.fromString` and surfaced as a 500. `planId` (or the alias `planKey`) now
+  accepts either; a blank or unknown plan is a 400 that says what to send.
+- **Credit purchase for a customer with no pool.** `POST /api/v1/client/credits/purchases`
+  required a `creditPoolId` a freshly signed-up customer has no way to obtain.
+  `creditPoolId` is now optional: send `denomination` and the pool is created on
+  first purchase when the operator has priced it, or send nothing when the
+  customer has exactly one pool. Ambiguity and missing prices are 400s that
+  name the fix.
+- **No payment processor is a 402, not a 500.** On an instance with no Stripe
+  key the purchase path reached the Stripe client and threw a
+  `NullPointerException`. It now answers 402 with `declineReason` and no
+  `checkoutUrl`; `StripeClientFactory` fails with a message for every other
+  path that reaches it without a key.
+- **Signup `nextSteps` carried a literal `{featureKey}` placeholder.** Replaced by
+  `check_entitlement_template` plus a `check_entitlement_example` built from one
+  of the plan's own features, and joined by `pricing`, `usage_summary`,
+  `buy_credits` and `change_plan`.
+
+### Added
+
+- **Agent discovery from the host name alone.** `GET /llms.txt` and
+  `GET /.well-known/agent.json` list every account that published a catalog,
+  with its `pricing.json` and, when enabled, its signup URL. Before this, every
+  non-API path answered 403 and an agent not handed the slug could not find
+  the catalog.
+- **`usage.unlimited` on entitlement checks.** An absent `limit` read the same as
+  an unknown one; the response now says which.
+- **402 documented in OpenAPI** on both `POST /api/v1/client/subscriptions` and
+  `POST /api/v1/client/credits/purchases`, with the checkout-session polling
+  path. The spec previously contained no 402 at all.
+
 ## 0.9.0 — 2026-08-21
 
 The release where the customer buying from your product stops having to be a
