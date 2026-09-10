@@ -39,6 +39,12 @@ access, then stalled at pay on a 500.
   of the plan's own features, and joined by `pricing`, `usage_summary`,
   `buy_credits` and `change_plan`.
 
+- **`deploy/setup.sh` is re-runnable on a used stack.** The account seed inserts
+  only what is absent, and the margin demo upserts its features, plans and
+  customers instead of deleting them, so real subscriptions that point at the
+  demo plans survive a re-seed. A failed seed now stops the script instead of
+  being swallowed.
+
 ### Added
 
 - **Agent discovery from the host name alone.** `GET /llms.txt` and

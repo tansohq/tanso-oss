@@ -1,28 +1,34 @@
--- Create test account
+-- Create test account. Safe to re-run: every row is inserted only if absent, so an
+-- existing account, user or key is left exactly as it is.
 -- Username: test / Password: password
 
 BEGIN;
 
 -- 1. Create Account
 INSERT INTO accounts (account_id, name, created_at, modified_at)
-VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'Test Account', NOW(), NOW());
+VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'Test Account', NOW(), NOW())
+ON CONFLICT (account_id) DO NOTHING;
 
 -- 2. Create User
 INSERT INTO users (user_id, username, password, email, first_name, last_name, created_at, modified_at)
-VALUES ('0ab38d70-120e-4fce-9273-36496d1f2db7', 'test', '$2b$12$3WnK.nlyQHLNEEOGtnblPeFjehktUeFDpQa7WK.EbsAQ51VAzEqci', 'test@test.com', '', '', NOW(), NOW());
+VALUES ('0ab38d70-120e-4fce-9273-36496d1f2db7', 'test', '$2b$12$3WnK.nlyQHLNEEOGtnblPeFjehktUeFDpQa7WK.EbsAQ51VAzEqci', 'test@test.com', '', '', NOW(), NOW())
+ON CONFLICT (user_id) DO NOTHING;
 
 -- 3. Link User to Account (Role: ADMIN)
 INSERT INTO users_accounts (id, user_id, account_id, role, created_at, modified_at)
-VALUES ('d6559146-c789-43f5-b95f-be486ca9b861', '0ab38d70-120e-4fce-9273-36496d1f2db7', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'ADMIN', NOW(), NOW());
+VALUES ('d6559146-c789-43f5-b95f-be486ca9b861', '0ab38d70-120e-4fce-9273-36496d1f2db7', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'ADMIN', NOW(), NOW())
+ON CONFLICT (id) DO NOTHING;
 
 -- 4. Initialize Account Settings
 INSERT INTO account_settings (account_id, stripe_mode)
-VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'NONE');
+VALUES ('a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'NONE')
+ON CONFLICT (account_id) DO NOTHING;
 
 -- 5. Create API Key
 -- key_value is the SHA-256 digest of the plaintext key printed by setup.sh:
 --   sk_test_828df0fc77874c219f353417fbca1ef4
 INSERT INTO account_api_keys (api_key_id, account_id, key_type, key_value, key_hint, is_active, expires_at, created_at, modified_at)
-VALUES ('286c570c-8a08-441d-92c0-2fc074a93457', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'SECRET', '16b45d1c2e789d6b24669ae1e2cf723d393169fec877e8f708e780be67e9df8f', 'sk_test_…1ef4', true, '2036-01-26 19:24:00', NOW(), NOW());
+VALUES ('286c570c-8a08-441d-92c0-2fc074a93457', 'a1f0ad9d-8d12-4d2b-95b4-e8964fd4d467', 'SECRET', '16b45d1c2e789d6b24669ae1e2cf723d393169fec877e8f708e780be67e9df8f', 'sk_test_…1ef4', true, '2036-01-26 19:24:00', NOW(), NOW())
+ON CONFLICT (api_key_id) DO NOTHING;
 
 COMMIT;

@@ -23,14 +23,11 @@ done
 echo "API is ready."
 
 echo "Seeding test account..."
-if docker compose exec -T postgres psql -q \
-    -v ON_ERROR_STOP=1 \
-    -U "${POSTGRES_USER:-tanso}" -d "${POSTGRES_DB:-tanso}" \
-    < ../scripts/create-test-account.sql; then
-  echo "Seeded."
-else
-  echo "Seed failed — the account probably already exists. Continuing."
-fi
+docker compose exec -T postgres psql -q \
+  -v ON_ERROR_STOP=1 \
+  -U "${POSTGRES_USER:-tanso}" -d "${POSTGRES_DB:-tanso}" \
+  < ../scripts/create-test-account.sql
+echo "Seeded."
 
 echo "Seeding the five-credit developer demo..."
 docker compose exec -T postgres psql -q \
