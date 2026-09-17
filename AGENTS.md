@@ -94,13 +94,24 @@ Tanso operates as a **Provider** to its own **Client Organizations**.
 
 ### B. Dogfooding Logic Flows
 
-#### 1. Account Provisioning (no signup endpoint)
-There is deliberately **no public signup endpoint** in the OSS build — the
-operator of a self-hosted billing engine *is* the tenant, and a public signup
-route would be pure attack surface. Accounts are provisioned via
-`scripts/create-test-account.sql` / `scripts/tenant-template.sql` (see
-`deploy/setup.sh`), which create the account, admin user, settings, and API
-key (stored as a digest, or auto-upgraded from plaintext on first use).
+#### 1. Account Provisioning
+Tenant accounts (the operator's own) have no public signup. They are
+provisioned via `scripts/create-test-account.sql` / `scripts/tenant-template.sql`
+(see `deploy/setup.sh`), which create the account, admin user, settings, and
+API key (stored as a digest, or auto-upgraded from plaintext on first use).
+
+Customer accounts do have a public signup: `POST /public/v1/catalog/{slug}/signup`
+(`PublicAgentSignupController` + `AgentSignupServiceImpl`). It is opt-in per
+tenant account (`agentSignupEnabled` plus a free ACTIVE `agentSignupDefaultPlanId`
+in account settings). A signed-up customer is `PROVISIONAL`: it gets the free
+plan's limits, a customer-scoped key, and an expiry (`agentProvisionalDays`,
+14 by default). Signups are capped per account per hour and per IP per hour.
+Payment is the only human gate: the first paid checkout or invoice sets the
+customer to `CLAIMED`; unpaid provisional customers become `EXPIRED` by the
+nightly `AgentProvisionalExpiryJob` and their keys are revoked. Discovery for
+agents is served by `AgentDiscoveryController` (`/llms.txt`,
+`/.well-known/agent.json`, `/.well-known/agent-skills/index.json`,
+`/agent-signup.md`).
 
 #### 2. Real-time Feature Gating
 Handled by `EntitlementAuthFilter`:
