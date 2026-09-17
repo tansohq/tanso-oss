@@ -136,7 +136,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         link.setPaymentLink("https://invoice.stripe.com/i/acct_test/inv_test");
         when(stripeSyncService.syncNewInvoice(UUID.fromString(invoiceId), UUID.fromString(accountId))).thenReturn(link);
 
-        var response = controller.createSubscription(customerKey(ownCustomerId), growth());
+        var response = controller.createSubscription(customerKey(ownCustomerId), growth(), new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
         org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isFalse();
@@ -152,7 +152,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest request = growth();
         request.setCustomerReferenceId("cust-ref");
 
-        var response = controller.createSubscription(new UserContext(accountId, null), request);
+        var response = controller.createSubscription(new UserContext(accountId, null), request, new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(201);
         org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
@@ -165,7 +165,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         when(accountService.retrieveAccountSettings(accountId))
                 .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.NONE));
 
-        var response = controller.createSubscription(customerKey(ownCustomerId), growth());
+        var response = controller.createSubscription(customerKey(ownCustomerId), growth(), new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(201);
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getCheckoutUrl()).isNull();
