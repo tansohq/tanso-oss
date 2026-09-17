@@ -55,7 +55,8 @@ public interface StripeSyncService {
 
     StripePaymentLinkDto updateCustomerPayment(String accountId, String customerId) throws StripeException;
 
-    void syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException;
+    /** Returns the payment method id that became the default. */
+    String syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException;
 
     boolean stripeInvoiceLinked(String stripeInvoiceId);
 

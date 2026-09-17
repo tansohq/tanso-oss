@@ -47,6 +47,7 @@ public class CheckoutSession {
     public static final String PURPOSE_SUBSCRIPTION = "SUBSCRIPTION";
     public static final String PURPOSE_CREDIT_TOPUP = "CREDIT_TOPUP";
     public static final String PURPOSE_INVOICE = "INVOICE";
+    public static final String PURPOSE_SPEND_MANDATE = "SPEND_MANDATE";
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_COMPLETED = "COMPLETED";

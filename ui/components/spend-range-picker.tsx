@@ -15,6 +15,7 @@ const rangedRoutes = [
   "/spend/pnl",
   "/spend/outcomes",
   "/spend/teams",
+  "/agent-funnel",
 ]
 
 export function SpendRangePicker() {

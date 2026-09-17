@@ -15,21 +15,12 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.service.internal.analytics;
 
-import com.tansoflow.tansocore.entity.CheckoutSession;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
+import com.tansoflow.tansocore.model.analytics.AgentFunnelResponse;
 
-import java.util.Optional;
-import java.util.UUID;
+import java.time.LocalDate;
 
-@Repository
-public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession, UUID> {
-
-    Optional<CheckoutSession> findByIdAndAccountId(UUID id, UUID accountId);
-
-    Optional<CheckoutSession> findByStripeSessionId(String stripeSessionId);
-
-    Optional<CheckoutSession> findFirstByCustomerIdAndPurposeOrderByCreatedAtDesc(UUID customerId, String purpose);
+public interface AgentFunnelService {
+    AgentFunnelResponse getFunnel(String accountId, LocalDate from, LocalDate to);
 }

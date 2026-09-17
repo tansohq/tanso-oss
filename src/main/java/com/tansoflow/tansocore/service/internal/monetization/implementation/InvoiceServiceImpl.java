@@ -452,6 +452,17 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setStatus(InvoiceStatus.PAID.name());
         invoiceRepository.save(invoice);
 
+        // Money paid is the claim for an agent-created customer. The customer is a managed
+        // entity here, so the change flushes with this transaction. A zero invoice (free plan) does not claim.
+        com.tansoflow.tansocore.entity.Customer customer = invoice.getSubscription().getCustomer();
+        if (customer.getAgentStatus() == com.tansoflow.tansocore.entity.AgentStatus.PROVISIONAL
+                && invoice.getAmount() != null && invoice.getAmount().signum() > 0) {
+            customer.setAgentStatus(com.tansoflow.tansocore.entity.AgentStatus.CLAIMED);
+            customer.setAgentClaimedAt(java.time.Instant.now());
+            customer.setAgentExpiresAt(null);
+            log.info("Agent customer {} claimed by paid invoice {}", customer.getExternalClientCustomerId(), invoice.getId());
+        }
+
         // Activate subscription when the initial in-advance invoice is paid
         if (InvoiceType.IN_ADVANCE_INITIAL.name().equals(invoice.getType())) {
             Subscription subscription = invoice.getSubscription();

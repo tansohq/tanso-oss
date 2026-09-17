@@ -15,21 +15,11 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.repository;
+package com.tansoflow.tansocore.entity;
 
-import com.tansoflow.tansocore.entity.CheckoutSession;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.stereotype.Repository;
-
-import java.util.Optional;
-import java.util.UUID;
-
-@Repository
-public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession, UUID> {
-
-    Optional<CheckoutSession> findByIdAndAccountId(UUID id, UUID accountId);
-
-    Optional<CheckoutSession> findByStripeSessionId(String stripeSessionId);
-
-    Optional<CheckoutSession> findFirstByCustomerIdAndPurposeOrderByCreatedAtDesc(UUID customerId, String purpose);
+/** Lifecycle of a customer an agent created for itself. Null on customers a human created. */
+public enum AgentStatus {
+    PROVISIONAL,
+    CLAIMED,
+    EXPIRED
 }

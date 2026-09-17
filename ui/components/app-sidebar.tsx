@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation"
 import {
   Activity,
   Bell,
+  Bot,
   ChevronRight,
   Coins,
   Gauge,
@@ -65,6 +66,7 @@ const monetizationNav = [
   { title: "Credits", href: "/credits", icon: Coins },
   { title: "Invoices", href: "/invoices", icon: ReceiptText },
   { title: "Events", href: "/events", icon: Activity },
+  { title: "Agent funnel", href: "/agent-funnel", icon: Bot },
 ]
 
 // Which groups the operator left open, remembered across visits. Reading

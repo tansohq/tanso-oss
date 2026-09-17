@@ -46,16 +46,26 @@ public class PublicAgentSignupController {
 
     @PostMapping("/{slug}/signup")
     @Operation(summary = "Programmatic agent signup",
-            description = "One call: creates a customer, subscribes it to the account's free default plan, and "
-                    + "returns a customer-scoped API key (once). No CAPTCHA, no email verification. Only served "
-                    + "when the operator enabled agent signup; rate-limited per account per hour (429 + Retry-After).")
+            description = "One call: creates a provisional customer, subscribes it to the account's free default "
+                    + "plan, and returns a customer-scoped API key (once). Email optional. No CAPTCHA, no email "
+                    + "verification; the first payment claims the account, unclaimed accounts expire. Only served "
+                    + "when the operator enabled agent signup; rate-limited per account and per IP per hour "
+                    + "(429 + Retry-After).")
     public ResponseEntity<ApiResponse<AgentSignupResponse>> signup(
             @PathVariable String slug,
             @Valid @RequestBody AgentSignupRequest request,
             HttpServletRequest httpRequest) {
         String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
-        AgentSignupResponse response = agentSignupService.signup(slug, request, baseUrl);
+        AgentSignupResponse response = agentSignupService.signup(slug, request, baseUrl, clientIp(httpRequest));
         return ResponseEntity.status(HttpStatus.CREATED).body(
                 ApiResponse.<AgentSignupResponse>builder().data(response).success(true).build());
+    }
+
+    static String clientIp(HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

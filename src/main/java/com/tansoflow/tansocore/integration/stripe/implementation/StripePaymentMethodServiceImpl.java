@@ -183,6 +183,35 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         return new HostedCheckout(session.getUrl(), session.getId());
     }
 
+    @Override
+    public HostedCheckout createSetupCheckoutSession(UUID accountId, UUID customerId,
+                                                     Map<String, String> metadata) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+        StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
+        AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
+        String successUrl = settings.getStripeCheckoutSuccessUrl() != null
+                ? settings.getStripeCheckoutSuccessUrl() : "https://example.com/success";
+        String cancelUrl = settings.getStripeCheckoutCancelUrl() != null
+                ? settings.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+
+        com.stripe.param.checkout.SessionCreateParams.SetupIntentData.Builder setupIntentData =
+                com.stripe.param.checkout.SessionCreateParams.SetupIntentData.builder()
+                        .putMetadata("tanso_account_id", accountId.toString())
+                        .putMetadata("tanso_customer_id", customerId.toString());
+        com.stripe.param.checkout.SessionCreateParams.Builder params =
+                com.stripe.param.checkout.SessionCreateParams.builder()
+                        .setMode(com.stripe.param.checkout.SessionCreateParams.Mode.SETUP)
+                        .setCustomer(stripeCustomer.getStripeCustomerExternalId())
+                        .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
+                        .setSuccessUrl(successUrl)
+                        .setCancelUrl(cancelUrl)
+                        .setSetupIntentData(setupIntentData.build());
+        metadata.forEach(params::putMetadata);
+
+        com.stripe.model.checkout.Session session = stripeClient.v1().checkout().sessions().create(params.build());
+        return new HostedCheckout(session.getUrl(), session.getId());
+    }
+
     /**
      * Fail closed before money moves. Two guards: the account cap bounds any
      * single agent-initiated charge, and the calling key's own budget bounds

@@ -1,0 +1,59 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260917-1"
+      author: tanso
+      comment: >
+        Agent onboarding v2. An agent-created customer starts PROVISIONAL with
+        an expiry; the first paid checkout or invoice claims it. Email at
+        signup is optional and recorded as the owner contact. The signup IP is
+        kept for a per-IP hourly cap next to the per-account cap. Spend mandate
+        lets an agent ask for a saved card up front, bounded by a per-key
+        budget; off by default per account.
+      changes:
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: agent_status
+                  type: VARCHAR(20)
+              - column:
+                  name: agent_expires_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: agent_claimed_at
+                  type: TIMESTAMPTZ
+              - column:
+                  name: agent_owner_email
+                  type: VARCHAR(255)
+              - column:
+                  name: agent_signup_ip
+                  type: VARCHAR(45)
+        - createIndex:
+            tableName: customers
+            indexName: idx_customers_agent_status_expires
+            columns:
+              - column:
+                  name: agent_status
+              - column:
+                  name: agent_expires_at
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: agent_provisional_days
+                  type: INT
+                  defaultValueNumeric: 14
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agent_signup_per_ip_cap
+                  type: INT
+                  defaultValueNumeric: 5
+                  constraints:
+                    nullable: false
+              - column:
+                  name: agent_spend_mandate_enabled
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

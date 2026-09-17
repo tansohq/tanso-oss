@@ -24,10 +24,12 @@ public interface AgentSignupService {
 
     /**
      * One-call agent onboarding for an account that opted in: creates a
-     * Customer with a generated reference ID, subscribes it to the account's
-     * free default plan, and issues a customer-scoped API key. Fails closed:
-     * 404 when the slug is unknown, signup is disabled, or the default plan
-     * is missing; RateLimitExceededException when the hourly cap is hit.
+     * PROVISIONAL Customer with a generated reference ID and an expiry,
+     * subscribes it to the account's free default plan, and issues a
+     * customer-scoped API key. No email needed; the first payment claims it.
+     * Fails closed: 404 when the slug is unknown, signup is disabled, or the
+     * default plan is missing; RateLimitExceededException when the per-account
+     * or per-IP hourly cap is hit.
      */
-    AgentSignupResponse signup(String slug, AgentSignupRequest request, String baseUrl);
+    AgentSignupResponse signup(String slug, AgentSignupRequest request, String baseUrl, String clientIp);
 }

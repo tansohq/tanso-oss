@@ -542,7 +542,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     }
 
     @Override
-    public void syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException {
+    public String syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException {
         StripeClient stripe = stripeClientFactory.forAccount(UUID.fromString(accountId));
         SetupIntent si = stripe.v1().setupIntents().retrieve(setupIntentId);
         String paymentMethodId = si.getPaymentMethod();
@@ -560,6 +560,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                         .build();
 
         stripe.v1().customers().update(stripeCustomerId, update);
+        return paymentMethodId;
     }
 
     @Override
