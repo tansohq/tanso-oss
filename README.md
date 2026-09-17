@@ -531,9 +531,10 @@ just your team's agents, but your customers' buying agents:
   plans, features, credit weight table, and governance flags as a
   machine-readable catalog (agent-serve pricing.json schema). Opt-in per
   account: set a slug and enable it in settings.
-- **Sign up**: `POST /public/v1/catalog/{slug}/signup` creates a customer,
-  subscribes your designated free plan, and returns a customer-scoped API key
-  in one call — no CAPTCHA, no email loop. Opt-in, rate-capped per hour.
+- **Sign up**: `POST /public/v1/catalog/{slug}/signup` creates a provisional
+  customer on your free plan and returns a customer-scoped API key in one
+  call. No CAPTCHA, no email loop. Opt-in, capped per hour and per IP. Details
+  in [Agent signup](#agent-signup) below.
 - **Scoped credentials**: `ck_live_`/`ck_test_` keys are pinned to one
   customer with explicit scopes (`read`, `purchase`); tenants issue and
   rotate them via `/api/v1/client/customers/{ref}/keys`. Every endpoint not
@@ -562,6 +563,127 @@ just your team's agents, but your customers' buying agents:
   `GET /customers/{ref}/usage` is the burndown API — per-feature projections
   and credit depletion dates. Errors carry stable `code` fields, and mutating
   requests accept an `Idempotency-Key` header with 24h replay.
+
+### Agent signup
+
+An agent with only your hostname finds the catalog through `/llms.txt`,
+`/.well-known/agent.json` and `/.well-known/agent-skills/index.json`, then
+follows the runbook at `/agent-signup.md`. Every one of these is served by the
+API itself, unauthenticated.
+
+**Request.** `POST /public/v1/catalog/{slug}/signup`. Every field is optional;
+an empty body works.
+
+```json
+{
+  "email": "ops@example.com",
+  "name": "research-agent-1",
+  "spend_mandate": { "max_amount": 50.00, "currency": "usd", "period": "month" }
+}
+```
+
+Same non-null email on the same account returns the existing
+`customerReferenceId` with a new key. No second customer is created.
+
+**Response (201).** New fields are snake_case; the existing camelCase fields
+are unchanged.
+
+```json
+{
+  "customerReferenceId": "agent_7f3c9a2e",
+  "apiKey": "ck_test_...",
+  "apiKeyScopes": ["read", "purchase"],
+  "plan": "free",
+  "status": "provisional",
+  "expires_at": "2026-10-01T00:00:00Z",
+  "limits": {
+    "features": { "ai.chat": { "included": 5, "period": "month", "unlimited": false } },
+    "spend_cap": null,
+    "currency": "usd"
+  },
+  "spend_mandate": { "status": "pending", "setup_url": "https://checkout.stripe.com/...", "max_amount": 50.00, "period": "month" },
+  "status_url": "https://your-host/api/v1/client/customers/agent_7f3c9a2e/status",
+  "owner_url": "https://your-host/api/v1/client/customers/agent_7f3c9a2e/owner",
+  "nextSteps": { "...": "unchanged" }
+}
+```
+
+`apiKey` is returned once. `expires_at` is null once the customer is claimed.
+`spend_mandate` is null unless the request sent one and
+`agentSpendMandateEnabled` is on.
+
+**Status.** `GET /api/v1/client/customers/{ref}/status` with the customer key
+returns `status` (`provisional`, `claimed`, `expired`), `expires_at`,
+`claimed_at`, `plan`, `limits`, `remaining` per feature key, `spend` (`cap`,
+`spent`, `remaining`, `currency`, `resets_at`, or null without a cap),
+`owner_email` and `spend_mandate` (`none`, `pending`, `active`).
+
+**Owner.** `PUT /api/v1/client/customers/{ref}/owner` with `{ "email" }`
+records a human contact and returns the status body. It sends nothing.
+
+**Gate envelope.** Every 402, and every 403 caused by a limit or access rule,
+carries an `error` object an agent can act on without parsing prose. A 402
+keeps its existing `data` payload.
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "payment_required",
+    "gate": "payment",
+    "action": "complete_checkout",
+    "url": "https://checkout.stripe.com/...",
+    "poll": "https://your-host/api/v1/client/checkout-sessions/cs_...",
+    "retry_after": null,
+    "message": "Open url to add a payment method, then poll the checkout session until it is complete."
+  },
+  "data": { "checkoutUrl": "...", "checkoutSessionId": "cs_..." }
+}
+```
+
+| gate | code | action |
+|------|------|--------|
+| `payment` | `payment_required` | `complete_checkout` (hand `url` to a human, poll `poll`) |
+| `budget` | `budget_exceeded`, `spend_cap_exceeded` | `wait` for `retry_after` seconds, or `raise_spend_cap` |
+| `claim` | `claim_required` | `claim_account` (paying claims the account; `poll` is the status URL) |
+| `scope` | `scope_denied` | `request_scope` |
+
+**Spend mandate.** When `agentSpendMandateEnabled` is on and the request
+includes `spend_mandate`, signup creates a Stripe Checkout session in setup
+mode and returns its URL as `setup_url`. When a human completes it, the
+payment method becomes the customer's default, the customer's spend cap is set
+to `max_amount`, the mandate becomes `active`, and the customer is claimed.
+Purchases inside the cap charge off-session; purchases above it return the
+gate envelope with `gate: "budget"`.
+
+**Provisional expiry.** A signed-up customer is `PROVISIONAL` with
+`expires_at = now + agentProvisionalDays`. The first paid checkout or invoice
+claims it (`CLAIMED`, `expires_at` null). A nightly job marks unpaid customers
+past `expires_at` as `EXPIRED` and revokes their keys. Nothing is deleted.
+Payment is the only human gate: no email confirmation, no CAPTCHA, no claim
+link.
+
+**Tenant settings** (`PATCH /api/v1/tanso/account-settings`, console JWT):
+
+| field | default | meaning |
+|-------|---------|---------|
+| `slug` | none | URL name for the catalog, `/public/v1/catalog/{slug}` |
+| `publicCatalogEnabled` | `false` | serve pricing.json for this account |
+| `agentSignupEnabled` | `false` | serve the signup endpoint |
+| `agentSignupDefaultPlanId` | none | free ACTIVE plan new customers land on; required before enabling |
+| `agentSignupHourlyCap` | `10` | signups per account per hour; 429 + `Retry-After` above it |
+| `agentSignupPerIpCap` | `5` | signups per IP per hour; 429 + `Retry-After` above it |
+| `agentProvisionalDays` | `14` | days before an unpaid provisional customer expires |
+| `agentSpendMandateEnabled` | `false` | honor `spend_mandate` on signup |
+
+`deploy/setup.sh` turns on the catalog and signup for the seeded account on
+the `developer_demo` plan at slug `demo`. Set `TANSO_SKIP_AGENT_SIGNUP=1` to
+skip that step.
+
+**Agent funnel.** `GET /api/v1/tanso/agent-funnel?from=&to=` (console JWT)
+returns signups, first verified job, claimed and paid counts, conversion rates,
+median hours to first job and to paid, expired count, and a by-day table. The
+console shows the same numbers on the Agent funnel page.
 
 Tanso Core also ships an [MCP](https://modelcontextprotocol.io) server so
 agents can operate over MCP instead of REST — including a curated
