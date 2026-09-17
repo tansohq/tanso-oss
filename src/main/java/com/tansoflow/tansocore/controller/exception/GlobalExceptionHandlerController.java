@@ -29,6 +29,7 @@ import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.Error;
 import com.tansoflow.tansocore.model.response.ErrorCode;
+import com.tansoflow.tansocore.model.response.GateError;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +46,8 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -93,8 +96,13 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.info("Key budget exceeded [errorId={}]: {}", errorId, exception.getMessage());
 
+        Long retryAfter = null;
+        if (exception.getResetsAt() != null) {
+            retryAfter = Math.max(0L, Duration.between(Instant.now(), exception.getResetsAt()).getSeconds());
+        }
+        String message = exception.getMessage() + "; wait for the window to reset or ask the key owner to raise the budget.";
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.BUDGET_EXCEEDED));
+                .body(gateResponse(GateError.budgetExceeded(retryAfter, message), errorId));
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)
@@ -171,7 +179,9 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.warn("Access denied [errorId={}]: {}", errorId, exception.getMessage());
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(processErrorMessage(exception.getMessage(), errorId, ErrorCode.FORBIDDEN));
+        String message = exception.getMessage() + "; ask the account owner for a key with the required scope.";
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(gateResponse(GateError.scopeDenied(message), errorId));
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
@@ -179,7 +189,9 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.warn("Authorization denied [errorId={}]: {}", errorId, exception.getMessage(), exception);
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(processErrorMessage(HttpStatus.FORBIDDEN.getReasonPhrase(), errorId, ErrorCode.FORBIDDEN));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.scopeDenied(
+                "This key is not allowed to call this endpoint; ask the account owner for a key with the required scope."),
+                errorId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -287,5 +299,14 @@ public class GlobalExceptionHandlerController {
 
         log.error("Error processed [errorId={}]: {}", errorId, message);
         return apiResponse;
+    }
+
+    // Gate envelopes keep message as one plain sentence for the agent; the errorId rides in detail.
+    private static ApiResponse<Void> gateResponse(GateError gateError, String errorId) {
+        gateError.setDetail("errorId=" + errorId);
+        return ApiResponse.<Void>builder()
+                .success(false)
+                .error(gateError)
+                .build();
     }
 }

@@ -823,8 +823,8 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Customer created as provisional, subscribed to the free default plan; data carries the customer-scoped apiKey (shown once), limits, expires_at, status_url and nextSteps.",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -832,6 +832,12 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "No account has this slug, or the operator has not enabled the public catalog or agent signup. error.code=not_found."
+                    },
+                    "429": {
+                        "description": "Hourly signup cap reached for this account or IP. error.code=rate_limited; Retry-After header carries the seconds to wait."
                     }
                 }
             }
@@ -3302,6 +3308,19 @@
                     },
                     "404": {
                         "description": "Invalid plan or customer ID"
+                    },
+                    "402": {
+                        "description": "Payment required: the plan is paid and the customer has no usable payment method. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the SubscribedCustomerResponse (checkoutUrl, checkoutSessionId). Customer-scoped (ck_) keys only.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSubscribedCustomerResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "planId is missing or names no plan on this account"
                     }
                 },
                 "security": [
@@ -3799,8 +3818,8 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Credits purchased and granted",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -3808,6 +3827,19 @@
                                 }
                             }
                         }
+                    },
+                    "402": {
+                        "description": "Payment required: no usable payment method, or the off-session charge was declined. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the CreditPurchaseResult (checkoutUrl, checkoutSessionId, declineReason). When the instance has no payment processor at all, url and poll are null and message says to contact the operator.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCreditPurchaseResult"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The pool could not be resolved, or no price is published for the denomination"
                     }
                 },
                 "security": [
@@ -8345,7 +8377,15 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after.",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Error"
+                            },
+                            {
+                                "$ref": "#/components/schemas/GateError"
+                            }
+                        ]
                     },
                     "meta": {
                         "type": "array",
@@ -9379,7 +9419,15 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after.",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Error"
+                            },
+                            {
+                                "$ref": "#/components/schemas/GateError"
+                            }
+                        ]
                     },
                     "meta": {
                         "type": "array",
@@ -11607,7 +11655,15 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after.",
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/Error"
+                            },
+                            {
+                                "$ref": "#/components/schemas/GateError"
+                            }
+                        ]
                     },
                     "meta": {
                         "type": "array",
@@ -15380,6 +15436,58 @@
                         "items": {
                             "type": "string"
                         }
+                    }
+                }
+            },
+            "GateError": {
+                "type": "object",
+                "description": "Error with a machine-readable gate and the action that clears it. Returned as `error` on every 402 and on access/limit 403.",
+                "allOf": [
+                    {
+                        "$ref": "#/components/schemas/Error"
+                    }
+                ],
+                "properties": {
+                    "gate": {
+                        "type": "string",
+                        "enum": [
+                            "payment",
+                            "budget",
+                            "claim",
+                            "scope"
+                        ]
+                    },
+                    "action": {
+                        "type": "string",
+                        "enum": [
+                            "complete_checkout",
+                            "wait",
+                            "claim_account",
+                            "request_scope",
+                            "raise_spend_cap"
+                        ]
+                    },
+                    "url": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "Checkout URL to hand to a human, or null"
+                    },
+                    "poll": {
+                        "type": [
+                            "string",
+                            "null"
+                        ],
+                        "description": "URL to poll until the gate clears, or null"
+                    },
+                    "retry_after": {
+                        "type": [
+                            "integer",
+                            "null"
+                        ],
+                        "format": "int64",
+                        "description": "Seconds until the budget window resets, or null"
                     }
                 }
             }

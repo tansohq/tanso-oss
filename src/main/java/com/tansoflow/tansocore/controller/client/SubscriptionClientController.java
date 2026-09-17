@@ -21,6 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
+import com.tansoflow.tansocore.model.response.GateError;
 import com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.response.SubscribedCustomerResponse;
@@ -31,6 +32,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -92,14 +94,17 @@ public class SubscriptionClientController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a subscription"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
                     "Payment required: the plan is paid and the customer has no usable payment method. "
-                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
-                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. Customer-scoped (ck_) keys only."),
+                            + "success is false and error is the gate envelope: code=payment_required, gate=payment, "
+                            + "action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session "
+                            + "GET URL, retry_after=null. data still carries the SubscribedCustomerResponse "
+                            + "(checkoutUrl, checkoutSessionId). Customer-scoped (ck_) keys only."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
                     "planId is missing or names no plan on this account", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid plan or customer ID", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubscribedCustomerResponse>> createSubscription(@AuthenticationPrincipal UserContext userContext,
-                                                          @Valid @RequestBody ClientSubscriptionRequest subscriptionRequest) {
+                                                          @Valid @RequestBody ClientSubscriptionRequest subscriptionRequest,
+                                                          HttpServletRequest httpRequest) {
         subscriptionRequest.setCustomerReferenceId(
                 customerAccessGuard.resolveCustomerRef(userContext, subscriptionRequest.getCustomerReferenceId()));
         customerAccessGuard.requirePurchaseScope(userContext);
@@ -137,9 +142,20 @@ public class SubscriptionClientController {
                 ? HttpStatus.PAYMENT_REQUIRED
                 : HttpStatus.CREATED;
 
+        GateError gateError = null;
+        if (status == HttpStatus.PAYMENT_REQUIRED) {
+            String pollUrl = null;
+            if (subscribedCustomerResponse.getCheckoutSessionId() != null) {
+                String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+                pollUrl = baseUrl + "/api/v1/client/checkout-sessions/" + subscribedCustomerResponse.getCheckoutSessionId();
+            }
+            gateError = GateError.paymentRequired(subscribedCustomerResponse.getCheckoutUrl(), pollUrl);
+        }
+
         ApiResponse<SubscribedCustomerResponse> apiResponse = ApiResponse.<SubscribedCustomerResponse>builder()
                 .data(subscribedCustomerResponse)
-                .success(!paymentRequired || !userContext.isCustomerScoped())
+                .error(gateError)
+                .success(status != HttpStatus.PAYMENT_REQUIRED)
                 .build();
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
     }
