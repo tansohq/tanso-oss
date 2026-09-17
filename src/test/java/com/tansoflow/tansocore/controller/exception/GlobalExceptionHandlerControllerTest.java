@@ -113,40 +113,65 @@ class GlobalExceptionHandlerControllerTest {
     }
 
     @Test
-    void budgetExceededWithoutAWindow_HasNullRetryAfter() {
-        ResponseEntity<ApiResponse<Void>> response = handler.handleBudgetExceededException(
-                com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
-                        new java.math.BigDecimal("25"), new java.math.BigDecimal("40")));
-
-        com.tansoflow.tansocore.model.response.GateError error =
-                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
-        assertEquals("budget_exceeded", error.getCode());
-        assertEquals(null, error.getRetryAfter());
-    }
-
-    @Test
-    void accessDenied_Returns403ScopeGate() {
+    void otherCustomer_Returns403ForbiddenWithUseOwnReference() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleAccessDeniedException(
-                new org.springframework.security.access.AccessDeniedException("This API key is scoped to another customer"));
+                new com.tansoflow.tansocore.auth.CustomerAccessGuard.OtherCustomerException("This API key is scoped to another customer"));
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         com.tansoflow.tansocore.model.response.GateError error =
                 (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
-        assertEquals("scope_denied", error.getCode());
+        assertEquals("forbidden", error.getCode());
         assertEquals("scope", error.getGate());
-        assertEquals("request_scope", error.getAction());
-        assertTrue(error.getMessage().startsWith("This API key is scoped to another customer"));
+        assertEquals("use_own_reference", error.getAction());
+        assertTrue(error.getMessage().contains("customerReferenceId"));
     }
 
     @Test
-    void authorizationDenied_Returns403ScopeGate() {
+    void missingPurchaseScope_Returns403ScopeDenied() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleAccessDeniedException(
+                new com.tansoflow.tansocore.auth.CustomerAccessGuard.MissingScopeException("This API key lacks the 'purchase' scope"));
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals("scope_denied", error.getCode());
+        assertEquals("request_scope", error.getAction());
+        assertTrue(error.getMessage().startsWith("This API key lacks the 'purchase' scope"));
+    }
+
+    @Test
+    void otherAccessDenied_Returns403ForbiddenEndpointNotOpen() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleAccessDeniedException(
+                new org.springframework.security.access.AccessDeniedException("Access Denied"));
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals("forbidden", error.getCode());
+        assertEquals("request_scope", error.getAction());
+    }
+
+    @Test
+    void authorizationDenied_Returns403ForbiddenEndpointNotOpen() {
         ResponseEntity<ApiResponse<Void>> response = handler.handleAuthorizationDeniedException(
                 new org.springframework.security.authorization.AuthorizationDeniedException("Access Denied"));
 
         assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
         com.tansoflow.tansocore.model.response.GateError error =
                 (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
-        assertEquals("scope_denied", error.getCode());
+        assertEquals("forbidden", error.getCode());
+        assertEquals("scope", error.getGate());
         assertEquals("request_scope", error.getAction());
+    }
+
+    @Test
+    void budgetWithoutWindow_ReturnsSpendCapExceeded() {
+        ResponseEntity<ApiResponse<Void>> response = handler.handleBudgetExceededException(
+                com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
+                        new java.math.BigDecimal("50"), new java.math.BigDecimal("80")));
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals("spend_cap_exceeded", error.getCode());
+        assertEquals("raise_spend_cap", error.getAction());
+        assertEquals(null, error.getRetryAfter());
     }
 }

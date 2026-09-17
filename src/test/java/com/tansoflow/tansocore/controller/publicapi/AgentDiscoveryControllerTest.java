@@ -100,6 +100,12 @@ class AgentDiscoveryControllerTest {
 
         assertEquals(BASE + "/agent-signup.md", manifest.get("runbook"));
         assertEquals(BASE + "/.well-known/agent-skills/index.json", manifest.get("skills"));
+        Map<?, ?> payment = (Map<?, ?>) manifest.get("payment");
+        assertEquals("http-402", payment.get("protocol"));
+        String description = (String) payment.get("description");
+        for (String field : List.of("error.gate", "error.action", "error.url", "error.poll", "error.retry_after")) {
+            assertTrue(description.contains(field), "payment description missing " + field);
+        }
     }
 
     @Test
@@ -115,7 +121,10 @@ class AgentDiscoveryControllerTest {
         assertTrue(body.contains("provisional"));
         assertTrue(body.contains("/api/v1/client/customers/{referenceId}/status"));
         assertTrue(body.contains("`gate`"));
+        assertTrue(body.contains("There is no claim"));
+        assertTrue(body.contains("every signup"));
         assertFalse(body.contains("POST an email"));
+        assertFalse(body.contains("claim_required"));
     }
 
     @Test
@@ -151,19 +160,49 @@ class AgentDiscoveryControllerTest {
                 "\"status_url\"", "\"owner_url\"", "\"nextSteps\"", "\"apiKeyScopes\": [\"read\", \"purchase\"]")) {
             assertTrue(body.contains(field), "runbook missing " + field);
         }
-        for (String gate : List.of("`payment`", "`budget`", "`claim`", "`scope`")) {
+        for (String gate : List.of("`payment`", "`budget`", "`scope`")) {
             assertTrue(body.contains(gate), "runbook missing gate " + gate);
         }
-        for (String code : List.of("payment_required", "budget_exceeded", "claim_required", "scope_denied", "spend_cap_exceeded")) {
+        for (String code : List.of("payment_required", "budget_exceeded", "spend_cap_exceeded", "scope_denied", "`forbidden`")) {
             assertTrue(body.contains(code), "runbook missing code " + code);
         }
-        for (String action : List.of("complete_checkout", "wait", "claim_account", "request_scope", "raise_spend_cap")) {
+        for (String action : List.of("complete_checkout", "wait", "raise_spend_cap", "use_own_reference", "request_scope")) {
             assertTrue(body.contains("`" + action + "`"), "runbook missing action " + action);
         }
+        assertFalse(body.contains("claim_required"));
+        assertFalse(body.contains("claim_account"));
+        assertTrue(body.contains("There is no claim gate."));
+        assertTrue(body.contains("\"detail\": \"errorId="));
+        assertTrue(body.contains("Payment is required: hand url to a human to complete checkout, then poll for the outcome."));
+        assertTrue(body.contains("`401 unauthorized`"));
+        assertTrue(body.contains("If you get 401 on every endpoint after your"));
+        assertTrue(body.contains("expiry date, the account expired. Sign up again."));
+        assertTrue(body.contains("\"status\": \"unavailable\""));
+        assertTrue(body.contains("`expired`"));
+        assertTrue(body.contains("\"check_entitlement_example\""));
+        assertTrue(body.contains("\"runbook\": \"" + BASE + "/agent-signup.md\""));
+        assertTrue(body.contains("Signup rate limit reached for this catalog; retry after Retry-After seconds"));
+        assertTrue(body.contains("Signup rate limit reached for this address; retry after Retry-After seconds"));
+        assertTrue(body.contains("## Other errors"));
+        assertTrue(body.contains("never omitted"));
+        assertTrue(body.contains("03:30 UTC"));
+        assertTrue(body.contains("`validation_failed`"));
+        assertFalse(body.contains("X-Forwarded-For"));
+        assertFalse(body.contains("same customer"));
         assertTrue(body.contains("PUT " + BASE + "/api/v1/client/customers/agent_7f3c9a2e/owner"));
         assertTrue(body.contains("14 days after signup by default"));
         assertTrue(body.contains("`Retry-After` header"));
         assertTrue(body.contains("5 signups per hour by default"));
+    }
+
+    @Test
+    void mappingsDoNotRestrictAcceptHeader() throws NoSuchMethodException {
+        for (String method : List.of("llmsTxt", "agentManifest", "skillsIndex", "runbook")) {
+            org.springframework.web.bind.annotation.GetMapping mapping = AgentDiscoveryController.class
+                    .getMethod(method, HttpServletRequest.class)
+                    .getAnnotation(org.springframework.web.bind.annotation.GetMapping.class);
+            assertEquals(0, mapping.produces().length, method + " must not set produces; Accept: application/json would get 406");
+        }
     }
 
     @Test

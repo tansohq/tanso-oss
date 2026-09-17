@@ -58,15 +58,13 @@ class GateErrorTest {
     }
 
     @Test
-    void claimRequiredPollsTheStatusUrl() {
-        GateError error = GateError.claimRequired("https://api.example.com/api/v1/client/customers/agent_1/status");
+    void otherCustomerTellsTheAgentToUseItsOwnReference() {
+        GateError error = GateError.otherCustomer();
 
-        assertThat(error.getCode()).isEqualTo("claim_required");
-        assertThat(error.getGate()).isEqualTo("claim");
-        assertThat(error.getAction()).isEqualTo("claim_account");
-        assertThat(error.getUrl()).isNull();
-        assertThat(error.getPoll()).isEqualTo("https://api.example.com/api/v1/client/customers/agent_1/status");
-        assertThat(error.getMessage()).containsIgnoringCase("paying");
+        assertThat(error.getCode()).isEqualTo("forbidden");
+        assertThat(error.getGate()).isEqualTo("scope");
+        assertThat(error.getAction()).isEqualTo("use_own_reference");
+        assertThat(error.getMessage()).contains("customerReferenceId");
     }
 
     @Test

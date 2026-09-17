@@ -64,18 +64,21 @@ docker compose exec -T postgres psql -q \
 if [ -z "${TANSO_SKIP_AGENT_SIGNUP:-}" ]; then
   AGENT_SLUG="${TANSO_AGENT_SLUG:-demo}"
   echo "Enabling public catalog and agent signup at /public/v1/catalog/$AGENT_SLUG ..."
-  LOGIN_RESPONSE="$(curl -sf -X POST "$API_URL/public/v1/login" \
+  LOGIN_RESPONSE="$(curl -s -X POST "$API_URL/public/v1/login" \
     -H 'Content-Type: application/json' \
     -d '{"username":"test","password":"password"}')"
   JWT="$(printf '%s' "$LOGIN_RESPONSE" | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
   if [ -z "$JWT" ]; then
-    echo "Login as test/password failed; leaving agent signup off. Response: $LOGIN_RESPONSE" >&2
+    echo "Login as test/password failed; agent signup stays off. Response: $LOGIN_RESPONSE" >&2
     exit 1
   fi
-  curl -sf -X PATCH "$API_URL/api/v1/tanso/account-settings" \
+  SETTINGS_RESPONSE="$(curl -s -X PATCH "$API_URL/api/v1/tanso/account-settings" \
     -H "Authorization: Bearer $JWT" -H 'Content-Type: application/json' \
-    -d "{\"slug\":\"$AGENT_SLUG\",\"publicCatalogEnabled\":true,\"agentSignupDefaultPlanId\":\"22222222-2222-4222-8222-222222222222\",\"agentSignupEnabled\":true}" \
-    > /dev/null
+    -d "{\"slug\":\"$AGENT_SLUG\",\"publicCatalogEnabled\":true,\"agentSignupDefaultPlanId\":\"22222222-2222-4222-8222-222222222222\",\"agentSignupEnabled\":true}")"
+  if ! printf '%s' "$SETTINGS_RESPONSE" | grep -q '"success":true'; then
+    echo "Enabling agent signup failed. Response: $SETTINGS_RESPONSE" >&2
+    exit 1
+  fi
   echo "Agent signup enabled."
 fi
 

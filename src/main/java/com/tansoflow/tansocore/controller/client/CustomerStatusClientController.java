@@ -73,6 +73,7 @@ public class CustomerStatusClientController {
     private final KeyBudgetService keyBudgetService;
     private final AccountSettingRepository accountSettingRepository;
     private final CheckoutSessionRepository checkoutSessionRepository;
+    private final com.tansoflow.tansocore.repository.SubscriptionRepository subscriptionRepository;
     private final AgentLifecycleService agentLifecycleService;
 
     @GetMapping("/status")
@@ -112,6 +113,12 @@ public class CustomerStatusClientController {
         CustomerUsageResponse usage = usageForecastService.getUsage(
                 customer.getExternalClientCustomerId(), userContext.getAccountId());
 
+        Map<String, String> periodByPlan = new LinkedHashMap<>();
+        for (com.tansoflow.tansocore.entity.Subscription subscription : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
+            Integer months = subscription.getPlan().getIntervalMonths();
+            periodByPlan.put(subscription.getPlan().getKey(), months == null || months == 1 ? "month" : months + " months");
+        }
+
         String plan = null;
         Map<String, AgentSignupResponse.FeatureLimit> limits = new LinkedHashMap<>();
         Map<String, BigDecimal> remaining = new LinkedHashMap<>();
@@ -123,7 +130,7 @@ public class CustomerStatusClientController {
                 boolean unlimited = feature.getLimit() == null;
                 limits.put(feature.getFeatureKey(), AgentSignupResponse.FeatureLimit.builder()
                         .included(feature.getLimit())
-                        .period("billing_period")
+                        .period(periodByPlan.getOrDefault(subscription.getPlanKey(), "month"))
                         .unlimited(unlimited)
                         .build());
                 remaining.put(feature.getFeatureKey(), feature.getRemaining());
@@ -145,7 +152,7 @@ public class CustomerStatusClientController {
                 .remaining(remaining)
                 .spend(spend(customer, userContext, settings))
                 .ownerEmail(customer.getAgentOwnerEmail())
-                .spendMandate(spendMandate(customer))
+                .spendMandate(spendMandate(customer, settings))
                 .build();
     }
 
@@ -168,14 +175,22 @@ public class CustomerStatusClientController {
                 .build();
     }
 
-    private AgentSignupResponse.AgentSpendMandate spendMandate(Customer customer) {
+    private AgentSignupResponse.AgentSpendMandate spendMandate(Customer customer, AccountSetting settings) {
         return checkoutSessionRepository
                 .findFirstByCustomerIdAndPurposeOrderByCreatedAtDesc(customer.getId(), CheckoutSession.PURPOSE_SPEND_MANDATE)
-                .map(session -> AgentSignupResponse.AgentSpendMandate.builder()
-                        .status(CheckoutSession.STATUS_COMPLETED.equals(session.getStatus()) ? "active" : "pending")
-                        .setupUrl(CheckoutSession.STATUS_COMPLETED.equals(session.getStatus()) ? null : session.getCheckoutUrl())
-                        .maxAmount(session.getAmount())
-                        .build())
+                .map(session -> {
+                    String status = switch (session.getStatus()) {
+                        case CheckoutSession.STATUS_COMPLETED -> "active";
+                        case CheckoutSession.STATUS_EXPIRED -> "expired";
+                        default -> "pending";
+                    };
+                    return AgentSignupResponse.AgentSpendMandate.builder()
+                            .status(status)
+                            .setupUrl("pending".equals(status) ? session.getCheckoutUrl() : null)
+                            .maxAmount(session.getAmount())
+                            .currency(settings.getCurrency())
+                            .build();
+                })
                 .orElse(AgentSignupResponse.AgentSpendMandate.builder().status("none").build());
     }
 
@@ -183,6 +198,7 @@ public class CustomerStatusClientController {
     public static class OwnerRequest {
         @NotBlank
         @Email
+        @jakarta.validation.constraints.Size(max = 255)
         private String email;
     }
 }

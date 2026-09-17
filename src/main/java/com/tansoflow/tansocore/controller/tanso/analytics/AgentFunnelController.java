@@ -74,6 +74,9 @@ public class AgentFunnelController {
         if (!effectiveFrom.isBefore(effectiveTo)) {
             throw new IllegalArgumentException("from must be before to");
         }
+        if (effectiveFrom.plusDays(366).isBefore(effectiveTo)) {
+            throw new IllegalArgumentException("range must be 366 days or less");
+        }
         AgentFunnelResponse funnel = agentFunnelService.getFunnel(userContext.getAccountId(), effectiveFrom, effectiveTo);
         return ResponseEntity.ok(ApiResponse.<AgentFunnelResponse>builder()
                 .success(true)

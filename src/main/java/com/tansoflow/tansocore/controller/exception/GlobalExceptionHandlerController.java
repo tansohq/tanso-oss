@@ -96,10 +96,12 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.info("Key budget exceeded [errorId={}]: {}", errorId, exception.getMessage());
 
-        Long retryAfter = null;
-        if (exception.getResetsAt() != null) {
-            retryAfter = Math.max(0L, Duration.between(Instant.now(), exception.getResetsAt()).getSeconds());
+        // No reset time means a per-charge cap or a TOTAL budget: waiting never helps.
+        if (exception.getResetsAt() == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.spendCapExceeded(
+                    exception.getMessage() + "; ask the account owner to raise the cap."), errorId));
         }
+        long retryAfter = Math.max(0L, Duration.between(Instant.now(), exception.getResetsAt()).getSeconds());
         String message = exception.getMessage() + "; wait for the window to reset or ask the key owner to raise the budget.";
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(gateResponse(GateError.budgetExceeded(retryAfter, message), errorId));
@@ -179,9 +181,14 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.warn("Access denied [errorId={}]: {}", errorId, exception.getMessage());
 
-        String message = exception.getMessage() + "; ask the account owner for a key with the required scope.";
-        return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                .body(gateResponse(GateError.scopeDenied(message), errorId));
+        if (exception instanceof com.tansoflow.tansocore.auth.CustomerAccessGuard.OtherCustomerException) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.otherCustomer(), errorId));
+        }
+        if (exception instanceof com.tansoflow.tansocore.auth.CustomerAccessGuard.MissingScopeException) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.scopeDenied(
+                    exception.getMessage() + "; ask the account owner for a key with the purchase scope."), errorId));
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.endpointNotOpen(), errorId));
     }
 
     @ExceptionHandler(AuthorizationDeniedException.class)
@@ -189,9 +196,7 @@ public class GlobalExceptionHandlerController {
         String errorId = assignErrorId();
         log.warn("Authorization denied [errorId={}]: {}", errorId, exception.getMessage(), exception);
 
-        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.scopeDenied(
-                "This key is not allowed to call this endpoint; ask the account owner for a key with the required scope."),
-                errorId));
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.endpointNotOpen(), errorId));
     }
 
     @ExceptionHandler(IllegalArgumentException.class)

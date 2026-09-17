@@ -39,6 +39,9 @@ import java.util.Map;
 /**
  * The front door for an agent that has this instance's address and nothing else.
  *
+ * <p>No {@code produces} on the mappings: an agent that sends {@code Accept: application/json} would get
+ * 406 for the Markdown and text documents. The content type is set on each response instead.
+ *
  * <p>Without it the catalog is unreachable in practice: {@code /public/v1/catalog/{slug}/pricing.json}
  * is public, but the slug appears nowhere an unauthenticated caller can read, and every other path on
  * the instance answers 403. These two documents name the enabled catalogs so discovery can start from
@@ -46,7 +49,7 @@ import java.util.Map;
  */
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Agent Discovery", description = "llms.txt and agent manifest — no authentication")
+@Tag(name = "Agent Discovery", description = "llms.txt and agent manifest, no authentication")
 @ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDiscoveryController {
 
@@ -76,7 +79,7 @@ public class AgentDiscoveryController {
         return request.getRequestURL().toString().replace(request.getRequestURI(), "");
     }
 
-    @GetMapping(value = "/llms.txt", produces = "text/plain; charset=utf-8")
+    @GetMapping("/llms.txt")
     @Operation(summary = "Agent-readable index of the published catalogs",
             description = "Plain text pointing at each enabled catalog's pricing.json, its signup URL, and the API spec.")
     public ResponseEntity<String> llmsTxt(HttpServletRequest request) {
@@ -116,16 +119,20 @@ public class AgentDiscoveryController {
                 .append("A new customer is provisional: it has the free plan's limits and expires after the\n")
                 .append("operator's provisional window (14 days by default) unless it pays. Paying claims the\n")
                 .append("account and removes the expiry. `GET ").append(base).append("/api/v1/client/customers/{referenceId}/status`\n")
-                .append("returns status, expiry, remaining limits and spend. Every 402 and every limit 403 carries an\n")
-                .append("`error` object with `gate`, `action`, `url`, `poll`, `retry_after` and `message` that says\n")
-                .append("what to do next. Step by step: [agent-signup.md](").append(base).append("/agent-signup.md).\n\n")
+                .append("returns status, expiry, remaining limits and spend. Every 402 and every limit or access 403 carries\n")
+                .append("an `error` object with `gate` (`payment`, `budget` or `scope`), `action`, `url`, `poll`,\n")
+                .append("`retry_after`, `message` and `detail` (the error id) that says what to do next. There is no claim\n")
+                .append("gate: paying is the claim. Once the account expires its keys are revoked and every call returns\n")
+                .append("401; sign up again. Step by step: [agent-signup.md](").append(base).append("/agent-signup.md).\n\n")
                 .append("- Check an entitlement before doing work: `POST ").append(base).append("/api/v1/client/entitlements`\n")
                 .append("- Record what you used afterwards: `POST ").append(base).append("/api/v1/client/events`\n")
                 .append("- Read your own usage and credit burndown: `GET ").append(base).append("/api/v1/client/customers/{referenceId}/usage`\n")
                 .append("- Buy credits: `POST ").append(base).append("/api/v1/client/credits/purchases`\n")
                 .append("- Change plan: `POST ").append(base).append("/api/v1/client/subscriptions` with the plan key from pricing.json\n\n")
-                .append("A paid action with no payment method answers 402 with a `checkoutUrl` to hand to a human,\n")
-                .append("and a `checkoutSessionId` to poll at `GET ").append(base).append("/api/v1/client/checkout-sessions/{id}`.\n\n");
+                .append("A paid action with no payment method answers 402 `payment_required` with `error.url` (the checkout\n")
+                .append("page to hand to a human) and `error.poll` (`GET ").append(base).append("/api/v1/client/checkout-sessions/{id}`).\n")
+                .append("Signup email is optional, recorded as the owner contact only, never sent to, and every signup\n")
+                .append("creates a new customer.\n\n");
 
         out.append("## Specification\n\n")
                 .append("- [OpenAPI](").append(base).append("/v3/api-docs)\n")
@@ -139,7 +146,7 @@ public class AgentDiscoveryController {
         return ResponseEntity.ok().contentType(MediaType.valueOf("text/plain; charset=utf-8")).body(out.toString());
     }
 
-    @GetMapping(value = "/.well-known/agent.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping("/.well-known/agent.json")
     @Operation(summary = "Agent manifest",
             description = "Machine-readable pointer to the published catalogs, the signup path, and the auth scheme.")
     public ResponseEntity<Map<String, Object>> agentManifest(HttpServletRequest request) {
@@ -171,16 +178,18 @@ public class AgentDiscoveryController {
                         .orElse("the operator of this instance")));
         manifest.put("payment", Map.of(
                 "protocol", "http-402",
-                "description", "Paid actions without a payment method answer 402 with checkoutUrl and checkoutSessionId."));
+                "description", "Paid actions without a payment method answer 402 payment_required. Every 402 and "
+                        + "every limit or access 403 body carries error.gate (payment, budget or scope), error.action, "
+                        + "error.url, error.poll and error.retry_after; poll error.poll until checkout completes."));
         manifest.put("openapi", base + "/v3/api-docs");
         manifest.put("docs", base + "/llms.txt");
         manifest.put("runbook", base + "/agent-signup.md");
         manifest.put("skills", base + "/.well-known/agent-skills/index.json");
 
-        return ResponseEntity.ok(manifest);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(manifest);
     }
 
-    @GetMapping(value = "/.well-known/agent-skills/index.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping("/.well-known/agent-skills/index.json")
     @Operation(summary = "Agent skills index",
             description = "Lists the signup runbook as a skill an agent can load.")
     public ResponseEntity<Map<String, Object>> skillsIndex(HttpServletRequest request) {
@@ -191,10 +200,10 @@ public class AgentDiscoveryController {
                 + "returned API key, use the free plan, and handle the 402/403 gate envelope, status, owner "
                 + "and expiry rules.");
         skill.put("url", base + "/agent-signup.md");
-        return ResponseEntity.ok(Map.of("skills", List.of(skill)));
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("skills", List.of(skill)));
     }
 
-    @GetMapping(value = "/agent-signup.md", produces = "text/markdown; charset=utf-8")
+    @GetMapping("/agent-signup.md")
     @Operation(summary = "Agent signup runbook",
             description = "Step-by-step Markdown: read pricing.json, sign up, store the key, check status, "
                     + "use the free plan, handle gates, set the owner, and what expiry means.")
@@ -279,14 +288,17 @@ public class AgentDiscoveryController {
               }'
             ```
 
-            - `email`: optional. Must be a valid address if present. Signing up again with the same email
-              on the same catalog returns the same `customerReferenceId` with a new key. No second customer.
+            - `email`: optional. Must be a valid address if present. It is recorded as the owner contact only.
+              Nothing is sent to it, and it never resolves to an existing customer: every signup creates a
+              new provisional customer, even with an email seen before.
             - `name`: optional, up to 100 characters.
-            - `spend_mandate`: optional. Only honored when the operator enabled spend mandates; otherwise the
-              response has `"spend_mandate": null`.
+            - `spend_mandate`: optional. `currency` must equal the account currency. `max_amount` is required
+              when the object is present. See step 3 for what comes back.
 
-            Errors: `404` when there is no catalog at that slug or signup is not enabled on it. `429` when a
-            rate limit is hit (see Rate limits).
+            Errors: `404 not_found` when there is no catalog at that slug or signup is not enabled on it (same
+            body for both, on purpose). `400 validation_failed` for a bad email, a `spend_mandate` without
+            `max_amount`, or a currency that does not match the account. `429 rate_limited` when a rate limit
+            is hit (see Rate limits).
 
             ## 3. The response (201)
 
@@ -311,6 +323,7 @@ public class AgentDiscoveryController {
                   "status": "pending",
                   "setup_url": "https://checkout.stripe.com/c/pay/cs_test_...",
                   "max_amount": 50.00,
+                  "currency": "usd",
                   "period": "month"
                 },
                 "status_url": "{base}/api/v1/client/customers/agent_7f3c9a2e/status",
@@ -319,20 +332,38 @@ public class AgentDiscoveryController {
                   "base_url": "{base}",
                   "pricing": "{base}/public/v1/catalog/{slug}/pricing.json",
                   "check_entitlement_template": "{base}/api/v1/client/entitlements/agent_7f3c9a2e/{featureKey}",
+                  "check_entitlement_example": "{base}/api/v1/client/entitlements/agent_7f3c9a2e/ai.chat",
                   "record_usage": "{base}/api/v1/client/events",
                   "usage_summary": "{base}/api/v1/client/customers/agent_7f3c9a2e/usage",
                   "credit_balances": "{base}/api/v1/client/credits/agent_7f3c9a2e/pools",
                   "buy_credits": "{base}/api/v1/client/credits/purchases",
                   "change_plan": "{base}/api/v1/client/subscriptions",
+                  "runbook": "{base}/agent-signup.md",
                   "docs": "{base}/swagger-ui.html"
                 }
               }
             }
             ```
 
-            `expires_at` is null once the account is claimed. `spend_mandate` is null when you did not send
-            one or the operator has mandates off. `limits.features` is keyed by feature key; `included` is
-            null when the plan does not meter that feature; `unlimited: true` means no cap.
+            `expires_at` is null once the account is claimed. `check_entitlement_example` is present only when
+            the plan has at least one feature. Null fields are written out (`"spend_mandate": null`,
+            `"claimed_at": null`), never omitted, in both the signup and the status body.
+
+            `limits.features` is keyed by feature key. `included` is null when the plan does not meter that
+            feature; `unlimited: true` means no cap; `period` comes from the plan interval: `"month"` or
+            `"N months"`. `limits.spend_cap` is the largest single charge the operator lets an agent start
+            (`agentMaxTopupAmount`); null means no per-charge limit. It is distinct from the calling key's
+            budget, which the status endpoint reports as `spend.cap`.
+
+            `spend_mandate` is:
+
+            - `null` when the request did not ask for one.
+            - `{ "status": "unavailable", "max_amount", "currency", "period" }` when you asked but the operator
+              has not enabled mandates, Stripe is not connected, or Stripe failed to open a session. The signup
+              still succeeds.
+            - `{ "status": "pending", "setup_url", "max_amount", "currency", "period" }` when a Stripe Checkout
+              page was opened. Hand `setup_url` to a human. When they finish, the cap is applied to every active
+              key of the customer, keys rotated later inherit it, and the customer is claimed.
 
             ## 4. Store the key once
 
@@ -365,14 +396,19 @@ public class AgentDiscoveryController {
                 "remaining": { "ai.chat": 3 },
                 "spend": null,
                 "owner_email": "ops@example.com",
-                "spend_mandate": { "status": "pending", "max_amount": 50.00, "period": "month" }
+                "spend_mandate": { "status": "pending", "setup_url": "https://checkout.stripe.com/c/pay/cs_test_...", "max_amount": 50.00, "currency": "usd" }
               }
             }
             ```
 
             `status` is `provisional`, `claimed` or `expired`. `remaining` is per feature key, null when
-            the feature is unmetered. `spend` is null until a spend cap exists; then it has `cap`, `spent`,
-            `remaining`, `currency` and `resets_at`. `spend_mandate.status` is `none`, `pending` or `active`.
+            the feature is unmetered. `spend` is null until the calling key has a budget; then it has `cap`,
+            `spent`, `remaining`, `currency` and `resets_at`. `limits.features[].period` uses the same
+            vocabulary as signup (`"month"` or `"N months"`).
+
+            `spend_mandate.status` is `none`, `pending`, `active` or `expired`. `setup_url` is present only
+            while `pending`. There is no `period` here. `expired` means the Stripe setup page expired unused
+            (24 hours); sign up again or ask for a new mandate.
 
             ## 6. Use the free plan
 
@@ -396,7 +432,8 @@ public class AgentDiscoveryController {
             ## 7. Gates: 402 and 403
 
             Every 402, and every 403 caused by a limit or access rule, has this `error` object. A 402 also
-            keeps its normal `data` payload (the subscription or credit purchase result).
+            keeps its normal `data` payload (the subscription or credit purchase result). `detail` always
+            carries the error id to quote to the operator.
 
             ```json
             {
@@ -408,20 +445,47 @@ public class AgentDiscoveryController {
                 "url": "https://checkout.stripe.com/c/pay/cs_test_...",
                 "poll": "{base}/api/v1/client/checkout-sessions/cs_test_...",
                 "retry_after": null,
-                "message": "Open url to add a payment method, then poll the checkout session until it is complete."
+                "message": "Payment is required: hand url to a human to complete checkout, then poll for the outcome.",
+                "detail": "errorId=3f6c1b2e-8d0a-4c7e-9a51-2b7d4e0f6a13"
               },
               "data": { "checkoutUrl": "https://checkout.stripe.com/c/pay/cs_test_...", "checkoutSessionId": "cs_test_..." }
             }
             ```
 
-            What to do per `gate`:
+            When no payment processor is connected to the instance, the 402 has `url` and `poll` null and
+            `message` is "Payment is required but no payment processor is connected to this instance; contact
+            the operator."
 
-            | gate | code | action | do this |
-            |------|------|--------|---------|
-            | `payment` | `payment_required` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` until the session is complete, then retry the call. |
-            | `budget` | `budget_exceeded` or `spend_cap_exceeded` | `wait` or `raise_spend_cap` | Wait `retry_after` seconds and retry, or ask the owner to raise the cap. Do not retry in a loop. |
-            | `claim` | `claim_required` | `claim_account` | This operation is for claimed accounts. Paying claims the account. `poll` is your status URL. |
-            | `scope` | `scope_denied` | `request_scope` | Your key lacks the scope. Ask the operator for a key with it. |
+            A budget gate looks like this:
+
+            ```json
+            {
+              "success": false,
+              "error": {
+                "code": "budget_exceeded",
+                "gate": "budget",
+                "action": "wait",
+                "url": null,
+                "poll": null,
+                "retry_after": 43200,
+                "message": "This API key's spend budget of 50.00 would be exceeded: 48.00 already used, 5.00 requested, window resets at 2026-10-01T00:00:00Z; wait for the window to reset or ask the key owner to raise the budget.",
+                "detail": "errorId=9a1d7c04-5e2b-4f38-b6c1-0d8e2f7a4b55"
+              }
+            }
+            ```
+
+            What to do per row:
+
+            | status | code | gate | action | do this |
+            |--------|------|------|--------|---------|
+            | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
+            | 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window is used up. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
+            | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap or the mandate cap. `retry_after` is null; waiting will not help. Ask the owner to raise the cap or make a smaller purchase. |
+            | 403 | `forbidden` | `scope` | `use_own_reference` | The key belongs to another customer. Message: "This API key belongs to another customer; use your own customerReferenceId or omit it." |
+            | 403 | `scope_denied` | `scope` | `request_scope` | The key lacks the `purchase` scope. Ask the operator for a key with it. |
+            | 403 | `forbidden` | `scope` | `request_scope` | The endpoint is not open to this kind of key. Use a tenant key or ask the account owner. |
+
+            There is no claim gate. Nothing is closed to a provisional account; paying is the claim.
 
             `url`, `poll` and `retry_after` are null when they do not apply. `message` is one sentence that
             says what to do. It is safe to show it to a human.
@@ -444,21 +508,41 @@ public class AgentDiscoveryController {
             change the window). Paying claims the account: the first completed checkout or paid invoice sets
             `status` to `claimed` and `expires_at` to null. Completing a spend mandate setup also claims it.
 
-            When the window passes without a payment, `status` becomes `expired` and the account's API keys
-            are revoked. Usage history is kept. Sign up again to get a new provisional account.
+            After the nightly job (03:30 UTC) an expired customer's keys are revoked, so your next call,
+            including `status_url`, returns `401 unauthorized`. If you get 401 on every endpoint after your
+            expiry date, the account expired. Sign up again. Usage history is kept.
+
+            A payment that completes after expiry re-claims the customer, but the old keys stay revoked; the
+            operator issues a new key from the console.
 
             ## Rate limits
 
-            - Per account: the operator's hourly signup cap (10 per hour by default).
-            - Per IP: 5 signups per hour by default.
+            - Per catalog: the operator's hourly signup cap (10 per hour by default).
+            - Per IP: 5 signups per hour by default. The IP is the connection's remote address; behind a proxy
+              the operator sets `server.forward-headers-strategy`.
 
-            Both return `429` with a `Retry-After` header in seconds and this body:
+            Both return `429` with a `Retry-After` header in seconds and one of these bodies:
 
             ```json
-            { "success": false, "error": { "code": "rate_limited", "message": "Signup rate limit reached (errorId=...)" } }
+            { "success": false, "error": { "code": "rate_limited", "message": "Signup rate limit reached for this catalog; retry after Retry-After seconds (errorId=3f6c1b2e-8d0a-4c7e-9a51-2b7d4e0f6a13)" } }
+            ```
+
+            ```json
+            { "success": false, "error": { "code": "rate_limited", "message": "Signup rate limit reached for this address; retry after Retry-After seconds (errorId=9a1d7c04-5e2b-4f38-b6c1-0d8e2f7a4b55)" } }
             ```
 
             Wait `Retry-After` seconds before trying again.
+
+            ## Other errors
+
+            All carry `success: false` and `error.code`; `error.message` ends with `(errorId=...)`.
+
+            | status | code | when |
+            |--------|------|------|
+            | 400 | `validation_failed` | Bad email, `spend_mandate` without `max_amount`, or a `currency` that does not match the account. |
+            | 401 | `unauthorized` | Missing, wrong or revoked `X-API-Key`. After expiry every endpoint answers this. |
+            | 404 | `not_found` | Unknown slug, or signup is off for that catalog. Same body for both, on purpose. |
+            | 405 | `not_found` | Wrong verb, for example `GET` on the signup URL. The code is `not_found`, the status is 405. |
 
             ## Reference
 

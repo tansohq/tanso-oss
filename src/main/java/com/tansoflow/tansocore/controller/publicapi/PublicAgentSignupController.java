@@ -60,6 +60,9 @@ public class PublicAgentSignupController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description =
                     "No account has this slug, or the operator has not enabled the public catalog or agent signup. "
                             + "error.code=not_found.", content = @Content),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
+                    "Invalid body: malformed email, spend_mandate without max_amount, or a currency other than the "
+                            + "account's. error.code=validation_failed.", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "429", description =
                     "Hourly signup cap reached for this account or IP. error.code=rate_limited; "
                             + "Retry-After header carries the seconds to wait.", content = @Content)
@@ -74,11 +77,9 @@ public class PublicAgentSignupController {
                 ApiResponse.<AgentSignupResponse>builder().data(response).success(true).build());
     }
 
+    // Behind a proxy the real address arrives via server.forward-headers-strategy (set in the prod,
+    // staging and sandbox profiles). Reading X-Forwarded-For here directly would let any caller pick its own IP.
     static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
         return request.getRemoteAddr();
     }
 }

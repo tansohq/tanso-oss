@@ -455,8 +455,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         // Money paid is the claim for an agent-created customer. The customer is a managed
         // entity here, so the change flushes with this transaction. A zero invoice (free plan) does not claim.
         com.tansoflow.tansocore.entity.Customer customer = invoice.getSubscription().getCustomer();
-        if (customer.getAgentStatus() == com.tansoflow.tansocore.entity.AgentStatus.PROVISIONAL
+        if (customer.getAgentStatus() != null && customer.getAgentStatus() != com.tansoflow.tansocore.entity.AgentStatus.CLAIMED
                 && invoice.getAmount() != null && invoice.getAmount().signum() > 0) {
+            if (customer.getAgentStatus() == com.tansoflow.tansocore.entity.AgentStatus.EXPIRED) {
+                log.warn("Paid invoice {} for expired agent customer {}; re-claiming, its keys stay revoked",
+                        invoice.getId(), customer.getExternalClientCustomerId());
+            }
             customer.setAgentStatus(com.tansoflow.tansocore.entity.AgentStatus.CLAIMED);
             customer.setAgentClaimedAt(java.time.Instant.now());
             customer.setAgentExpiresAt(null);

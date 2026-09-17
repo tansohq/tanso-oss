@@ -221,6 +221,10 @@ public class StripeWebhookImpl implements StripeWebhook {
                     Session session = deserializeEvent(event, Session.class);
                     handleSessionsComplete(session);
                 }
+                case "checkout.session.expired" -> {
+                    Session session = deserializeEvent(event, Session.class);
+                    handleSessionExpired(session);
+                }
                 case "setup_intent.succeeded" -> {
                     com.stripe.model.SetupIntent setupIntent =
                             deserializeEvent(event, com.stripe.model.SetupIntent.class);
@@ -366,16 +370,28 @@ public class StripeWebhookImpl implements StripeWebhook {
 
     /** A saved card for an agent's spend mandate: cap the signup key, store the card, claim the account. */
     private void handleSpendMandateSessionComplete(Session session, String paymentMethodId) {
+        // Tanso stamped this session as a mandate, so a missing row is our bug: fail so Stripe retries and it is logged.
+        com.tansoflow.tansocore.entity.CheckoutSession record = checkoutSessionRepository
+                .findByStripeSessionId(session.getId())
+                .orElseThrow(() -> new IllegalStateException("No checkout_sessions row for spend mandate session " + session.getId()));
+        if (com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED.equals(record.getStatus())) {
+            return;
+        }
+        String period = session.getMetadata().getOrDefault("tanso_period", "month");
+        agentLifecycleService.activateSpendMandate(record.getAccountId(), record.getCustomerId(),
+                record.getApiKeyId(), paymentMethodId, record.getAmount(), period);
+        record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
+        record.setCompletedAt(java.time.Instant.now());
+        checkoutSessionRepository.save(record);
+    }
+
+    /** Stripe closes unused Checkout pages after a day; mark ours so status stops saying pending. */
+    private void handleSessionExpired(Session session) {
         checkoutSessionRepository.findByStripeSessionId(session.getId()).ifPresent(record -> {
-            if (com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED.equals(record.getStatus())) {
-                return;
+            if (com.tansoflow.tansocore.entity.CheckoutSession.STATUS_PENDING.equals(record.getStatus())) {
+                record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_EXPIRED);
+                checkoutSessionRepository.save(record);
             }
-            String period = session.getMetadata().getOrDefault("tanso_period", "month");
-            agentLifecycleService.activateSpendMandate(record.getAccountId(), record.getCustomerId(),
-                    record.getApiKeyId(), paymentMethodId, record.getAmount(), period);
-            record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
-            record.setCompletedAt(java.time.Instant.now());
-            checkoutSessionRepository.save(record);
         });
     }
 

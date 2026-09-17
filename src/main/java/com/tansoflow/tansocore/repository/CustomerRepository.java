@@ -40,19 +40,20 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     boolean existsByIdAndAccountId(UUID id, UUID accountId);
 
     @Query("SELECT COUNT(c) FROM Customer c WHERE c.account.id = :accountId "
-            + "AND c.externalClientCustomerId LIKE 'agent_%' AND c.createdAt >= :since")
+            + "AND c.externalClientCustomerId LIKE 'agent\\_%' ESCAPE '\\' AND c.createdAt >= :since")
     long countAgentSignupsSince(UUID accountId, java.time.Instant since);
 
     @Query("SELECT COUNT(c) FROM Customer c WHERE c.agentSignupIp = :ip "
-            + "AND c.externalClientCustomerId LIKE 'agent_%' AND c.createdAt >= :since")
+            + "AND c.externalClientCustomerId LIKE 'agent\\_%' ESCAPE '\\' AND c.createdAt >= :since")
     long countAgentSignupsFromIpSince(String ip, java.time.Instant since);
-
-    @Query("SELECT c FROM Customer c WHERE c.account.id = :accountId AND c.agentOwnerEmail = :email "
-            + "AND c.externalClientCustomerId LIKE 'agent_%' AND c.agentStatus <> com.tansoflow.tansocore.entity.AgentStatus.EXPIRED "
-            + "ORDER BY c.createdAt ASC")
-    List<Customer> findAgentCustomersByOwnerEmail(UUID accountId, String email);
 
     @Query("SELECT c FROM Customer c WHERE c.agentStatus = com.tansoflow.tansocore.entity.AgentStatus.PROVISIONAL "
             + "AND c.agentExpiresAt < :now")
     List<Customer> findExpiredProvisionalAgentCustomers(java.time.Instant now);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Customer c SET c.agentStatus = com.tansoflow.tansocore.entity.AgentStatus.EXPIRED "
+            + "WHERE c.id = :id AND c.agentStatus = com.tansoflow.tansocore.entity.AgentStatus.PROVISIONAL "
+            + "AND c.agentExpiresAt < :now")
+    int expireIfStillProvisional(UUID id, java.time.Instant now);
 }

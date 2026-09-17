@@ -32,6 +32,7 @@ import java.math.BigDecimal;
 @Data
 public class AgentSignupRequest {
     @Email
+    @Size(max = 255)
     @Schema(description = "Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. "
             + "Can be set later via PUT /api/v1/client/customers/{ref}/owner.")
     private String email;
@@ -43,7 +44,7 @@ public class AgentSignupRequest {
     @Valid
     @JsonProperty("spend_mandate")
     @Schema(description = "Optional. Ask for a saved card up front so later purchases inside max_amount need no human. "
-            + "Only honoured when the operator enabled agentSpendMandateEnabled.")
+            + "Only honored when the operator enabled agentSpendMandateEnabled.")
     private SpendMandate spendMandate;
 
     @Data

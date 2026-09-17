@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
+import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/toast"
 import { useUpdateAgentServeSettings } from "@/features/settings/mutations"
 import { useAccountSettings } from "@/features/settings/queries"
@@ -37,6 +38,9 @@ const agentServeSchema = z.object({
   agentSignupEnabled: z.boolean(),
   agentSignupDefaultPlanId: z.string(),
   agentSignupHourlyCap: z.string().regex(/^[1-9]\d*$/, "At least 1"),
+  agentSignupPerIpCap: z.string().regex(/^[1-9]\d*$/, "At least 1"),
+  agentProvisionalDays: z.string().regex(/^[1-9]\d*$/, "At least 1"),
+  agentSpendMandateEnabled: z.boolean(),
   agentMaxTopupAmount: z.union([z.string().regex(/^\d+(\.\d{1,2})?$/, "Enter an amount"), z.literal("")]),
 })
 
@@ -64,6 +68,9 @@ export function AgentServeCard() {
       agentSignupEnabled: settings.data?.agentSignupEnabled ?? false,
       agentSignupDefaultPlanId: settings.data?.agentSignupDefaultPlanId ?? "",
       agentSignupHourlyCap: String(settings.data?.agentSignupHourlyCap ?? 10),
+      agentSignupPerIpCap: String(settings.data?.agentSignupPerIpCap ?? 5),
+      agentProvisionalDays: String(settings.data?.agentProvisionalDays ?? 14),
+      agentSpendMandateEnabled: settings.data?.agentSpendMandateEnabled ?? false,
       agentMaxTopupAmount:
         settings.data?.agentMaxTopupAmount != null ? String(settings.data.agentMaxTopupAmount) : "",
     },
@@ -75,6 +82,7 @@ export function AgentServeCard() {
   }
 
   const slug = form.watch("slug")
+  const stripeEnabled = settings.data?.stripeEnabled ?? false
 
   return (
     <Card>
@@ -185,8 +193,44 @@ export function AgentServeCard() {
                   aria-invalid={!!errors.agentSignupHourlyCap}
                   {...form.register("agentSignupHourlyCap")}
                 />
-                {errors.agentSignupHourlyCap && (
+                {errors.agentSignupHourlyCap ? (
                   <FieldError>{errors.agentSignupHourlyCap.message}</FieldError>
+                ) : (
+                  <FieldDescription>Account-wide cap on agent signups per hour. Default 10.</FieldDescription>
+                )}
+              </Field>
+              <Field data-invalid={!!errors.agentSignupPerIpCap || undefined}>
+                <FieldLabel htmlFor="signup-ip-cap">Signups per IP per hour</FieldLabel>
+                <Input
+                  id="signup-ip-cap"
+                  type="number"
+                  min={1}
+                  aria-invalid={!!errors.agentSignupPerIpCap}
+                  {...form.register("agentSignupPerIpCap")}
+                />
+                {errors.agentSignupPerIpCap ? (
+                  <FieldError>{errors.agentSignupPerIpCap.message}</FieldError>
+                ) : (
+                  <FieldDescription>How many signups one IP address may make per hour. Default 5.</FieldDescription>
+                )}
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field data-invalid={!!errors.agentProvisionalDays || undefined}>
+                <FieldLabel htmlFor="provisional-days">Unpaid customer lifetime (days)</FieldLabel>
+                <Input
+                  id="provisional-days"
+                  type="number"
+                  min={1}
+                  aria-invalid={!!errors.agentProvisionalDays}
+                  {...form.register("agentProvisionalDays")}
+                />
+                {errors.agentProvisionalDays ? (
+                  <FieldError>{errors.agentProvisionalDays.message}</FieldError>
+                ) : (
+                  <FieldDescription>
+                    How long an agent-created customer stays before it pays or gets removed. Default 14.
+                  </FieldDescription>
                 )}
               </Field>
               <Field data-invalid={!!errors.agentMaxTopupAmount || undefined}>
@@ -205,6 +249,26 @@ export function AgentServeCard() {
                 </FieldDescription>
               </Field>
             </div>
+            <Field orientation="horizontal">
+              <FieldLabel htmlFor="spend-mandate">Let agents save a card at signup</FieldLabel>
+              <Controller
+                control={form.control}
+                name="agentSpendMandateEnabled"
+                render={({ field }) => (
+                  <Switch
+                    id="spend-mandate"
+                    checked={field.value}
+                    onCheckedChange={field.onChange}
+                    disabled={!stripeEnabled}
+                  />
+                )}
+              />
+              <FieldDescription>
+                {stripeEnabled
+                  ? "An agent can ask for a saved card during signup, so later purchases need no human. Default off."
+                  : "Connect Stripe first. Saved cards need a Stripe account."}
+              </FieldDescription>
+            </Field>
             <div>
               <Button type="submit" disabled={updateSettings.isPending}>
                 {updateSettings.isPending && <Spinner data-icon="inline-start" />}

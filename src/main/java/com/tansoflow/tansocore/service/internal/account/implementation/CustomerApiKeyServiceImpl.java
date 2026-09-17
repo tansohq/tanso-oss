@@ -109,7 +109,20 @@ public class CustomerApiKeyServiceImpl implements CustomerApiKeyService {
         List<String> scopes = existing.getScopes() != null
                 ? Arrays.asList(existing.getScopes().split(","))
                 : List.of("read");
-        return createKey(accountId, customerReferenceId, scopes);
+        CustomerApiKeyDto replacement = createKey(accountId, customerReferenceId, scopes);
+
+        // A budget bounds the actor, not the secret: the replacement starts a fresh window under the same ceiling.
+        if (existing.getBudgetPeriod() != null) {
+            AccountApiKey created = accountApiKeyRepository.findById(UUID.fromString(replacement.getId()))
+                    .orElseThrow(() -> new IllegalStateException("Rotated key vanished: " + replacement.getId()));
+            created.setBudgetPeriod(existing.getBudgetPeriod());
+            created.setBudgetCredits(existing.getBudgetCredits());
+            created.setBudgetAmount(existing.getBudgetAmount());
+            created.setBudgetAlertThreshold(existing.getBudgetAlertThreshold());
+            created.setBudgetStartedAt(Instant.now());
+            accountApiKeyRepository.save(created);
+        }
+        return replacement;
     }
 
     @Override

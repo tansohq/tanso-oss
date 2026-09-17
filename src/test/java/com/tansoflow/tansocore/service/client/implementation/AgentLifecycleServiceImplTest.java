@@ -30,9 +30,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.SimpleTransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -41,8 +43,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,14 +62,20 @@ class AgentLifecycleServiceImplTest {
     @Mock
     private KeyBudgetService keyBudgetService;
 
-    @InjectMocks
+    private TransactionTemplate transactionTemplate;
     private AgentLifecycleServiceImpl service;
 
     private final UUID accountId = UUID.randomUUID();
     private Customer customer;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
+        transactionTemplate = mock(TransactionTemplate.class);
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
+                ((TransactionCallback<Object>) inv.getArgument(0)).doInTransaction(new SimpleTransactionStatus()));
+        service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, keyBudgetService, transactionTemplate);
+
         Account account = new Account();
         account.setId(accountId);
         customer = new Customer();
@@ -90,6 +101,13 @@ class AgentLifecycleServiceImplTest {
     }
 
     @Test
+    void paymentAfterExpiryReclaims() {
+        customer.setAgentStatus(AgentStatus.EXPIRED);
+        service.claimOnPayment(customer);
+        assertThat(customer.getAgentStatus()).isEqualTo(AgentStatus.CLAIMED);
+    }
+
+    @Test
     void humanCreatedCustomersAreLeftAlone() {
         customer.setAgentStatus(null);
         service.claimOnPayment(customer);
@@ -97,10 +115,13 @@ class AgentLifecycleServiceImplTest {
     }
 
     @Test
-    void claimByIdIgnoresOtherAccountsAndNulls() {
+    void claimByIdIgnoresUnknownCustomersAndOtherAccounts() {
+        UUID unknown = UUID.randomUUID();
+        when(customerRepository.getCustomerById(unknown)).thenReturn(Optional.empty());
+        service.claimOnPayment(unknown, accountId);
         service.claimOnPayment(null, accountId);
-        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
 
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
         service.claimOnPayment(customer.getId(), UUID.randomUUID());
         assertThat(customer.getAgentStatus()).isEqualTo(AgentStatus.PROVISIONAL);
 
@@ -109,14 +130,20 @@ class AgentLifecycleServiceImplTest {
     }
 
     @Test
-    void spendMandateCapsTheKeyStoresTheCardAndClaims() {
+    void spendMandateCapsEveryActiveKeyStoresTheCardAndClaims() {
         UUID keyId = UUID.randomUUID();
         when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+        when(customerApiKeyService.listKeys(accountId.toString(), "agent_abc")).thenReturn(List.of(
+                CustomerApiKeyDto.builder().id(keyId.toString()).active(true).build(),
+                CustomerApiKeyDto.builder().id("k2").active(true).build(),
+                CustomerApiKeyDto.builder().id("k3").active(false).build()));
 
         service.activateSpendMandate(accountId, customer.getId(), keyId, "pm_123", new BigDecimal("40"), "month");
 
         ArgumentCaptor<UpdateKeyBudgetRequest> budget = ArgumentCaptor.forClass(UpdateKeyBudgetRequest.class);
         verify(keyBudgetService).setBudget(eq(accountId.toString()), eq("agent_abc"), eq(keyId.toString()), budget.capture());
+        verify(keyBudgetService).setBudget(eq(accountId.toString()), eq("agent_abc"), eq("k2"), any());
+        verify(keyBudgetService, never()).setBudget(eq(accountId.toString()), eq("agent_abc"), eq("k3"), any());
         assertThat(budget.getValue().getPeriod()).isEqualTo(BudgetPeriod.MONTH);
         assertThat(budget.getValue().getAmountLimit()).isEqualByComparingTo("40");
         assertThat(customer.getStripeDefaultPaymentMethodId()).isEqualTo("pm_123");
@@ -124,18 +151,26 @@ class AgentLifecycleServiceImplTest {
     }
 
     @Test
-    void expiryRevokesActiveKeysAndMarksExpired() {
-        when(customerRepository.findExpiredProvisionalAgentCustomers(any())).thenReturn(List.of(customer));
+    void expiryRevokesActiveKeysOnlyWhenTheFlipWins() {
+        Instant now = Instant.now();
+        when(customerRepository.findExpiredProvisionalAgentCustomers(now)).thenReturn(List.of(customer));
+        when(customerRepository.expireIfStillProvisional(customer.getId(), now)).thenReturn(1);
         when(customerApiKeyService.listKeys(accountId.toString(), "agent_abc")).thenReturn(List.of(
                 CustomerApiKeyDto.builder().id("k1").active(true).build(),
                 CustomerApiKeyDto.builder().id("k2").active(false).build()));
 
-        int expired = service.expireProvisional(Instant.now());
-
-        assertThat(expired).isEqualTo(1);
+        assertThat(service.expireProvisional(now)).isEqualTo(1);
         verify(customerApiKeyService).revokeKey(accountId.toString(), "agent_abc", "k1");
         verify(customerApiKeyService, never()).revokeKey(accountId.toString(), "agent_abc", "k2");
-        assertThat(customer.getAgentStatus()).isEqualTo(AgentStatus.EXPIRED);
-        verify(customerRepository).save(customer);
+    }
+
+    @Test
+    void expiryLeavesACustomerThatPaidInBetween() {
+        Instant now = Instant.now();
+        when(customerRepository.findExpiredProvisionalAgentCustomers(now)).thenReturn(List.of(customer));
+        when(customerRepository.expireIfStillProvisional(customer.getId(), now)).thenReturn(0);
+
+        assertThat(service.expireProvisional(now)).isEqualTo(0);
+        verify(customerApiKeyService, never()).listKeys(any(), any());
     }
 }

@@ -68,12 +68,17 @@ public class GateError extends Error {
         return new GateError(ErrorCode.SPEND_CAP_EXCEEDED, "budget", "raise_spend_cap", null, null, null, message);
     }
 
-    public static GateError claimRequired(String statusUrl) {
-        return new GateError(ErrorCode.CLAIM_REQUIRED, "claim", "claim_account", null, statusUrl, null,
-                "This account is provisional; paying for a plan or credits claims it and unlocks this operation.");
-    }
-
     public static GateError scopeDenied(String message) {
         return new GateError(ErrorCode.SCOPE_DENIED, "scope", "request_scope", null, null, null, message);
+    }
+
+    public static GateError otherCustomer() {
+        return new GateError(ErrorCode.FORBIDDEN, "scope", "use_own_reference", null, null, null,
+                "This API key belongs to another customer; use your own customerReferenceId or omit it.");
+    }
+
+    public static GateError endpointNotOpen() {
+        return new GateError(ErrorCode.FORBIDDEN, "scope", "request_scope", null, null, null,
+                "This endpoint is not open to this kind of key; use a tenant key or ask the account owner.");
     }
 }

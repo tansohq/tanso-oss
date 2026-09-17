@@ -32,7 +32,7 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class AgentSignupResponse {
     private String customerReferenceId;
-    @Schema(description = "Customer-scoped API key. Returned exactly once — store it now.")
+    @Schema(description = "Customer-scoped API key. Returned exactly once; store it now.")
     private String apiKey;
     private List<String> apiKeyScopes;
     private String plan;
@@ -41,12 +41,15 @@ public class AgentSignupResponse {
     private String status;
 
     @JsonProperty("expires_at")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
     @Schema(description = "When an unclaimed provisional account is closed. Null once claimed.")
     private Instant expiresAt;
 
     private AgentLimits limits;
 
     @JsonProperty("spend_mandate")
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(description = "Null unless the request asked for one")
     private AgentSpendMandate spendMandate;
 
     @JsonProperty("status_url")

@@ -28,7 +28,6 @@ import java.util.Map;
 
 @Getter
 @Builder
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AgentStatusResponse {
     private String customerReferenceId;
     private String status;

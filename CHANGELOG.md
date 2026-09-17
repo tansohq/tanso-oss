@@ -47,6 +47,23 @@ access, then stalled at pay on a 500.
 
 ### Added
 
+- **Agent onboarding v2.** Signup creates a provisional customer on the free
+  plan with an expiry (`agentProvisionalDays`, 14 by default). Paying is the
+  claim: the first completed checkout or paid invoice sets the customer to
+  claimed and clears the expiry. Email is optional, stored as the owner contact
+  only, never sent to, and never used to find an existing customer. A per-IP
+  signup cap (`agentSignupPerIpCap`) sits next to the per-account cap. An
+  optional `spend_mandate` on signup opens a Stripe Checkout setup session; on
+  completion the cap applies to every active key of the customer. Every 402 and
+  every limit or access 403 carries a gate envelope (`error.gate`,
+  `error.action`, `error.url`, `error.poll`, `error.retry_after`, `error.detail`).
+  New endpoints: `GET /api/v1/client/customers/{ref}/status` and
+  `PUT /api/v1/client/customers/{ref}/owner`. A runbook at `/agent-signup.md`
+  and a skills index at `/.well-known/agent-skills/index.json`, both linked
+  from `llms.txt` and `agent.json`. An agent funnel report at
+  `GET /api/v1/tanso/agent-funnel` with a console page. Three new account
+  settings: `agentSignupPerIpCap`, `agentProvisionalDays`,
+  `agentSpendMandateEnabled`.
 - **Agent discovery from the host name alone.** `GET /llms.txt` and
   `GET /.well-known/agent.json` list every account that published a catalog,
   with its `pricing.json` and, when enabled, its signup URL. Before this, every
@@ -57,6 +74,16 @@ access, then stalled at pay on a 500.
 - **402 documented in OpenAPI** on both `POST /api/v1/client/subscriptions` and
   `POST /api/v1/client/credits/purchases`, with the checkout-session polling
   path. The spec previously contained no 402 at all.
+
+### Changed
+
+- A customer key without the `purchase` scope now gets 403 `scope_denied`
+  instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`
+  code but now carry the gate object (`gate: "scope"`, with `use_own_reference`
+  or `request_scope` as the action).
+- The discovery documents (`/llms.txt`, `/agent-signup.md`, `agent.json`, the
+  skills index) no longer set `produces`, so a client sending
+  `Accept: application/json` gets the document instead of a 406.
 
 ## 0.9.0 — 2026-08-21
 

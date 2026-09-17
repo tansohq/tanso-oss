@@ -105,13 +105,23 @@ Customer accounts do have a public signup: `POST /public/v1/catalog/{slug}/signu
 tenant account (`agentSignupEnabled` plus a free ACTIVE `agentSignupDefaultPlanId`
 in account settings). A signed-up customer is `PROVISIONAL`: it gets the free
 plan's limits, a customer-scoped key, and an expiry (`agentProvisionalDays`,
-14 by default). Signups are capped per account per hour and per IP per hour.
-Payment is the only human gate: the first paid checkout or invoice sets the
-customer to `CLAIMED`; unpaid provisional customers become `EXPIRED` by the
-nightly `AgentProvisionalExpiryJob` and their keys are revoked. Discovery for
-agents is served by `AgentDiscoveryController` (`/llms.txt`,
-`/.well-known/agent.json`, `/.well-known/agent-skills/index.json`,
-`/agent-signup.md`).
+14 by default). `email` is optional, stored as `agent_owner_email` only, never
+sent to, and never used to find an existing customer: every signup creates a
+new customer. Signups are capped per account per hour and per IP per hour
+(`agent_signup_ip`, the connection's remote address; behind a proxy
+`server.forward-headers-strategy` supplies it). An optional `spend_mandate`
+opens a Stripe Checkout setup session (`agentSpendMandateEnabled`); on
+completion the cap is applied to every active key of the customer and rotated
+keys inherit it. Payment is the only human gate: the first paid checkout or
+invoice sets the customer to `CLAIMED`. There is no claim gate in the API;
+every 402 and every limit or access 403 returns the `GateError` envelope
+(`gate` is `payment`, `budget` or `scope`). Unpaid provisional customers become
+`EXPIRED` by the nightly `AgentProvisionalExpiryJob` (03:30 UTC) and their keys
+are revoked, so the agent sees 401 everywhere; a later payment re-claims the
+customer but keys are reissued from the console. Discovery for agents is
+served by `AgentDiscoveryController` (`/llms.txt`, `/.well-known/agent.json`,
+`/.well-known/agent-skills/index.json`, `/agent-signup.md`), with no `produces`
+on the mappings so `Accept: application/json` does not 406.
 
 #### 2. Real-time Feature Gating
 Handled by `EntitlementAuthFilter`:

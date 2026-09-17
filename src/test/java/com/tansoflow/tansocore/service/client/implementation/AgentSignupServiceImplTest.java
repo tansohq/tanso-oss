@@ -132,7 +132,6 @@ class AgentSignupServiceImplTest {
         lenient().when(featureService.retrieveFeaturesLinkedToPlan(plan)).thenReturn(List.of(chat));
         lenient().when(customerRepository.countAgentSignupsSince(eq(accountId), any())).thenReturn(0L);
         lenient().when(customerRepository.countAgentSignupsFromIpSince(anyString(), any())).thenReturn(0L);
-        lenient().when(customerRepository.findAgentCustomersByOwnerEmail(eq(accountId), anyString())).thenReturn(List.of());
         lenient().when(customerRepository.save(any(Customer.class))).thenAnswer(inv -> inv.getArgument(0));
         lenient().when(customerService.createCustomer(eq(accountId.toString()), any(CustomerRequest.class)))
                 .thenAnswer(inv -> {
@@ -197,23 +196,18 @@ class AgentSignupServiceImplTest {
     }
 
     @Test
-    void emailIsRecordedAsOwnerAndDedupesToTheExistingCustomer() {
+    void emailIsRecordedAsOwnerAndNeverResolvesToAnotherCustomer() {
         AgentSignupRequest request = new AgentSignupRequest();
         request.setEmail("Owner@Example.com");
 
         AgentSignupResponse first = service.signup("acme", request, "http://x", "1.1.1.1");
-        ArgumentCaptor<Customer> saved = ArgumentCaptor.forClass(Customer.class);
-        verify(customerRepository).save(saved.capture());
-        assertThat(saved.getValue().getAgentOwnerEmail()).isEqualTo("owner@example.com");
-
-        when(customerRepository.findAgentCustomersByOwnerEmail(accountId, "owner@example.com"))
-                .thenReturn(List.of(saved.getValue()));
         AgentSignupResponse second = service.signup("acme", request, "http://x", "1.1.1.1");
 
-        assertThat(second.getCustomerReferenceId()).isEqualTo(first.getCustomerReferenceId());
-        verify(subscriptionService).subscribe(any(), eq(plan), eq(accountId.toString()));
-        verify(customerApiKeyService, org.mockito.Mockito.times(2))
-                .createKey(eq(accountId.toString()), eq(first.getCustomerReferenceId()), any());
+        ArgumentCaptor<Customer> saved = ArgumentCaptor.forClass(Customer.class);
+        verify(customerRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(c -> assertThat(c.getAgentOwnerEmail()).isEqualTo("owner@example.com"));
+        assertThat(second.getCustomerReferenceId()).isNotEqualTo(first.getCustomerReferenceId());
+        verify(subscriptionService, org.mockito.Mockito.times(2)).subscribe(any(), eq(plan), eq(accountId.toString()));
     }
 
     @Test
@@ -263,6 +257,39 @@ class AgentSignupServiceImplTest {
         assertThat(response.getSpendMandate().getStatus()).isEqualTo("unavailable");
         assertThat(response.getSpendMandate().getMaxAmount()).isEqualByComparingTo("25");
         assertThat(response.getSpendMandate().getPeriod()).isEqualTo("month");
+        verify(checkoutSessionRepository, never()).save(any());
+    }
+
+    @Test
+    void spendMandateInAnotherCurrencyIsRejected() {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("25"));
+        mandate.setCurrency("eur");
+        request.setSpendMandate(mandate);
+
+        assertThatThrownBy(() -> service.signup("acme", request, "http://x", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("USD");
+    }
+
+    @Test
+    void stripeFailureLeavesTheSignupIntactAndTheMandateUnavailable() throws Exception {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any()))
+                .thenThrow(new com.stripe.exception.ApiConnectionException("stripe down"));
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("25"));
+        request.setSpendMandate(mandate);
+
+        AgentSignupResponse response = service.signup("acme", request, "http://x", null);
+
+        assertThat(response.getApiKey()).isEqualTo("ck_test_generated");
+        assertThat(response.getSpendMandate().getStatus()).isEqualTo("unavailable");
         verify(checkoutSessionRepository, never()).save(any());
     }
 

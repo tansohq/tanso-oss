@@ -89,12 +89,12 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         Instant hourAgo = Instant.now().minus(Duration.ofHours(1));
         if (customerRepository.countAgentSignupsSince(account.getId(), hourAgo) >= settings.getAgentSignupHourlyCap()) {
             throw new RateLimitExceededException(
-                    "Signup rate limit reached for this catalog — retry later", 3600);
+                    "Signup rate limit reached for this catalog; retry after Retry-After seconds", 3600);
         }
         if (clientIp != null
                 && customerRepository.countAgentSignupsFromIpSince(clientIp, hourAgo) >= settings.getAgentSignupPerIpCap()) {
             throw new RateLimitExceededException(
-                    "Signup rate limit reached for this address — retry later", 3600);
+                    "Signup rate limit reached for this address; retry after Retry-After seconds", 3600);
         }
 
         Plan plan = planRepository.findById(settings.getAgentSignupDefaultPlanId())
@@ -103,19 +103,16 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         String ownerEmail = request.getEmail() == null || request.getEmail().isBlank()
                 ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
 
-        Customer customer = ownerEmail == null ? null : existingCustomerFor(account, ownerEmail);
-        boolean created = customer == null;
-        if (created) {
-            customer = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
-            subscriptionService.subscribe(customer, plan, account.getId().toString());
-        }
+        // The owner email is unverified, so it never resolves to an existing customer: that would let
+        // anyone who knows the address mint a key for someone else's account.
+        Customer customer = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
+        subscriptionService.subscribe(customer, plan, account.getId().toString());
         String referenceId = customer.getExternalClientCustomerId();
 
         CustomerApiKeyDto key = customerApiKeyService.createKey(
                 account.getId().toString(), referenceId, List.of("read", "purchase"));
 
-        log.info("Agent signup on account {}: customer {} ({}) plan {}",
-                account.getId(), referenceId, created ? "new" : "existing owner email", plan.getKey());
+        log.info("Agent signup on account {}: customer {} plan {}", account.getId(), referenceId, plan.getKey());
 
         List<FeatureDto> features = featureService.retrieveFeaturesLinkedToPlan(plan);
         String exampleFeatureKey = features.stream()
@@ -138,11 +135,6 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 .ownerUrl(customerBase + "/owner")
                 .nextSteps(nextSteps(baseUrl, slug, referenceId, exampleFeatureKey))
                 .build();
-    }
-
-    private Customer existingCustomerFor(Account account, String ownerEmail) {
-        List<Customer> owned = customerRepository.findAgentCustomersByOwnerEmail(account.getId(), ownerEmail);
-        return owned.isEmpty() ? null : owned.get(0);
     }
 
     private Customer createProvisionalCustomer(Account account, AccountSetting settings, AgentSignupRequest request,
@@ -194,6 +186,10 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         String period = requested.getPeriod() == null ? "month" : requested.getPeriod().toLowerCase(Locale.ROOT);
         String currency = requested.getCurrency() == null
                 ? settings.getCurrency() : requested.getCurrency().toUpperCase(Locale.ROOT);
+        if (!currency.equalsIgnoreCase(settings.getCurrency())) {
+            throw new IllegalArgumentException("spend_mandate.currency must be " + settings.getCurrency()
+                    + ", the account currency");
+        }
         AgentSignupResponse.AgentSpendMandate.AgentSpendMandateBuilder mandate = AgentSignupResponse.AgentSpendMandate.builder()
                 .maxAmount(requested.getMaxAmount())
                 .currency(currency)
@@ -213,7 +209,10 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         try {
             hosted = stripePaymentMethodService.createSetupCheckoutSession(account.getId(), customer.getId(), metadata);
         } catch (StripeException e) {
-            throw new IllegalStateException("Stripe error creating spend mandate session: " + e.getMessage(), e);
+            // The mandate is optional; the account and key are still good. The agent can retry via the status endpoint later.
+            log.error("Stripe refused the spend mandate session for agent customer {} on account {}: {}",
+                    customer.getExternalClientCustomerId(), account.getId(), e.getMessage(), e);
+            return mandate.status("unavailable").build();
         }
 
         CheckoutSession session = new CheckoutSession();

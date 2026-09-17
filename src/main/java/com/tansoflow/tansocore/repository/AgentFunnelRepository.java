@@ -47,6 +47,7 @@ public class AgentFunnelRepository {
                           JOIN subscriptions s ON s.subscription_id = i.subscription_id
                          WHERE s.customer_id = c.customer_id
                            AND i.status IN ('PAID', 'ADJUSTMENT_PAID')
+                           AND i.amount > 0
                            AND i.deleted_at IS NULL),
                        (SELECT MIN(cs.completed_at)
                           FROM checkout_sessions cs
