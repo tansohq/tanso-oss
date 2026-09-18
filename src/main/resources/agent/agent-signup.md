@@ -201,7 +201,9 @@ carries the error id to quote to the operator.
 }
 ```
 
-When no payment processor is connected to the instance, the 402 has `url` and `poll` null and
+When the operator's billing sends a Stripe hosted invoice instead of a Checkout page, `url` is that
+invoice and `poll` is your status URL: poll it until `plan` shows the new plan and `status` is
+`claimed`. When no payment processor is connected to the instance, the 402 has `url` and `poll` null and
 `message` is "Payment is required but no payment processor is connected to this instance; contact
 the operator."
 
