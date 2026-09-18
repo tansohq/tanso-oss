@@ -21,6 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
+import com.tansoflow.tansocore.model.response.GateError;
 import com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.response.SubscribedCustomerResponse;
@@ -31,6 +32,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +69,7 @@ public class SubscriptionClientController {
     private final SubscriptionService subscriptionService;
     private final com.tansoflow.tansocore.service.internal.account.AccountService accountService;
     private final com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
+    private final com.tansoflow.tansocore.service.internal.account.CustomerService customerService;
 
     /** ck_ callers may only touch subscriptions belonging to their own customer. */
     private void requireOwnSubscription(UserContext userContext, String subscriptionId) {
@@ -92,14 +95,17 @@ public class SubscriptionClientController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Successfully created a subscription"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
                     "Payment required: the plan is paid and the customer has no usable payment method. "
-                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
-                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. Customer-scoped (ck_) keys only."),
+                            + "success is false and error is the gate envelope: code=payment_required, gate=payment, "
+                            + "action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session "
+                            + "GET URL, retry_after=null. data still carries the SubscribedCustomerResponse "
+                            + "(checkoutUrl, checkoutSessionId). Customer-scoped (ck_) keys only."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
                     "planId is missing or names no plan on this account", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Invalid plan or customer ID", content = @Content)
     })
     public ResponseEntity<ApiResponse<SubscribedCustomerResponse>> createSubscription(@AuthenticationPrincipal UserContext userContext,
-                                                          @Valid @RequestBody ClientSubscriptionRequest subscriptionRequest) {
+                                                          @Valid @RequestBody ClientSubscriptionRequest subscriptionRequest,
+                                                          HttpServletRequest httpRequest) {
         subscriptionRequest.setCustomerReferenceId(
                 customerAccessGuard.resolveCustomerRef(userContext, subscriptionRequest.getCustomerReferenceId()));
         customerAccessGuard.requirePurchaseScope(userContext);
@@ -115,6 +121,21 @@ public class SubscriptionClientController {
                 && "DUE".equals(subscribedCustomerResponse.getInvoice().getStatus())) {
             AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
             if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
+                // Stripe will not send an invoice to a customer without an email. An agent that signed up
+                // without one gets told exactly where to put it instead of a 500.
+                com.tansoflow.tansocore.entity.Customer customer = customerService
+                        .retrieveCustomerByExternalClientCustomerIdAndAccount(
+                                subscriptionRequest.getCustomerReferenceId(), userContext.getAccountId());
+                if (customer.getEmail() == null || customer.getEmail().isBlank()) {
+                    String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+                    String ownerUrl = baseUrl + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/owner";
+                    return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
+                            .body(ApiResponse.<SubscribedCustomerResponse>builder()
+                                    .data(subscribedCustomerResponse)
+                                    .error(GateError.ownerEmailRequired(ownerUrl))
+                                    .success(false)
+                                    .build());
+                }
                 try {
                     StripePaymentLinkDto link = stripeSyncService.syncNewInvoice(
                             UUID.fromString(subscribedCustomerResponse.getInvoice().getId()),
@@ -137,9 +158,20 @@ public class SubscriptionClientController {
                 ? HttpStatus.PAYMENT_REQUIRED
                 : HttpStatus.CREATED;
 
+        GateError gateError = null;
+        if (status == HttpStatus.PAYMENT_REQUIRED) {
+            String pollUrl = null;
+            if (subscribedCustomerResponse.getCheckoutSessionId() != null) {
+                String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+                pollUrl = baseUrl + "/api/v1/client/checkout-sessions/" + subscribedCustomerResponse.getCheckoutSessionId();
+            }
+            gateError = GateError.paymentRequired(subscribedCustomerResponse.getCheckoutUrl(), pollUrl);
+        }
+
         ApiResponse<SubscribedCustomerResponse> apiResponse = ApiResponse.<SubscribedCustomerResponse>builder()
                 .data(subscribedCustomerResponse)
-                .success(!paymentRequired || !userContext.isCustomerScoped())
+                .error(gateError)
+                .success(status != HttpStatus.PAYMENT_REQUIRED)
                 .build();
         return ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON).body(apiResponse);
     }

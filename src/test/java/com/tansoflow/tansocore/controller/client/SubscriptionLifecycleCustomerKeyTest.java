@@ -50,6 +50,8 @@ class SubscriptionLifecycleCustomerKeyTest {
 
     @Mock
     private com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
+    @Mock
+    private com.tansoflow.tansocore.service.internal.account.CustomerService customerService;
     @Spy
     private CustomerAccessGuard customerAccessGuard = new CustomerAccessGuard();
 
@@ -65,6 +67,12 @@ class SubscriptionLifecycleCustomerKeyTest {
     void setUp() {
         Customer owner = new Customer();
         owner.setId(ownCustomerId);
+        owner.setEmail("owner@example.com");
+        owner.setExternalClientCustomerId("cust-ref-" + ownCustomerId);
+        org.mockito.Mockito.lenient()
+                .when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(accountId)))
+                .thenReturn(owner);
         subscription = new Subscription();
         subscription.setId(UUID.fromString(subscriptionId));
         subscription.setCustomer(owner);
@@ -136,13 +144,38 @@ class SubscriptionLifecycleCustomerKeyTest {
         link.setPaymentLink("https://invoice.stripe.com/i/acct_test/inv_test");
         when(stripeSyncService.syncNewInvoice(UUID.fromString(invoiceId), UUID.fromString(accountId))).thenReturn(link);
 
-        var response = controller.createSubscription(customerKey(ownCustomerId), growth());
+        var response = controller.createSubscription(customerKey(ownCustomerId), growth(), new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
         org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isFalse();
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getCheckoutUrl())
                 .isEqualTo("https://invoice.stripe.com/i/acct_test/inv_test");
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getSubscription().getIsActive()).isFalse();
+    }
+
+    // Stripe refuses to send an invoice to a customer without an email. An agent that signed up with no
+    // email used to get a 500 here; it now gets told where to put the email.
+    @Test
+    void passThroughWithoutAnEmailAnswers402NominateOwner() throws Exception {
+        Customer noEmail = new Customer();
+        noEmail.setId(ownCustomerId);
+        noEmail.setExternalClientCustomerId("agent_noemail");
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(accountId))).thenReturn(noEmail);
+        when(subscriptionService.clientSubscribeCustomer(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.eq(accountId)))
+                .thenReturn(inactivePaidOutcome(UUID.randomUUID().toString()));
+        when(accountService.retrieveAccountSettings(accountId))
+                .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH));
+
+        var response = controller.createSubscription(customerKey(ownCustomerId), growth(), new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(error.getAction()).isEqualTo("nominate_owner");
+        org.assertj.core.api.Assertions.assertThat(error.getUrl()).endsWith("/api/v1/client/customers/agent_noemail/owner");
+        org.mockito.Mockito.verify(stripeSyncService, org.mockito.Mockito.never())
+                .syncNewInvoice(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 
     @Test
@@ -152,7 +185,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest request = growth();
         request.setCustomerReferenceId("cust-ref");
 
-        var response = controller.createSubscription(new UserContext(accountId, null), request);
+        var response = controller.createSubscription(new UserContext(accountId, null), request, new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(201);
         org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
@@ -165,7 +198,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         when(accountService.retrieveAccountSettings(accountId))
                 .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.NONE));
 
-        var response = controller.createSubscription(customerKey(ownCustomerId), growth());
+        var response = controller.createSubscription(customerKey(ownCustomerId), growth(), new org.springframework.mock.web.MockHttpServletRequest());
 
         org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(201);
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getCheckoutUrl()).isNull();

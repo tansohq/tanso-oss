@@ -123,6 +123,27 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         return subscribe(customer, plan, accountId, request.getPaymentMethodId());
     }
 
+    /**
+     * An agent that got a 402 retries the same subscribe after paying or nominating an owner. For
+     * agent-created customers where Tanso does the billing, that retry returns what already exists
+     * instead of opening a second subscription. Stripe-managed modes and calls that bring a payment
+     * method are left alone: there the retry is a new charge attempt.
+     */
+    private boolean retryIsIdempotent(Customer customer, AccountSetting accountSetting, String paymentMethodId) {
+        boolean stripeManaged = accountSetting != null
+                && (accountSetting.getStripeMode().isStripeIntegration() || accountSetting.getStripeMode() == StripeMode.STRIPE_DRIVEN);
+        return customer.getAgentStatus() != null && paymentMethodId == null && !stripeManaged;
+    }
+
+    private Subscription existingOnPlan(Customer customer, Plan plan, boolean active) {
+        for (Subscription existing : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
+            if (existing.getPlan().getId().equals(plan.getId()) && Boolean.TRUE.equals(existing.getIsActive()) == active) {
+                return existing;
+            }
+        }
+        return null;
+    }
+
     @Transactional
     @Override
     public SubscribedCustomerResponse subscribeCustomer(SubscriptionRequest request, String accountId) {
@@ -145,8 +166,20 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             throw new IllegalArgumentException("Cannot subscribe to plan: status is " + plan.getStatus() + ", only ACTIVE plans accept subscriptions");
         }
 
-        // STRIPE_INTEGRATION and STRIPE_DRIVEN accounts: only one active subscription per customer (Stripe meters are customer-scoped)
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId);
+        boolean idempotentRetry = retryIsIdempotent(customer, accountSetting, paymentMethodId);
+
+        // Already paid for this plan: nothing to charge, hand back what the agent has.
+        if (idempotentRetry) {
+            Subscription active = existingOnPlan(customer, plan, true);
+            if (active != null) {
+                SubscribedCustomerResponse existing = new SubscribedCustomerResponse();
+                existing.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(active));
+                return existing;
+            }
+        }
+
+        // STRIPE_INTEGRATION and STRIPE_DRIVEN accounts: only one active subscription per customer (Stripe meters are customer-scoped)
         if (accountSetting != null && (accountSetting.getStripeMode().isStripeIntegration() || accountSetting.getStripeMode() == StripeMode.STRIPE_DRIVEN)) {
             long activeCount = subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())
                     .stream().filter(Subscription::getIsActive).count();
@@ -174,6 +207,19 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             }
             keyBudgetService.assertWithinBudget(
                     AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
+        }
+
+        // Still unpaid from an earlier attempt: return that subscription and its DUE invoice. This sits
+        // below the plan, cap and budget checks so a retry is held to the same limits as the first call.
+        if (idempotentRetry) {
+            Subscription pending = existingOnPlan(customer, plan, false);
+            Invoice due = pending == null ? null : invoiceService.retrieveCurrentlyDueBySubscription(pending);
+            if (due != null) {
+                SubscribedCustomerResponse existing = new SubscribedCustomerResponse();
+                existing.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(pending));
+                existing.setInvoice(invoiceMapper.invoiceEntityToInvoiceDto(due));
+                return existing;
+            }
         }
 
         SubscribedCustomerResponse response = new SubscribedCustomerResponse();

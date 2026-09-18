@@ -197,7 +197,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html","/public/**").permitAll()
                         // Agent discovery: the only way to find a catalog from the host name alone.
-                        .requestMatchers("/llms.txt", "/.well-known/agent.json").permitAll()
+                        .requestMatchers("/llms.txt", "/.well-known/agent.json",
+                                "/.well-known/agent-skills/index.json", "/agent-signup.md").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/admin/**", "/public/stripe/ingest/webhook/**").permitAll()
                         // TODO: Remove this after Stripe integration for webhooks is completed.
                         .requestMatchers("/public").denyAll()

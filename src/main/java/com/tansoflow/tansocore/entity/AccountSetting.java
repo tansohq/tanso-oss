@@ -86,6 +86,18 @@ public class AccountSetting {
     @Column(name = "agent_signup_hourly_cap", nullable = false)
     private int agentSignupHourlyCap = 10;
 
+    @ColumnDefault("14")
+    @Column(name = "agent_provisional_days", nullable = false)
+    private int agentProvisionalDays = 14;
+
+    @ColumnDefault("5")
+    @Column(name = "agent_signup_per_ip_cap", nullable = false)
+    private int agentSignupPerIpCap = 5;
+
+    @ColumnDefault("false")
+    @Column(name = "agent_spend_mandate_enabled", nullable = false)
+    private boolean agentSpendMandateEnabled = false;
+
     // Attributing spend to a named employee is a monitoring capability; off until the
     // operator says so and has told their staff (the notice is required to enable it).
     @ColumnDefault("false")

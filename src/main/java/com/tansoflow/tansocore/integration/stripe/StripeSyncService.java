@@ -55,9 +55,13 @@ public interface StripeSyncService {
 
     StripePaymentLinkDto updateCustomerPayment(String accountId, String customerId) throws StripeException;
 
-    void syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException;
+    /** Returns the payment method id that became the default. */
+    String syncNewPaymentAsDefault(String setupIntentId, String accountId, String stripeCustomerId) throws StripeException;
 
     boolean stripeInvoiceLinked(String stripeInvoiceId);
+
+    /** Pushes a changed email to the mirrored Stripe customer, if one exists. No-op otherwise. */
+    void syncCustomerEmail(UUID accountId, UUID customerId, String email) throws StripeException;
 
     StripeInvoice retrieveStripeInvoiceLinkedData(String stripeInvoiceId);
 

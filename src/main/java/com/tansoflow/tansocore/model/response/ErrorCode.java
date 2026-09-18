@@ -34,6 +34,8 @@ public enum ErrorCode {
     BUDGET_EXCEEDED("budget_exceeded"),
     VENDOR_ERROR("vendor_error"),
     MODULE_DISABLED("module_disabled"),
+    SCOPE_DENIED("scope_denied"),
+    SPEND_CAP_EXCEEDED("spend_cap_exceeded"),
     INTERNAL_ERROR("internal_error");
 
     private final String code;

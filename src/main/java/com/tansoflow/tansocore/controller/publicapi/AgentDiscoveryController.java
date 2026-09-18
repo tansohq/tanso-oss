@@ -39,6 +39,9 @@ import java.util.Map;
 /**
  * The front door for an agent that has this instance's address and nothing else.
  *
+ * <p>No {@code produces} on the mappings: an agent that sends {@code Accept: application/json} would get
+ * 406 for the Markdown and text documents. The content type is set on each response instead.
+ *
  * <p>Without it the catalog is unreachable in practice: {@code /public/v1/catalog/{slug}/pricing.json}
  * is public, but the slug appears nowhere an unauthenticated caller can read, and every other path on
  * the instance answers 403. These two documents name the enabled catalogs so discovery can start from
@@ -46,7 +49,7 @@ import java.util.Map;
  */
 @RestController
 @RequiredArgsConstructor
-@Tag(name = "Agent Discovery", description = "llms.txt and agent manifest — no authentication")
+@Tag(name = "Agent Discovery", description = "llms.txt and agent manifest, no authentication")
 @ConditionalOnProperty(name = "app.modules.monetization.enabled", havingValue = "true", matchIfMissing = true)
 public class AgentDiscoveryController {
 
@@ -76,7 +79,7 @@ public class AgentDiscoveryController {
         return request.getRequestURL().toString().replace(request.getRequestURI(), "");
     }
 
-    @GetMapping(value = "/llms.txt", produces = "text/plain; charset=utf-8")
+    @GetMapping("/llms.txt")
     @Operation(summary = "Agent-readable index of the published catalogs",
             description = "Plain text pointing at each enabled catalog's pricing.json, its signup URL, and the API spec.")
     public ResponseEntity<String> llmsTxt(HttpServletRequest request) {
@@ -101,36 +104,49 @@ public class AgentDiscoveryController {
                 if (catalog.signupEnabled()) {
                     out.append("- [").append(catalog.slug()).append(" signup](")
                             .append(base).append("/public/v1/catalog/").append(catalog.slug())
-                            .append("/signup): POST an email to create an account and receive a scoped API key ")
-                            .append("in the response. No CAPTCHA, no email confirmation.\n");
+                            .append("/signup): POST an empty body, or an optional email and name, to create a ")
+                            .append("provisional customer and receive a scoped API key in the response. ")
+                            .append("No CAPTCHA, no email confirmation.\n");
                 }
             }
             out.append("\n");
         }
 
         out.append("## How to use this API\n\n")
-                .append("Read pricing.json, sign up at the plan's `trial.api_provisioning_url`, then send the\n")
+                .append("Read pricing.json, POST to the catalog's signup URL (no fields required), then send the\n")
                 .append("returned key as `X-API-Key` on every call. The key is pinned to its own customer:\n")
                 .append("reading another customer's data returns 403.\n\n")
+                .append("A new customer is provisional: it has the free plan's limits and expires after the\n")
+                .append("operator's provisional window (14 days by default) unless it pays. Paying claims the\n")
+                .append("account and removes the expiry. `GET ").append(base).append("/api/v1/client/customers/{referenceId}/status`\n")
+                .append("returns status, expiry, remaining limits and spend. Every 402 and every limit or access 403 carries\n")
+                .append("an `error` object with `gate` (`payment`, `budget` or `scope`), `action`, `url`, `poll`,\n")
+                .append("`retry_after`, `message` and `detail` (the error id) that says what to do next. There is no claim\n")
+                .append("gate: paying is the claim. Once the account expires its keys are revoked and every call returns\n")
+                .append("401; sign up again. Step by step: [agent-signup.md](").append(base).append("/agent-signup.md).\n\n")
                 .append("- Check an entitlement before doing work: `POST ").append(base).append("/api/v1/client/entitlements`\n")
                 .append("- Record what you used afterwards: `POST ").append(base).append("/api/v1/client/events`\n")
                 .append("- Read your own usage and credit burndown: `GET ").append(base).append("/api/v1/client/customers/{referenceId}/usage`\n")
                 .append("- Buy credits: `POST ").append(base).append("/api/v1/client/credits/purchases`\n")
                 .append("- Change plan: `POST ").append(base).append("/api/v1/client/subscriptions` with the plan key from pricing.json\n\n")
-                .append("A paid action with no payment method answers 402 with a `checkoutUrl` to hand to a human,\n")
-                .append("and a `checkoutSessionId` to poll at `GET ").append(base).append("/api/v1/client/checkout-sessions/{id}`.\n\n");
+                .append("A paid action with no payment method answers 402 `payment_required` with `error.url` (the checkout\n")
+                .append("page to hand to a human) and `error.poll` (`GET ").append(base).append("/api/v1/client/checkout-sessions/{id}`).\n")
+                .append("Signup email is optional, recorded as the owner contact only, never sent to, and every signup\n")
+                .append("creates a new customer.\n\n");
 
         out.append("## Specification\n\n")
                 .append("- [OpenAPI](").append(base).append("/v3/api-docs)\n")
                 .append("- [API reference](").append(base).append("/swagger-ui.html)\n")
-                .append("- [Agent manifest](").append(base).append("/.well-known/agent.json)\n\n")
+                .append("- [Agent manifest](").append(base).append("/.well-known/agent.json)\n")
+                .append("- [Signup runbook](").append(base).append("/agent-signup.md)\n")
+                .append("- [Skills index](").append(base).append("/.well-known/agent-skills/index.json)\n\n")
                 .append("Do not use this API to read other customers' data or to spend past a key's budget;\n")
                 .append("both are refused and both are logged.\n");
 
         return ResponseEntity.ok().contentType(MediaType.valueOf("text/plain; charset=utf-8")).body(out.toString());
     }
 
-    @GetMapping(value = "/.well-known/agent.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @GetMapping("/.well-known/agent.json")
     @Operation(summary = "Agent manifest",
             description = "Machine-readable pointer to the published catalogs, the signup path, and the auth scheme.")
     public ResponseEntity<Map<String, Object>> agentManifest(HttpServletRequest request) {
@@ -162,10 +178,84 @@ public class AgentDiscoveryController {
                         .orElse("the operator of this instance")));
         manifest.put("payment", Map.of(
                 "protocol", "http-402",
-                "description", "Paid actions without a payment method answer 402 with checkoutUrl and checkoutSessionId."));
+                "description", "Paid actions without a payment method answer 402 payment_required. Every 402 and "
+                        + "every limit or access 403 body carries error.gate (payment, budget or scope), error.action, "
+                        + "error.url, error.poll and error.retry_after; poll error.poll until checkout completes."));
         manifest.put("openapi", base + "/v3/api-docs");
         manifest.put("docs", base + "/llms.txt");
+        manifest.put("runbook", base + "/agent-signup.md");
+        manifest.put("skills", base + "/.well-known/agent-skills/index.json");
 
-        return ResponseEntity.ok(manifest);
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(manifest);
+    }
+
+    @GetMapping("/.well-known/agent-skills/index.json")
+    @Operation(summary = "Agent skills index",
+            description = "Lists the signup runbook as a skill an agent can load.")
+    public ResponseEntity<Map<String, Object>> skillsIndex(HttpServletRequest request) {
+        String base = baseUrl(request);
+        Map<String, Object> skill = new LinkedHashMap<>();
+        skill.put("name", "tanso-agent-signup");
+        skill.put("description", "Sign up for a provisional customer account on this Tanso instance, store the "
+                + "returned API key, use the free plan, and handle the 402/403 gate envelope, status, owner "
+                + "and expiry rules.");
+        skill.put("url", base + "/agent-signup.md");
+        return ResponseEntity.ok().contentType(MediaType.APPLICATION_JSON).body(Map.of("skills", List.of(skill)));
+    }
+
+    @GetMapping("/agent-signup.md")
+    @Operation(summary = "Agent signup runbook",
+            description = "Step-by-step Markdown: read pricing.json, sign up, store the key, check status, "
+                    + "use the free plan, handle gates, set the owner, and what expiry means.")
+    public ResponseEntity<String> runbook(HttpServletRequest request) {
+        String base = baseUrl(request);
+        List<Catalog> catalogs = publishedCatalogs();
+
+        StringBuilder catalogSection = new StringBuilder();
+        String exampleSlug = "{slug}";
+        if (catalogs.isEmpty()) {
+            catalogSection.append("No public catalog is published on this instance. Ask the operator to enable ")
+                    .append("the public catalog and agent signup. The steps below use `{slug}` as a placeholder.\n");
+        } else {
+            catalogSection.append("Catalogs on this instance:\n\n");
+            for (Catalog catalog : catalogs) {
+                catalogSection.append("- `").append(catalog.slug()).append("`: pricing at ")
+                        .append(base).append("/public/v1/catalog/").append(catalog.slug()).append("/pricing.json");
+                if (catalog.signupEnabled()) {
+                    catalogSection.append(", signup at ")
+                            .append(base).append("/public/v1/catalog/").append(catalog.slug()).append("/signup");
+                    if ("{slug}".equals(exampleSlug)) {
+                        exampleSlug = catalog.slug();
+                    }
+                } else {
+                    catalogSection.append(", signup not enabled");
+                }
+                catalogSection.append("\n");
+            }
+            if ("{slug}".equals(exampleSlug)) {
+                catalogSection.append("\nNone of these catalogs has signup enabled. The steps below use `{slug}` ")
+                        .append("as a placeholder.\n");
+            } else if (catalogs.size() > 1) {
+                catalogSection.append("\nThe examples below use `").append(exampleSlug)
+                        .append("`. Swap in the slug you want.\n");
+            }
+        }
+
+        String body = RUNBOOK
+                .replace("{catalogs}", catalogSection.toString())
+                .replace("{base}", base)
+                .replace("{slug}", exampleSlug);
+        return ResponseEntity.ok().contentType(MediaType.valueOf("text/markdown; charset=utf-8")).body(body);
+    }
+
+    private static final String RUNBOOK = loadRunbook();
+
+    private static String loadRunbook() {
+        try {
+            return new org.springframework.core.io.ClassPathResource("agent/agent-signup.md")
+                    .getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("agent/agent-signup.md is missing from the classpath", e);
+        }
     }
 }

@@ -109,4 +109,22 @@ public class Customer {
     @Column(name = "archived_at")
     private Instant archivedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "agent_status", length = 20)
+    private AgentStatus agentStatus;
+
+    @Column(name = "agent_expires_at")
+    private Instant agentExpiresAt;
+
+    @Column(name = "agent_claimed_at")
+    private Instant agentClaimedAt;
+
+    @Size(max = 255)
+    @Column(name = "agent_owner_email")
+    private String agentOwnerEmail;
+
+    @Size(max = 45)
+    @Column(name = "agent_signup_ip", length = 45)
+    private String agentSignupIp;
+
 }

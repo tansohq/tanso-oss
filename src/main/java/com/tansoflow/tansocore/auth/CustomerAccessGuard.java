@@ -28,6 +28,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class CustomerAccessGuard {
 
+    /** The key is valid but belongs to a different customer than the one in the URL or body. */
+    public static class OtherCustomerException extends AccessDeniedException {
+        public OtherCustomerException(String message) {
+            super(message);
+        }
+    }
+
+    /** The key is valid but lacks a scope the endpoint needs. */
+    public static class MissingScopeException extends AccessDeniedException {
+        public MissingScopeException(String message) {
+            super(message);
+        }
+    }
+
     /**
      * Returns the customer reference the request is allowed to act on: the
      * requested one for tenant keys, the key's own for customer keys (403 on
@@ -41,13 +55,13 @@ public class CustomerAccessGuard {
         if (requestedRef == null || requestedRef.equals(own)) {
             return own;
         }
-        throw new AccessDeniedException("This API key is scoped to another customer");
+        throw new OtherCustomerException("This API key is scoped to another customer");
     }
 
     public void requirePurchaseScope(UserContext ctx) {
         if (ctx.isCustomerScoped()
                 && (ctx.getScopes() == null || !ctx.getScopes().contains("purchase"))) {
-            throw new AccessDeniedException("This API key lacks the 'purchase' scope");
+            throw new MissingScopeException("This API key lacks the 'purchase' scope");
         }
     }
 }

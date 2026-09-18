@@ -29,6 +29,9 @@ export function useUpdateAgentServeSettings() {
       agentSignupEnabled: boolean
       agentSignupDefaultPlanId: string
       agentSignupHourlyCap: string
+      agentSignupPerIpCap: string
+      agentProvisionalDays: string
+      agentSpendMandateEnabled: boolean
       agentMaxTopupAmount: string
     }) =>
       apiFetch<AccountSettingDto>("/api/v1/tanso/account-settings", {
@@ -39,6 +42,9 @@ export function useUpdateAgentServeSettings() {
           agentSignupEnabled: input.agentSignupEnabled,
           agentSignupDefaultPlanId: input.agentSignupDefaultPlanId || undefined,
           agentSignupHourlyCap: Number(input.agentSignupHourlyCap),
+          agentSignupPerIpCap: Number(input.agentSignupPerIpCap),
+          agentProvisionalDays: Number(input.agentProvisionalDays),
+          agentSpendMandateEnabled: input.agentSpendMandateEnabled,
           // 0 clears the cap server-side; empty means "leave unchanged"
           agentMaxTopupAmount: input.agentMaxTopupAmount === "" ? undefined : Number(input.agentMaxTopupAmount),
         }),

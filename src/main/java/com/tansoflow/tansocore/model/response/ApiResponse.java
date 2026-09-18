@@ -35,6 +35,8 @@ import java.util.List;
 public class ApiResponse<T> {
     @Schema(description = "Response data")
     private T data;
+    @Schema(description = "Set when success is false. On 402 and on access/limit 403 this is a GateError: "
+            + "code, message plus gate, action, url, poll, retry_after.")
     private Error error;
     private List<Object> meta;
 

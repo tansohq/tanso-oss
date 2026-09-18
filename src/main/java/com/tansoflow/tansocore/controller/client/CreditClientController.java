@@ -205,15 +205,18 @@ public class CreditClientController {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "201", description = "Credits purchased and granted"),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
                     "Payment required: no usable payment method, or the off-session charge was declined. "
-                            + "The body carries checkoutUrl and checkoutSessionId; hand the URL to a human and poll "
-                            + "GET /api/v1/client/checkout-sessions/{checkoutSessionId}. When the instance has no "
-                            + "payment processor at all, checkoutUrl is absent and declineReason says so."),
+                            + "success is false and error is the gate envelope: code=payment_required, gate=payment, "
+                            + "action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session "
+                            + "GET URL, retry_after=null. data still carries the CreditPurchaseResult (checkoutUrl, "
+                            + "checkoutSessionId, declineReason). When the instance has no payment processor at all, "
+                            + "url and poll are null and message says to contact the operator."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description =
                     "The pool could not be resolved, or no price is published for the denomination")
     })
     public org.springframework.http.ResponseEntity<ApiResponse<com.tansoflow.tansocore.model.credit.CreditPurchaseResult>> purchaseCredits(
             @org.springframework.security.core.annotation.AuthenticationPrincipal com.tansoflow.tansocore.auth.UserContext userContext,
-            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest request) {
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody com.tansoflow.tansocore.model.credit.request.CreditPurchaseRequest request,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
         String customerReferenceId = customerAccessGuard.resolveCustomerRef(userContext, request.getCustomerReferenceId());
         customerAccessGuard.requirePurchaseScope(userContext);
         if (customerReferenceId == null) {
@@ -225,9 +228,24 @@ public class CreditClientController {
         org.springframework.http.HttpStatus status = result.isCompleted()
                 ? org.springframework.http.HttpStatus.CREATED
                 : org.springframework.http.HttpStatus.PAYMENT_REQUIRED;
+
+        com.tansoflow.tansocore.model.response.GateError gateError = null;
+        if (!result.isCompleted()) {
+            if (result.getCheckoutUrl() == null) {
+                gateError = com.tansoflow.tansocore.model.response.GateError.paymentRequiredNoProcessor();
+            } else {
+                String pollUrl = null;
+                if (result.getCheckoutSessionId() != null) {
+                    String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+                    pollUrl = baseUrl + "/api/v1/client/checkout-sessions/" + result.getCheckoutSessionId();
+                }
+                gateError = com.tansoflow.tansocore.model.response.GateError.paymentRequired(result.getCheckoutUrl(), pollUrl);
+            }
+        }
+
         return org.springframework.http.ResponseEntity.status(status).body(
                 ApiResponse.<com.tansoflow.tansocore.model.credit.CreditPurchaseResult>builder()
-                        .data(result).success(result.isCompleted()).build());
+                        .data(result).error(gateError).success(result.isCompleted()).build());
     }
 
 }

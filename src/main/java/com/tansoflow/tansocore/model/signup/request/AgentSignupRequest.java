@@ -17,20 +17,49 @@
  */
 package com.tansoflow.tansocore.model.signup.request;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.math.BigDecimal;
+
 @Data
 public class AgentSignupRequest {
-    @NotBlank
     @Email
-    @Schema(description = "Contact email of the agent's principal — the human or org the agent buys for")
+    @Size(max = 255)
+    @Schema(description = "Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. "
+            + "Can be set later via PUT /api/v1/client/customers/{ref}/owner.")
     private String email;
 
     @Size(max = 100)
     @Schema(description = "Optional display name for the customer record")
     private String name;
+
+    @Valid
+    @JsonProperty("spend_mandate")
+    @Schema(description = "Optional. Ask for a saved card up front so later purchases inside max_amount need no human. "
+            + "Only honored when the operator enabled agentSpendMandateEnabled.")
+    private SpendMandate spendMandate;
+
+    @Data
+    public static class SpendMandate {
+        @NotNull
+        @DecimalMin(value = "0.01")
+        @JsonProperty("max_amount")
+        private BigDecimal maxAmount;
+
+        @Pattern(regexp = "^[A-Za-z]{3}$")
+        @Schema(description = "ISO 4217, defaults to the account currency")
+        private String currency;
+
+        @Pattern(regexp = "^(day|week|month)$")
+        @Schema(description = "Rolling window the cap applies to. Defaults to month.")
+        private String period;
+    }
 }

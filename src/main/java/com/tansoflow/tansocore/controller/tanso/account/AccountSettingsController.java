@@ -154,6 +154,25 @@ public class AccountSettingsController {
             }
             setting.setAgentSignupHourlyCap(request.getAgentSignupHourlyCap());
         }
+        if (request.getAgentProvisionalDays() != null) {
+            if (request.getAgentProvisionalDays() < 1) {
+                throw new IllegalArgumentException("agentProvisionalDays must be at least 1");
+            }
+            setting.setAgentProvisionalDays(request.getAgentProvisionalDays());
+        }
+        if (request.getAgentSignupPerIpCap() != null) {
+            if (request.getAgentSignupPerIpCap() < 1) {
+                throw new IllegalArgumentException("agentSignupPerIpCap must be at least 1");
+            }
+            setting.setAgentSignupPerIpCap(request.getAgentSignupPerIpCap());
+        }
+        if (request.getAgentSpendMandateEnabled() != null) {
+            if (request.getAgentSpendMandateEnabled() && !setting.isStripeEnabled()
+                    && request.getStripeMode() == null) {
+                throw new IllegalArgumentException("Connect Stripe before enabling the agent spend mandate");
+            }
+            setting.setAgentSpendMandateEnabled(request.getAgentSpendMandateEnabled());
+        }
         if (request.getAgentMaxTopupAmount() != null) {
             if (request.getAgentMaxTopupAmount().compareTo(BigDecimal.ZERO) < 0) {
                 throw new IllegalArgumentException("agentMaxTopupAmount must not be negative");
@@ -204,6 +223,9 @@ public class AccountSettingsController {
         dto.setAgentSignupEnabled(setting.isAgentSignupEnabled());
         dto.setAgentSignupDefaultPlanId(setting.getAgentSignupDefaultPlanId());
         dto.setAgentSignupHourlyCap(setting.getAgentSignupHourlyCap());
+        dto.setAgentProvisionalDays(setting.getAgentProvisionalDays());
+        dto.setAgentSignupPerIpCap(setting.getAgentSignupPerIpCap());
+        dto.setAgentSpendMandateEnabled(setting.isAgentSpendMandateEnabled());
         dto.setAgentMaxTopupAmount(setting.getAgentMaxTopupAmount());
         if (setting.getDefaultCostConfig() != null) {
             dto.setDefaultCostConfig(objectMapper.convertValue(
@@ -225,6 +247,9 @@ public class AccountSettingsController {
         private boolean agentSignupEnabled;
         private java.util.UUID agentSignupDefaultPlanId;
         private Integer agentSignupHourlyCap;
+        private Integer agentProvisionalDays;
+        private Integer agentSignupPerIpCap;
+        private boolean agentSpendMandateEnabled;
         private BigDecimal agentMaxTopupAmount;
     }
 
@@ -240,6 +265,9 @@ public class AccountSettingsController {
         private Boolean agentSignupEnabled;
         private java.util.UUID agentSignupDefaultPlanId;
         private Integer agentSignupHourlyCap;
+        private Integer agentProvisionalDays;
+        private Integer agentSignupPerIpCap;
+        private Boolean agentSpendMandateEnabled;
         private BigDecimal agentMaxTopupAmount;
     }
 

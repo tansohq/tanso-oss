@@ -99,6 +99,7 @@ public class StripeWebhookImpl implements StripeWebhook {
     private final AccountRepository accountRepository;
     private final CustomerService customerService;
     private final com.tansoflow.tansocore.repository.CustomerRepository customerRepository;
+    private final com.tansoflow.tansocore.service.client.AgentLifecycleService agentLifecycleService;
     private final PlanService planService;
     private final SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
 
@@ -220,6 +221,10 @@ public class StripeWebhookImpl implements StripeWebhook {
                     Session session = deserializeEvent(event, Session.class);
                     handleSessionsComplete(session);
                 }
+                case "checkout.session.expired" -> {
+                    Session session = deserializeEvent(event, Session.class);
+                    handleSessionExpired(session);
+                }
                 case "setup_intent.succeeded" -> {
                     com.stripe.model.SetupIntent setupIntent =
                             deserializeEvent(event, com.stripe.model.SetupIntent.class);
@@ -287,7 +292,10 @@ public class StripeWebhookImpl implements StripeWebhook {
             if (setupIntentId == null) throw new IllegalStateException("Missing setup_intent on session");
             String accountId = session.getMetadata().get("tanso_account_id");
 
-            stripeSyncService.syncNewPaymentAsDefault(setupIntentId, accountId, session.getCustomer());
+            String paymentMethodId = stripeSyncService.syncNewPaymentAsDefault(setupIntentId, accountId, session.getCustomer());
+            if (com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_SPEND_MANDATE.equals(session.getMetadata().get("tanso_purpose"))) {
+                handleSpendMandateSessionComplete(session, paymentMethodId);
+            }
         } else if ("subscription".equals(session.getMode())) {
             log.info("Checkout session completed in subscription mode (session: {}). " +
                     "Subscription will be handled by customer.subscription.created webhook.", session.getId());
@@ -356,6 +364,34 @@ public class StripeWebhookImpl implements StripeWebhook {
                     com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, record.getAmount(),
                     session.getId(), "checkout_" + session.getId());
             checkoutSessionRepository.save(record);
+            agentLifecycleService.claimOnPayment(record.getCustomerId(), record.getAccountId());
+        });
+    }
+
+    /** A saved card for an agent's spend mandate: cap the signup key, store the card, claim the account. */
+    private void handleSpendMandateSessionComplete(Session session, String paymentMethodId) {
+        // Tanso stamped this session as a mandate, so a missing row is our bug: fail so Stripe retries and it is logged.
+        com.tansoflow.tansocore.entity.CheckoutSession record = checkoutSessionRepository
+                .findByStripeSessionId(session.getId())
+                .orElseThrow(() -> new IllegalStateException("No checkout_sessions row for spend mandate session " + session.getId()));
+        if (com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED.equals(record.getStatus())) {
+            return;
+        }
+        String period = session.getMetadata().getOrDefault("tanso_period", "month");
+        agentLifecycleService.activateSpendMandate(record.getAccountId(), record.getCustomerId(),
+                record.getApiKeyId(), paymentMethodId, record.getAmount(), period);
+        record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
+        record.setCompletedAt(java.time.Instant.now());
+        checkoutSessionRepository.save(record);
+    }
+
+    /** Stripe closes unused Checkout pages after a day; mark ours so status stops saying pending. */
+    private void handleSessionExpired(Session session) {
+        checkoutSessionRepository.findByStripeSessionId(session.getId()).ifPresent(record -> {
+            if (com.tansoflow.tansocore.entity.CheckoutSession.STATUS_PENDING.equals(record.getStatus())) {
+                record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_EXPIRED);
+                checkoutSessionRepository.save(record);
+            }
         });
     }
 
@@ -389,6 +425,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
             record.setCompletedAt(java.time.Instant.now());
             checkoutSessionRepository.save(record);
+            agentLifecycleService.claimOnPayment(record.getCustomerId(), record.getAccountId());
         });
     }
 

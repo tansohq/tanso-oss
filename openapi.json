@@ -97,8 +97,20 @@
             "description": "Global AI model pricing reference"
         },
         {
+            "name": "Agent Discovery",
+            "description": "llms.txt and agent manifest, no authentication"
+        },
+        {
             "name": "Public Catalog",
             "description": "Machine-readable pricing for buying agents \u2014 no authentication"
+        },
+        {
+            "name": "Agent account",
+            "description": "Where an agent-created account stands: provisional, claimed, expired"
+        },
+        {
+            "name": "Agent funnel",
+            "description": "Agent self-signup funnel: signups, first verified job, claimed, paid"
         },
         {
             "name": "Plan",
@@ -619,6 +631,53 @@
                 ]
             }
         },
+        "/api/v1/client/customers/{customerReferenceId}/owner": {
+            "put": {
+                "tags": [
+                    "Agent account"
+                ],
+                "summary": "Nominate an owner",
+                "description": "Records the principal's email on the account. Nothing is sent to it; paying is what claims the account.",
+                "operationId": "setOwner",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/OwnerRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseAgentStatusResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/budget": {
             "get": {
                 "tags": [
@@ -800,7 +859,7 @@
                     "Public Catalog"
                 ],
                 "summary": "Programmatic agent signup",
-                "description": "One call: creates a customer, subscribes it to the account's free default plan, and returns a customer-scoped API key (once). No CAPTCHA, no email verification. Only served when the operator enabled agent signup; rate-limited per account per hour (429 + Retry-After).",
+                "description": "One call: creates a provisional customer, subscribes it to the account's free default plan, and returns a customer-scoped API key (once). Email optional. No CAPTCHA, no email verification; the first payment claims the account, unclaimed accounts expire. Only served when the operator enabled agent signup; rate-limited per account and per IP per hour (429 + Retry-After).",
                 "operationId": "signup",
                 "parameters": [
                     {
@@ -823,8 +882,8 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Customer created as provisional, subscribed to the free default plan; data carries the customer-scoped apiKey (shown once), limits, expires_at, status_url and nextSteps.",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -832,6 +891,15 @@
                                 }
                             }
                         }
+                    },
+                    "404": {
+                        "description": "No account has this slug, or the operator has not enabled the public catalog or agent signup. error.code=not_found."
+                    },
+                    "400": {
+                        "description": "Invalid body: malformed email, spend_mandate without max_amount, or a currency other than the account's. error.code=validation_failed."
+                    },
+                    "429": {
+                        "description": "Hourly signup cap reached for this account or IP. error.code=rate_limited; Retry-After header carries the seconds to wait."
                     }
                 }
             }
@@ -3300,6 +3368,19 @@
                             }
                         }
                     },
+                    "402": {
+                        "description": "Payment required: the plan is paid and the customer has no usable payment method. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the SubscribedCustomerResponse (checkoutUrl, checkoutSessionId). Customer-scoped (ck_) keys only.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseSubscribedCustomerResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "planId is missing or names no plan on this account"
+                    },
                     "404": {
                         "description": "Invalid plan or customer ID"
                     }
@@ -3799,8 +3880,28 @@
                     "required": true
                 },
                 "responses": {
-                    "200": {
-                        "description": "OK",
+                    "201": {
+                        "description": "Credits purchased and granted",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCreditPurchaseResult"
+                                }
+                            }
+                        }
+                    },
+                    "402": {
+                        "description": "Payment required: no usable payment method, or the off-session charge was declined. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the CreditPurchaseResult (checkoutUrl, checkoutSessionId, declineReason). When the instance has no payment processor at all, url and poll are null and message says to contact the operator.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCreditPurchaseResult"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "The pool could not be resolved, or no price is published for the denomination",
                         "content": {
                             "*/*": {
                                 "schema": {
@@ -4809,6 +4910,28 @@
                 }
             }
         },
+        "/llms.txt": {
+            "get": {
+                "tags": [
+                    "Agent Discovery"
+                ],
+                "summary": "Agent-readable index of the published catalogs",
+                "description": "Plain text pointing at each enabled catalog's pricing.json, its signup URL, and the API spec.",
+                "operationId": "llmsTxt",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/v1/tanso/model-pricing": {
             "get": {
                 "tags": [
@@ -5115,6 +5238,61 @@
                                 }
                             }
                         }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
+        "/api/v1/tanso/agent-funnel": {
+            "get": {
+                "tags": [
+                    "Agent funnel"
+                ],
+                "summary": "Get agent funnel",
+                "description": "Counts customers whose external id starts with agent_ and were created in [from, to), and how many reached first usage event, claim (first payment) and paid. Defaults to the last 30 days.",
+                "operationId": "getAgentFunnel",
+                "parameters": [
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "description": "Inclusive start date (UTC), ISO yyyy-MM-dd. Default: 30 days ago.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "description": "Exclusive end date (UTC), ISO yyyy-MM-dd. Default: tomorrow, so today is included.",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Successfully retrieved agent funnel",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseAgentFunnelResponse"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "from is not before to"
+                    },
+                    "403": {
+                        "description": "Access Denied."
                     }
                 },
                 "security": [
@@ -6644,6 +6822,43 @@
                 ]
             }
         },
+        "/api/v1/client/customers/{customerReferenceId}/status": {
+            "get": {
+                "tags": [
+                    "Agent account"
+                ],
+                "summary": "Account status",
+                "description": "Status, expiry, plan limits, remaining allowance, and the calling key's spend budget. Poll this after a 402 or 403 to see what changed.",
+                "operationId": "status",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseAgentStatusResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/credits/{customerReferenceId}/pools": {
             "get": {
                 "tags": [
@@ -7164,6 +7379,74 @@
                         "Bearer": []
                     }
                 ]
+            }
+        },
+        "/agent-signup.md": {
+            "get": {
+                "tags": [
+                    "Agent Discovery"
+                ],
+                "summary": "Agent signup runbook",
+                "description": "Step-by-step Markdown: read pricing.json, sign up, store the key, check status, use the free plan, handle gates, set the owner, and what expiry means.",
+                "operationId": "runbook",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/.well-known/agent.json": {
+            "get": {
+                "tags": [
+                    "Agent Discovery"
+                ],
+                "summary": "Agent manifest",
+                "description": "Machine-readable pointer to the published catalogs, the signup path, and the auth scheme.",
+                "operationId": "agentManifest",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/.well-known/agent-skills/index.json": {
+            "get": {
+                "tags": [
+                    "Agent Discovery"
+                ],
+                "summary": "Agent skills index",
+                "description": "Lists the signup runbook as a skill an agent can load.",
+                "operationId": "skillsIndex",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "object",
+                                    "additionalProperties": {}
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "/api/v1/tanso/customers/{customerId}/keys/{keyId}": {
@@ -7747,7 +8030,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -7897,7 +8181,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -7979,7 +8264,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8100,7 +8386,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8163,7 +8450,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8222,6 +8510,155 @@
                     }
                 }
             },
+            "OwnerRequest": {
+                "type": "object",
+                "properties": {
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 255,
+                        "minLength": 0
+                    }
+                },
+                "required": [
+                    "email"
+                ]
+            },
+            "AgentLimits": {
+                "type": "object",
+                "properties": {
+                    "features": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/FeatureLimit"
+                        }
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "spend_cap": {
+                        "type": "number"
+                    }
+                }
+            },
+            "AgentSpendMandate": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "none | pending | active | unavailable"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "period": {
+                        "type": "string"
+                    },
+                    "setup_url": {
+                        "type": "string",
+                        "description": "Hand this to the principal. Saving a card here activates the mandate and claims the account."
+                    },
+                    "max_amount": {
+                        "type": "number"
+                    }
+                }
+            },
+            "AgentStatusResponse": {
+                "type": "object",
+                "properties": {
+                    "customerReferenceId": {
+                        "type": "string"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "plan": {
+                        "type": "string"
+                    },
+                    "limits": {
+                        "$ref": "#/components/schemas/AgentLimits"
+                    },
+                    "remaining": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "number"
+                        }
+                    },
+                    "spend": {
+                        "$ref": "#/components/schemas/Spend"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "claimed_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "owner_email": {
+                        "type": "string"
+                    },
+                    "spend_mandate": {
+                        "$ref": "#/components/schemas/AgentSpendMandate"
+                    }
+                }
+            },
+            "ApiResponseAgentStatusResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/AgentStatusResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "FeatureLimit": {
+                "type": "object",
+                "properties": {
+                    "included": {
+                        "type": "number"
+                    },
+                    "period": {
+                        "type": "string"
+                    },
+                    "unlimited": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Spend": {
+                "type": "object",
+                "properties": {
+                    "cap": {
+                        "type": "number"
+                    },
+                    "spent": {
+                        "type": "number"
+                    },
+                    "remaining": {
+                        "type": "number"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "resets_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
             "UsernameAndPasswordRequest": {
                 "type": "object",
                 "properties": {
@@ -8242,7 +8679,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8275,18 +8713,42 @@
                     "email": {
                         "type": "string",
                         "format": "email",
-                        "description": "Contact email of the agent's principal \u2014 the human or org the agent buys for",
-                        "minLength": 1
+                        "description": "Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.",
+                        "maxLength": 255,
+                        "minLength": 0
                     },
                     "name": {
                         "type": "string",
                         "description": "Optional display name for the customer record",
                         "maxLength": 100,
                         "minLength": 0
+                    },
+                    "spend_mandate": {
+                        "$ref": "#/components/schemas/SpendMandate",
+                        "description": "Optional. Ask for a saved card up front so later purchases inside max_amount need no human. Only honored when the operator enabled agentSpendMandateEnabled."
+                    }
+                }
+            },
+            "SpendMandate": {
+                "type": "object",
+                "properties": {
+                    "currency": {
+                        "type": "string",
+                        "description": "ISO 4217, defaults to the account currency",
+                        "pattern": "^[A-Za-z]{3}$"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "Rolling window the cap applies to. Defaults to month.",
+                        "pattern": "^(day|week|month)$"
+                    },
+                    "max_amount": {
+                        "type": "number",
+                        "minimum": 0.01
                     }
                 },
                 "required": [
-                    "email"
+                    "max_amount"
                 ]
             },
             "AgentSignupResponse": {
@@ -8297,7 +8759,7 @@
                     },
                     "apiKey": {
                         "type": "string",
-                        "description": "Customer-scoped API key. Returned exactly once \u2014 store it now."
+                        "description": "Customer-scoped API key. Returned exactly once; store it now."
                     },
                     "apiKeyScopes": {
                         "type": "array",
@@ -8308,12 +8770,34 @@
                     "plan": {
                         "type": "string"
                     },
+                    "status": {
+                        "type": "string",
+                        "description": "provisional until the first payment claims the account; expired once past expires_at unpaid"
+                    },
+                    "limits": {
+                        "$ref": "#/components/schemas/AgentLimits"
+                    },
                     "nextSteps": {
                         "type": "object",
                         "additionalProperties": {
                             "type": "string"
                         },
                         "description": "Where to go next: base URL, entitlement check, event ingestion, usage"
+                    },
+                    "expires_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When an unclaimed provisional account is closed. Null once claimed."
+                    },
+                    "spend_mandate": {
+                        "$ref": "#/components/schemas/AgentSpendMandate",
+                        "description": "Null unless the request asked for one"
+                    },
+                    "status_url": {
+                        "type": "string"
+                    },
+                    "owner_url": {
+                        "type": "string"
                     }
                 }
             },
@@ -8326,7 +8810,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8345,7 +8830,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8377,7 +8863,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8450,7 +8937,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8551,7 +9039,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8640,7 +9129,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8784,7 +9274,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8897,7 +9388,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -8961,7 +9453,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9001,7 +9494,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9032,7 +9526,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9123,7 +9618,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9262,7 +9758,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9338,7 +9835,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9379,7 +9877,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9772,7 +10271,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9874,7 +10374,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -9915,7 +10416,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10006,7 +10508,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10074,7 +10577,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10134,7 +10638,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10232,7 +10737,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10342,7 +10848,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10481,7 +10988,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10610,7 +11118,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10742,7 +11251,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10821,7 +11331,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -10907,7 +11418,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11007,7 +11519,14 @@
                 "type": "object",
                 "properties": {
                     "planId": {
-                        "type": "string"
+                        "type": "string",
+                        "description": "Plan to subscribe to. Accepts the plan key published as plans[].id in pricing.json (for example \"starter\") or the plan UUID.",
+                        "example": "starter"
+                    },
+                    "planKey": {
+                        "type": "string",
+                        "description": "Alias for planId, for callers that read plans[].id from pricing.json and think of it as a key.",
+                        "example": "starter"
                     },
                     "customerReferenceId": {
                         "type": "string"
@@ -11167,7 +11686,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11295,7 +11815,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11443,6 +11964,10 @@
                         "type": "number",
                         "description": "Maximum usage allowed by the plan"
                     },
+                    "unlimited": {
+                        "type": "boolean",
+                        "description": "True when the plan places no cap on this feature. Lets a caller tell 'no limit applies' apart from 'the limit is unknown', which an absent limit alone cannot express."
+                    },
                     "remaining": {
                         "type": "number",
                         "description": "Remaining usage before the limit is hit"
@@ -11478,7 +12003,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11549,7 +12075,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11581,8 +12108,12 @@
                     },
                     "creditPoolId": {
                         "type": "string",
-                        "description": "Credit pool to top up (must belong to the customer)",
-                        "minLength": 1
+                        "description": "Credit pool to top up (must belong to the customer). Optional: omit it and supply a denomination, or omit both when the customer has exactly one pool."
+                    },
+                    "denomination": {
+                        "type": "string",
+                        "description": "Credit denomination to buy, as published in pricing.json under credits.currency_name (for example \"AI_CREDITS\"). Used when creditPoolId is omitted; the customer's pool for that denomination is created on first purchase if the operator has published a price for it.",
+                        "example": "AI_CREDITS"
                     },
                     "credits": {
                         "type": "number",
@@ -11594,7 +12125,6 @@
                     }
                 },
                 "required": [
-                    "creditPoolId",
                     "credits"
                 ]
             },
@@ -11607,7 +12137,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11715,7 +12246,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11774,7 +12306,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11858,6 +12391,17 @@
                         "type": "integer",
                         "format": "int32"
                     },
+                    "agentProvisionalDays": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "agentSignupPerIpCap": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "agentSpendMandateEnabled": {
+                        "type": "boolean"
+                    },
                     "agentMaxTopupAmount": {
                         "type": "number"
                     }
@@ -11908,6 +12452,17 @@
                         "type": "integer",
                         "format": "int32"
                     },
+                    "agentProvisionalDays": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "agentSignupPerIpCap": {
+                        "type": "integer",
+                        "format": "int32"
+                    },
+                    "agentSpendMandateEnabled": {
+                        "type": "boolean"
+                    },
                     "agentMaxTopupAmount": {
                         "type": "number"
                     }
@@ -11922,7 +12477,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11942,7 +12498,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -11996,7 +12553,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12079,7 +12637,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12135,7 +12694,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12381,7 +12941,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12440,7 +13001,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12463,7 +13025,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12497,6 +13060,138 @@
                     }
                 }
             },
+            "AgentFunnelResponse": {
+                "type": "object",
+                "description": "Agent signup funnel: signups -> first verified job -> claimed -> paid",
+                "properties": {
+                    "period": {
+                        "$ref": "#/components/schemas/Period"
+                    },
+                    "stages": {
+                        "$ref": "#/components/schemas/Stages"
+                    },
+                    "rates": {
+                        "$ref": "#/components/schemas/Rates"
+                    },
+                    "expired": {
+                        "type": "integer",
+                        "format": "int64",
+                        "description": "Signups in the period whose agent_status is EXPIRED"
+                    },
+                    "median_hours_signup_to_first_job": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Median hours from signup to first usage event; null when no agent has sent one"
+                    },
+                    "median_hours_signup_to_paid": {
+                        "type": "number",
+                        "format": "double",
+                        "description": "Median hours from signup to first PAID invoice or completed checkout; null when nobody paid"
+                    },
+                    "by_day": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Day"
+                        }
+                    }
+                }
+            },
+            "ApiResponseAgentFunnelResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/AgentFunnelResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "Day": {
+                "type": "object",
+                "description": "Counts keyed by signup date (UTC): how the cohort that signed up that day progressed",
+                "properties": {
+                    "date": {
+                        "type": "string"
+                    },
+                    "signups": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "claimed": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "paid": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "first_verified_job": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
+            "Period": {
+                "type": "object",
+                "properties": {
+                    "from": {
+                        "type": "string"
+                    },
+                    "to": {
+                        "type": "string"
+                    }
+                }
+            },
+            "Rates": {
+                "type": "object",
+                "description": "Each rate is a fraction of signups; 0 when there are no signups",
+                "properties": {
+                    "activation": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "claim": {
+                        "type": "number",
+                        "format": "double"
+                    },
+                    "paid": {
+                        "type": "number",
+                        "format": "double"
+                    }
+                }
+            },
+            "Stages": {
+                "type": "object",
+                "properties": {
+                    "signups": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "claimed": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "paid": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "first_verified_job": {
+                        "type": "integer",
+                        "format": "int64"
+                    }
+                }
+            },
             "ApiResponseListSpendUnitDto": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -12509,7 +13204,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12532,7 +13228,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12622,7 +13319,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12789,7 +13487,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12895,7 +13594,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -12973,7 +13673,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13080,7 +13781,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13196,7 +13898,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13277,7 +13980,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13330,7 +14034,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13353,7 +14058,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13376,7 +14082,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13399,7 +14106,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13422,7 +14130,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13445,7 +14154,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13468,7 +14178,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13488,7 +14199,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13572,7 +14284,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13724,7 +14437,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13744,7 +14458,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13815,7 +14530,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13838,7 +14554,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13861,7 +14578,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13884,7 +14602,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13907,7 +14626,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13930,7 +14650,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13953,7 +14674,8 @@
                         }
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13973,7 +14695,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -13993,7 +14716,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14029,7 +14753,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14250,7 +14975,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14284,7 +15010,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14344,7 +15071,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14470,7 +15198,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14564,7 +15293,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14584,7 +15314,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14618,7 +15349,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14697,7 +15429,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14748,7 +15481,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14782,7 +15516,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -14891,7 +15626,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",
@@ -15266,7 +16002,8 @@
                         "description": "Response data"
                     },
                     "error": {
-                        "$ref": "#/components/schemas/Error"
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
                     },
                     "meta": {
                         "type": "array",

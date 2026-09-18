@@ -30,4 +30,6 @@ public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession
     Optional<CheckoutSession> findByIdAndAccountId(UUID id, UUID accountId);
 
     Optional<CheckoutSession> findByStripeSessionId(String stripeSessionId);
+
+    Optional<CheckoutSession> findFirstByCustomerIdAndPurposeOrderByCreatedAtDesc(UUID customerId, String purpose);
 }

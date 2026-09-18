@@ -133,6 +133,9 @@ class StripeWebhookImplTest {
     @Mock
     private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
 
+    @Mock
+    private com.tansoflow.tansocore.service.client.AgentLifecycleService agentLifecycleService;
+
     // Regression: a hosted checkout completes in a browser, so the webhook is the
     // only place the money can be charged back to the key that opened it. The
     // security context is gone by then, which is why the key and amount ride on

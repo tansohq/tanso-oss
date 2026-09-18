@@ -104,6 +104,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/customers/{customerReferenceId}/owner": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Nominate an owner
+         * @description Records the principal's email on the account. Nothing is sent to it; paying is what claims the account.
+         */
+        put: operations["setOwner"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one key's spend budget
+         * @description Limits, spend so far in the current window, and when the window resets. A customer key may read its own budget so an agent can decide whether to spend before it gets rejected.
+         */
+        get: operations["getBudget_1"];
+        /**
+         * Set one key's spend budget
+         * @description Bounds what a single agent or team member may consume. Credits and money are capped independently over a rolling window; omit an axis to leave it unlimited. Deliberately NOT opened to ROLE_CUSTOMER — a key must not raise its own ceiling. Changing the period restarts the window.
+         */
+        put: operations["setBudget_1"];
+        post?: never;
+        /** Clear one key's spend budget */
+        delete: operations["clearBudget_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/public/v1/login": {
         parameters: {
             query?: never;
@@ -135,7 +180,7 @@ export interface paths {
         put?: never;
         /**
          * Programmatic agent signup
-         * @description One call: creates a customer, subscribes it to the account's free default plan, and returns a customer-scoped API key (once). No CAPTCHA, no email verification. Only served when the operator enabled agent signup; rate-limited per account per hour (429 + Retry-After).
+         * @description One call: creates a provisional customer, subscribes it to the account's free default plan, and returns a customer-scoped API key (once). Email optional. No CAPTCHA, no email verification; the first payment claims the account, unclaimed accounts expire. Only served when the operator enabled agent signup; rate-limited per account and per IP per hour (429 + Retry-After).
          */
         post: operations["signup"];
         delete?: never;
@@ -1008,6 +1053,308 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create subscription
+         * @description Adds a new subscription to a customer with a specific plan. For paid plans with a supplied or saved payment method the subscription is created synchronously; without one, customer-key callers get 402 with a checkout URL and a pollable checkout session.
+         */
+        post: operations["createSubscription_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/subscriptions/{subscriptionId}/plan-change": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change plan
+         * @description Changes a customer subscription to a new plan by upgrading or downgrading
+         */
+        post: operations["changeSubscription"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/subscriptions/cancellation/{subscriptionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel subscription
+         * @description Cancels a customer subscription immediately or at the end of the period
+         */
+        post: operations["cancelSubscription_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/outcomes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record that something shipped
+         * @description Same contract as the console route: same externalId again updates the outcome. Tenant sk_ key only.
+         */
+        post: operations["record_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ingest an event
+         * @description Ingests a single event with idempotency check
+         */
+        post: operations["createEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check feature entitlement with usage simulation
+         * @description Checks if a customer has entitlement for a feature. When usage context is provided, simulates whether the proposed usage would be allowed without recording real usage. The event is recorded with zero usage for audit purposes only. Use POST /api/v1/client/events to record actual usage.
+         */
+        post: operations["evaluateEntitlement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a customer
+         * @description Creates a new customer under the current account
+         */
+        post: operations["postCustomer_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/payment-methods/setup-intent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a SetupIntent
+         * @description Returns a client_secret the principal confirms directly with Stripe. Requires the 'purchase' scope on customer keys.
+         */
+        post: operations["createSetupIntent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/payment-methods/default": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set the default payment method
+         * @description Attaches a confirmed payment method (pm_...) and stores it as the customer's default for off-session charges.
+         */
+        post: operations["setDefaultPaymentMethod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/keys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List a customer's API keys (hints only) */
+        get: operations["listKeys_1"];
+        put?: never;
+        /**
+         * Create a customer-scoped API key
+         * @description Issues a ck_ key pinned to this customer. The plaintext key is returned exactly once. Scopes: 'read' (balances, entitlements, usage) and 'purchase' (actions that spend money). Defaults to read-only when no scopes are given.
+         */
+        post: operations["createKey_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}/rotate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rotate one key
+         * @description Deactivates this key only and issues a replacement with the same scopes. Sibling keys are untouched.
+         */
+        post: operations["rotateKey_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/purchases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Buy credits at the current price book rate
+         * @description Off-session charge with the supplied or saved payment method; 402 with a hosted checkout URL and pollable checkout session when there is none or the charge is declined. Requires the 'purchase' scope on customer keys.
+         */
+        post: operations["purchaseCredits"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/billing/subscriptions/{subscriptionId}/stripe/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Stripe checkout session for subscription
+         * @description Finds the first DUE invoice for a subscription and generates a Stripe Checkout URL for payment
+         */
+        post: operations["createStripeCheckoutSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/billing/invoices/{invoiceId}/mark-paid": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark invoice as paid
+         * @description Manually marks an invoice as paid and activates the associated subscription
+         */
+        post: operations["markInvoicePaid"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/billing/invoices/subscription/{subscriptionId}/stripe/checkout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Stripe checkout session (DEPRECATED)
+         * @deprecated
+         * @description Generates a Stripe Checkout URL for a specific subscription. This endpoint is deprecated, use /invoices/{invoiceId}/stripe/checkout instead.
+         */
+        post: operations["createStripeSubscriptionCheckoutSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/insights/generate": {
         parameters: {
             query?: never;
@@ -1260,6 +1607,30 @@ export interface paths {
         patch: operations["patchInvoice"];
         trace?: never;
     };
+    "/api/v1/client/customers/{externalClientCustomerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retrieve a customer
+         * @description Retrieves customer details and subscriptions by external client customer ID
+         */
+        get: operations["getCustomer_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update a customer
+         * @description Partially updates a customer's details. Only provided fields are updated.
+         */
+        patch: operations["patchCustomer"];
+        trace?: never;
+    };
     "/public/v1/catalog/{slug}/pricing.json": {
         parameters: {
             query?: never;
@@ -1272,6 +1643,26 @@ export interface paths {
          * @description The account's plans, features, credit weight table, and governance flags in the agent-serve pricing.json format. Raw JSON, not the ApiResponse envelope, so agents can validate it directly against the schema.
          */
         get: operations["getPricingCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/llms.txt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent-readable index of the published catalogs
+         * @description Plain text pointing at each enabled catalog's pricing.json, its signup URL, and the API spec.
+         */
+        get: operations["llmsTxt"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1332,6 +1723,26 @@ export interface paths {
          * @description Returns events aggregated by a specified field with totals
          */
         get: operations["getGroupedEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tanso/agent-funnel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get agent funnel
+         * @description Counts customers whose external id starts with agent_ and were created in [from, to), and how many reached first usage event, claim (first payment) and paid. Defaults to the last 30 days.
+         */
+        get: operations["getAgentFunnel"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1886,6 +2297,286 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get client plans with pricing
+         * @description Retrieves active plans with feature pricing details for the authenticated account
+         */
+        get: operations["getClientPlansFeatures"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all features
+         * @description Retrieves all features defined for the authenticated account
+         */
+        get: operations["getFeatures_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/features/{featureKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get feature by key
+         * @description Retrieves a single feature by its unique key
+         */
+        get: operations["getFeatureByKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/entitlements/{customerReferenceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List all customer entitlements
+         * @description Returns all active entitlements for a customer, grouped by subscription
+         */
+        get: operations["getCustomerEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/entitlements/{customerReferenceId}/{feature-key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Check feature entitlement
+         * @description Checks if a customer has entitlement for a specific feature by its key
+         */
+        get: operations["getEntitlementByCustomerReferenceIdAndFeatureKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Usage and burndown forecast
+         * @description Per-feature current-period usage with a linear end-of-period projection, and per-pool credit balances with average burn, projected depletion date, and the current credit price.
+         */
+        get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Account status
+         * @description Status, expiry, plan limits, remaining allowance, and the calling key's spend budget. Poll this after a 402 or 403 to see what changed.
+         */
+        get: operations["status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/{customerReferenceId}/pools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List credit pools for a customer
+         * @description Retrieves all credit pools for a customer identified by their reference ID
+         */
+        get: operations["getCreditPools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/{customerReferenceId}/pools/{poolId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a single credit pool
+         * @description Retrieves a specific credit pool with balance information
+         */
+        get: operations["getCreditPool"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/{customerReferenceId}/pools/{poolId}/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pool transactions
+         * @description Retrieves the transaction ledger for a specific credit pool
+         */
+        get: operations["getPoolTransactions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/{customerReferenceId}/pools/{poolId}/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pool grants
+         * @description Retrieves all credit grants for a specific credit pool
+         */
+        get: operations["getPoolGrants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/credits/prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Current credit prices
+         * @description The price of one credit for each priced denomination, from the account's price book. Use this to show end users what credits cost and to total up top-up purchases. Denominations with no published price are omitted.
+         */
+        get: operations["getCurrentPrices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/checkout-sessions/{checkoutSessionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Checkout session status
+         * @description PENDING until the hosted checkout completes; COMPLETED carries the created subscription id (subscriptions) or granted credits (top-ups).
+         */
+        get: operations["getCheckoutSession"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/billing/invoices/{externalClientCustomerId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List customer invoices
+         * @description Retrieves all invoices for a customer using the external client reference ID
+         */
+        get: operations["getInvoicesByExternalClientCustomerId"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/analytics/revenue-bridge": {
         parameters: {
             query?: never;
@@ -1965,6 +2656,66 @@ export interface paths {
          * @description Deletes all generated insights
          */
         delete: operations["clearInsights"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent-signup.md": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent signup runbook
+         * @description Step-by-step Markdown: read pricing.json, sign up, store the key, check status, use the free plan, handle gates, set the owner, and what expiry means.
+         */
+        get: operations["runbook"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/agent.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent manifest
+         * @description Machine-readable pointer to the published catalogs, the signup path, and the auth scheme.
+         */
+        get: operations["agentManifest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/agent-skills/index.json": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agent skills index
+         * @description Lists the signup runbook as a skill an agent can load.
+         */
+        get: operations["skillsIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -2166,6 +2917,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/subscriptions/{subscriptionId}/plan-change/scheduled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel scheduled plan change
+         * @description Cancels all scheduled changes for a subscription
+         */
+        delete: operations["cancelScheduledSubscriptionChanges"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/subscriptions/cancellation/{subscriptionId}/scheduled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel scheduled cancellation
+         * @description Cancels a previously scheduled subscription cancellation
+         */
+        delete: operations["cancelScheduledSubscriptionCancellation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/keys/{keyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a key */
+        delete: operations["revokeKey_1"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2199,6 +3007,7 @@ export interface components {
         ApiResponseKeyBudgetDto: {
             /** @description Response data */
             data?: components["schemas"]["KeyBudgetDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2275,6 +3084,7 @@ export interface components {
         ApiResponseSpendUnitDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendUnitDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2308,6 +3118,7 @@ export interface components {
         ApiResponseSpendBudgetDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendBudgetDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2360,6 +3171,7 @@ export interface components {
         ApiResponseSpendSettingsDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendSettingsDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2385,6 +3197,7 @@ export interface components {
         ApiResponseVendorConnectionDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorConnectionDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2407,6 +3220,64 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        OwnerRequest: {
+            /** Format: email */
+            email: string;
+        };
+        AgentLimits: {
+            features?: {
+                [key: string]: components["schemas"]["FeatureLimit"];
+            };
+            currency?: string;
+            spend_cap?: number;
+        };
+        AgentSpendMandate: {
+            /** @description none | pending | active | unavailable */
+            status?: string;
+            currency?: string;
+            period?: string;
+            /** @description Hand this to the principal. Saving a card here activates the mandate and claims the account. */
+            setup_url?: string;
+            max_amount?: number;
+        };
+        AgentStatusResponse: {
+            customerReferenceId?: string;
+            status?: string;
+            plan?: string;
+            limits?: components["schemas"]["AgentLimits"];
+            remaining?: {
+                [key: string]: number;
+            };
+            spend?: components["schemas"]["Spend"];
+            /** Format: date-time */
+            expires_at?: string;
+            /** Format: date-time */
+            claimed_at?: string;
+            owner_email?: string;
+            spend_mandate?: components["schemas"]["AgentSpendMandate"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseAgentStatusResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["AgentStatusResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        FeatureLimit: {
+            included?: number;
+            period?: string;
+            unlimited?: boolean;
+        };
+        Spend: {
+            cap?: number;
+            spent?: number;
+            remaining?: number;
+            currency?: string;
+            /** Format: date-time */
+            resets_at?: string;
+        };
         UsernameAndPasswordRequest: {
             username?: string;
             password?: string;
@@ -2415,6 +3286,7 @@ export interface components {
         ApiResponseJwtResponse: {
             /** @description Response data */
             data?: components["schemas"]["JwtResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2435,11 +3307,20 @@ export interface components {
         AgentSignupRequest: {
             /**
              * Format: email
-             * @description Contact email of the agent's principal — the human or org the agent buys for
+             * @description Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.
              */
-            email: string;
+            email?: string;
             /** @description Optional display name for the customer record */
             name?: string;
+            /** @description Optional. Ask for a saved card up front so later purchases inside max_amount need no human. Only honoured when the operator enabled agentSpendMandateEnabled. */
+            spend_mandate?: components["schemas"]["SpendMandate"];
+        };
+        SpendMandate: {
+            /** @description ISO 4217, defaults to the account currency */
+            currency?: string;
+            /** @description Rolling window the cap applies to. Defaults to month. */
+            period?: string;
+            max_amount: number;
         };
         AgentSignupResponse: {
             customerReferenceId?: string;
@@ -2447,15 +3328,27 @@ export interface components {
             apiKey?: string;
             apiKeyScopes?: string[];
             plan?: string;
+            /** @description provisional until the first payment claims the account; expired once past expires_at unpaid */
+            status?: string;
+            limits?: components["schemas"]["AgentLimits"];
             /** @description Where to go next: base URL, entitlement check, event ingestion, usage */
             nextSteps?: {
                 [key: string]: string;
             };
+            /**
+             * Format: date-time
+             * @description When an unclaimed provisional account is closed. Null once claimed.
+             */
+            expires_at?: string;
+            spend_mandate?: components["schemas"]["AgentSpendMandate"];
+            status_url?: string;
+            owner_url?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponseAgentSignupResponse: {
             /** @description Response data */
             data?: components["schemas"]["AgentSignupResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2464,6 +3357,7 @@ export interface components {
         ApiResponseVoid: {
             /** @description Response data */
             data?: unknown;
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2476,6 +3370,7 @@ export interface components {
         ApiResponseCustomerApiKeyDto: {
             /** @description Response data */
             data?: components["schemas"]["CustomerApiKeyDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2506,6 +3401,7 @@ export interface components {
         ApiResponseCsvImportResult: {
             /** @description Response data */
             data?: components["schemas"]["CsvImportResult"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2545,6 +3441,7 @@ export interface components {
         ApiResponseSpendAttributionRuleDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAttributionRuleDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2582,6 +3479,7 @@ export interface components {
         ApiResponseSpendRouteSimulationDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendRouteSimulationDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2639,6 +3537,7 @@ export interface components {
         ApiResponseOutcomeDto: {
             /** @description Response data */
             data?: components["schemas"]["OutcomeDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2676,6 +3575,7 @@ export interface components {
         ApiResponseOutcomeSourceDto: {
             /** @description Response data */
             data?: components["schemas"]["OutcomeSourceDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2700,6 +3600,7 @@ export interface components {
         ApiResponseVendorSyncResultDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorSyncResultDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2717,6 +3618,7 @@ export interface components {
         ApiResponseVendorProbeResultDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorProbeResultDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2729,6 +3631,7 @@ export interface components {
         ApiResponseVendorInvoiceDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorInvoiceDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2760,6 +3663,7 @@ export interface components {
         ApiResponseSpendDigestDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendDigestDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2811,6 +3715,7 @@ export interface components {
         ApiResponseListSpendAlertDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAlertDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2838,6 +3743,7 @@ export interface components {
         ApiResponseSpendAlertDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAlertDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -2852,6 +3758,7 @@ export interface components {
         ApiResponseSubscribedCustomerResponse: {
             /** @description Response data */
             data?: components["schemas"]["SubscribedCustomerResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3132,6 +4039,7 @@ export interface components {
         ApiResponsePlanFeatureRuleDto: {
             /** @description Response data */
             data?: components["schemas"]["PlanFeatureRuleDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3196,6 +4104,7 @@ export interface components {
         ApiResponsePlanDto: {
             /** @description Response data */
             data?: components["schemas"]["PlanDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3213,6 +4122,7 @@ export interface components {
         ApiResponseFeatureDto: {
             /** @description Response data */
             data?: components["schemas"]["FeatureDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3265,6 +4175,7 @@ export interface components {
         ApiResponseCustomerDto: {
             /** @description Response data */
             data?: components["schemas"]["CustomerDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3292,6 +4203,7 @@ export interface components {
         ApiResponseListCreditFeatureWeightDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditFeatureWeightDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3325,6 +4237,7 @@ export interface components {
         ApiResponseCreditTransactionDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditTransactionDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3373,6 +4286,7 @@ export interface components {
         ApiResponseListCreditPriceDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditPriceDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3440,6 +4354,7 @@ export interface components {
         ApiResponseCreditPoolDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditPoolDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3520,6 +4435,7 @@ export interface components {
         ApiResponseCreditModelDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditModelDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3592,6 +4508,7 @@ export interface components {
         ApiResponseCreditGrantDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditGrantDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3669,6 +4586,7 @@ export interface components {
         ApiResponseStripeCheckoutSessionsResponse: {
             /** @description Response data */
             data?: components["schemas"]["StripeCheckoutSessionsResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3700,6 +4618,7 @@ export interface components {
         ApiResponseStripeImportStatusResponse: {
             /** @description Response data */
             data?: components["schemas"]["StripeImportStatusResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3734,6 +4653,7 @@ export interface components {
         ApiResponseStripeDiscoveryResponse: {
             /** @description Response data */
             data?: components["schemas"]["StripeDiscoveryResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3765,6 +4685,391 @@ export interface components {
         StripeApiKeyRegisterRequest: {
             clientStripeApiKey?: string;
         };
+        ClientSubscriptionRequest: {
+            /**
+             * @description Plan to subscribe to. Accepts the plan key published as plans[].id in pricing.json (for example "starter") or the plan UUID.
+             * @example starter
+             */
+            planId?: string;
+            /**
+             * @description Alias for planId, for callers that read plans[].id from pricing.json and think of it as a key.
+             * @example starter
+             */
+            planKey?: string;
+            customerReferenceId?: string;
+            /** Format: int32 */
+            gracePeriod?: number;
+            paymentMethodId?: string;
+        };
+        ClientChangeSubscriptionRequest: {
+            changeToPlanId?: string;
+            /** @enum {string} */
+            changeType?: "UPGRADE" | "DOWNGRADE";
+        };
+        /** @description Structured cost input for model-aware cost tracking. Provides typed fields for AI model name, provider, and cost-relevant quantity. */
+        CostInput: {
+            /**
+             * @description AI model name (e.g., gpt-4, claude-3-opus)
+             * @example gpt-4
+             */
+            model?: string;
+            /**
+             * @description AI model provider (e.g., openai, anthropic)
+             * @example openai
+             */
+            modelProvider?: string;
+            /**
+             * @deprecated
+             * @description Cost-relevant quantity (e.g., total token count). Deprecated — use inputTokens and outputTokens instead.
+             * @example 50000
+             */
+            costUnits?: number;
+            /**
+             * @description Input token count for AI model cost calculation
+             * @example 3000
+             */
+            inputTokens?: number;
+            /**
+             * @description Output token count for AI model cost calculation
+             * @example 500
+             */
+            outputTokens?: number;
+        };
+        /** @description Request object for creating an event */
+        EventRequest: {
+            /**
+             * @description Idempotency key for the event. Auto-generated if omitted.
+             * @example event_12345
+             */
+            eventIdempotencyKey?: string;
+            /** @description Flow identifier associated with the event */
+            flowId?: string;
+            /** @description The key of the feature this event tracks usage for. Used to resolve pricing rules and billing. */
+            featureKey?: string;
+            /**
+             * Format: uuid
+             * @description Feature UUID. If provided, supersedes featureKey — no lookup is performed.
+             */
+            featureId?: string;
+            /** @description Name of the event */
+            eventName: string;
+            /**
+             * Format: date-time
+             * @description Timestamp when the event occurred
+             */
+            occurredAt?: string;
+            /**
+             * Format: uuid
+             * @description Customer identifier (UUID) associated with the event. Use either customerId or customerReferenceId, not both.
+             */
+            customerId?: string;
+            /**
+             * @description Customer reference ID (your internal customer identifier). Use either customerId, customerReferenceId, or stripeCustomerId.
+             * @example user_12345
+             */
+            customerReferenceId?: string;
+            /**
+             * @description Stripe customer ID (cus_...). Creates a customer linked via Stripe bridge table without setting externalClientCustomerId. Preferred when Tanso manages your customer records.
+             * @example cus_abc123
+             */
+            stripeCustomerId?: string;
+            /**
+             * Format: uuid
+             * @description Subscription identifier associated with the event
+             */
+            subscriptionId?: string;
+            /**
+             * Format: uuid
+             * @description Entitlement identifier associated with the event
+             */
+            entitlementId?: string;
+            /**
+             * Format: uuid
+             * @description Invoice identifier associated with the event
+             */
+            invoiceId?: string;
+            /**
+             * @description Cost amount associated with the event. Optional - if omitted, Tanso will automatically calculate it based on usageUnits and the configured cost_rate in the plan rule.
+             * @example 0.05
+             */
+            costAmount?: number;
+            /**
+             * @description Revenue amount associated with the event. Optional - if omitted, Tanso will automatically calculate it based on usageUnits and the configured pricing rule. Use this to pass through your own revenue figures for margin tracking.
+             * @example 0.1
+             */
+            revenueAmount?: number;
+            /**
+             * @description Usage units (e.g., number of tokens, API calls, storage GB). Used for billing calculations and margin analysis.
+             * @example 1000
+             */
+            usageUnits?: number;
+            /** @description Metadata associated with the event */
+            meta?: {
+                [key: string]: unknown;
+            };
+            /** @description Structured cost input for model-aware cost tracking */
+            costInput?: components["schemas"]["CostInput"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseEventIngestionResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["EventIngestionResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        EventIngestionResponse: {
+            usageLimitExceeded?: boolean;
+            message?: string;
+            creditsDeducted?: number;
+            weightApplied?: number;
+            weightId?: string;
+            weightMatch?: string;
+            remainingBalance?: number;
+        };
+        /** @description Request to check an entitlement and optionally attach tracking context for analytics. */
+        EntitlementEvaluationRequest: {
+            /**
+             * @description External customer reference ID (scoped to tenant/account).
+             * @example cust_123
+             */
+            customerReferenceId: string;
+            /**
+             * @description Feature key to check.
+             * @example llm.generate
+             */
+            featureKey: string;
+            /** @description Optional usage context for simulating whether proposed usage would be allowed. Does not record real usage. */
+            usage?: components["schemas"]["UsageContext"];
+            /** @description Optional correlation/debug context. Useful for joining logs/events. */
+            context?: components["schemas"]["RequestContext"];
+        };
+        /** @description Correlation/debug context for joining requests across systems. */
+        RequestContext: {
+            /**
+             * @description Caller-provided idempotency key.
+             * @example req_abc123
+             */
+            idempotencyKey?: string;
+            /**
+             * @description Flow/correlation identifier.
+             * @example flow_chat_turn_42
+             */
+            flowId?: string;
+        };
+        /** @description Usage context for simulating whether proposed usage would be allowed. */
+        UsageContext: {
+            /**
+             * @description User-defined event name for what is being attempted.
+             * @example llm.generate
+             */
+            eventName?: string;
+            /**
+             * @description The amount of usage units to simulate (e.g., number of tokens, API calls). Used to project whether the proposed usage would exceed the plan limit.
+             * @example 1000
+             */
+            usageUnits?: number;
+            /**
+             * @description Model the usage will run on (e.g. "gpt-4.1"). Selects the credit weight row; must exactly match the model string sent on the ingestion event's costInput.model.
+             * @example gpt-4.1
+             */
+            model?: string;
+            /** @description Optional metadata (JSON object). */
+            meta?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseEntitlementResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["EntitlementResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Credit balance for the feature's credit model */
+        Credit: {
+            /** @description Credit denomination (e.g. CREDITS, TOKENS) */
+            denomination?: string;
+            /** @description Current available balance */
+            balance?: number;
+            /** @description Total credits granted */
+            totalGranted?: number;
+            /** @description Total credits consumed */
+            totalConsumed?: number;
+            /** @description Whether zero balance blocks access */
+            hardLimit?: boolean;
+        };
+        /** @description Credit weight quote for a proposed usage amount */
+        CreditQuote: {
+            /** @description Credits burned per usage unit for this feature/model */
+            weight?: number;
+            /** @description requestedUnits × weight — the estimated credit charge */
+            estimatedCredits?: number;
+            /** @description Tariff row the weight came from. Null when the identity default (1.0) applied. */
+            weightId?: string;
+            /** @description Which tariff tier matched: MODEL, FEATURE_DEFAULT, or NONE */
+            weightMatch?: string;
+            /** @description Current price of one credit from the account's price book. Null when the denomination is unpriced. */
+            pricePerCredit?: number;
+            /** @description ISO 4217 currency for pricePerCredit and estimatedCost */
+            currency?: string;
+            /** @description estimatedCredits × pricePerCredit — what the requested usage is worth in money. Null when unpriced. */
+            estimatedCost?: number;
+        };
+        /** @description Response containing feature entitlement information for a customer */
+        EntitlementResponse: {
+            /**
+             * @description The external client reference ID for the customer
+             * @example cust_12345
+             */
+            referenceCustomerId?: string;
+            /**
+             * @description The key of the feature being checked
+             * @example premium_reports
+             */
+            featureKey?: string;
+            /** @description Additional metadata about the entitlement decision */
+            meta?: components["schemas"]["meta"];
+            /** @description The flow ID of the event */
+            flowId?: string;
+            /** @description Usage information when a usage limit applies to the feature */
+            usage?: components["schemas"]["Usage"];
+            /** @description Simulation results when usage context is provided in the request */
+            simulation?: components["schemas"]["Simulation"];
+            /** @description Credit balance for the feature's credit model */
+            credit?: components["schemas"]["Credit"];
+            /** @description Credit weight quote for the requested usage, when a credit model applies. A quote, not a promise: it resolves at request time, the actual charge resolves at the event's occurredAt, so a tariff change between quote and charge can change the outcome. */
+            creditQuote?: components["schemas"]["CreditQuote"];
+            allowed?: boolean;
+        };
+        /** @description Simulation results showing projected usage impact */
+        Simulation: {
+            /** @description The usage amount requested in the simulation */
+            requestedUsage?: number;
+            /** @description Cumulative usage after adding the requested amount */
+            projectedUsage?: number;
+            /** @description Remaining usage after projected usage (limit - projected, minimum 0) */
+            projectedRemaining?: number;
+            /** @description Whether the proposed usage would exceed the plan limit */
+            wouldExceedLimit?: boolean;
+        };
+        /** @description Usage details for a metered feature */
+        Usage: {
+            /** @description Total usage consumed in the current period */
+            used?: number;
+            /** @description Maximum usage allowed by the plan */
+            limit?: number;
+            /** @description True when the plan places no cap on this feature. Lets a caller tell 'no limit applies' apart from 'the limit is unknown', which an absent limit alone cannot express. */
+            unlimited?: boolean;
+            /** @description Remaining usage before the limit is hit */
+            remaining?: number;
+        };
+        /** @description Metadata about the entitlement decision */
+        meta: {
+            /** @description The reason why the entitlement was granted or denied */
+            reason?: components["schemas"]["reason"];
+        };
+        /** @description Reason details */
+        reason: {
+            /** @description A human-readable description of the reason */
+            description?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerClientResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerClientResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Response containing customer details and their subscriptions */
+        CustomerClientResponse: {
+            /**
+             * @description External client reference ID for the customer
+             * @example cust_12345
+             */
+            customerReferenceId?: string;
+            /**
+             * @description First name of the customer
+             * @example John
+             */
+            firstName?: string;
+            /**
+             * @description Last name of the customer
+             * @example Doe
+             */
+            lastName?: string;
+            /**
+             * @description Email address of the customer
+             * @example john.doe@example.com
+             */
+            email?: string;
+            /** @description Timestamp when the customer record was created */
+            createdAt?: string;
+            /** @description Timestamp when the customer record was last modified */
+            modifiedAt?: string;
+            /** @description List of subscriptions associated with the customer */
+            subscriptions?: components["schemas"]["SubscriptionDto"][];
+            /** @description Credit pools associated with the customer */
+            creditPools?: components["schemas"]["CreditPoolDto"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseMapStringString: {
+            /** @description Response data */
+            data?: {
+                [key: string]: string;
+            };
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        DefaultPaymentMethodRequest: {
+            paymentMethodId: string;
+        };
+        CreditPurchaseRequest: {
+            /** @description Customer reference. Optional for customer-scoped keys (their own). */
+            customerReferenceId?: string;
+            /** @description Credit pool to top up (must belong to the customer). Optional: omit it and supply a denomination, or omit both when the customer has exactly one pool. */
+            creditPoolId?: string;
+            /**
+             * @description Credit denomination to buy, as published in pricing.json under credits.currency_name (for example "AI_CREDITS"). Used when creditPoolId is omitted; the customer's pool for that denomination is created on first purchase if the operator has published a price for it.
+             * @example AI_CREDITS
+             */
+            denomination?: string;
+            /** @description How many credits to buy; priced at the current price book rate */
+            credits: number;
+            /** @description Stripe payment method (pm_...). Falls back to the customer's saved default; with neither, the response is a 402 with a hosted checkout URL. */
+            paymentMethodId?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCreditPurchaseResult: {
+            /** @description Response data */
+            data?: components["schemas"]["CreditPurchaseResult"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        CreditPurchaseResult: {
+            /** @description True when the charge succeeded and credits are granted */
+            completed?: boolean;
+            credits?: number;
+            pricePerCredit?: number;
+            amountCharged?: number;
+            currency?: string;
+            grantId?: string;
+            paymentIntentId?: string;
+            /** @description Set on the 402 fallback: hand this URL to the principal */
+            checkoutUrl?: string;
+            /** @description Poll GET /api/v1/client/checkout-sessions/{id} for the outcome */
+            checkoutSessionId?: string;
+            declineReason?: string;
+        };
         AiInsightDto: {
             /** Format: uuid */
             id?: string;
@@ -3786,6 +5091,7 @@ export interface components {
         ApiResponseListAiInsightDto: {
             /** @description Response data */
             data?: components["schemas"]["AiInsightDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3820,6 +5126,7 @@ export interface components {
         ApiResponseAccountApiKeyResponse: {
             /** @description Response data */
             data?: components["schemas"]["AccountApiKeyResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3850,6 +5157,11 @@ export interface components {
             agentSignupDefaultPlanId?: string;
             /** Format: int32 */
             agentSignupHourlyCap?: number;
+            /** Format: int32 */
+            agentProvisionalDays?: number;
+            /** Format: int32 */
+            agentSignupPerIpCap?: number;
+            agentSpendMandateEnabled?: boolean;
             agentMaxTopupAmount?: number;
         };
         AccountSettingDto: {
@@ -3867,12 +5179,18 @@ export interface components {
             agentSignupDefaultPlanId?: string;
             /** Format: int32 */
             agentSignupHourlyCap?: number;
+            /** Format: int32 */
+            agentProvisionalDays?: number;
+            /** Format: int32 */
+            agentSignupPerIpCap?: number;
+            agentSpendMandateEnabled?: boolean;
             agentMaxTopupAmount?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseAccountSettingDto: {
             /** @description Response data */
             data?: components["schemas"]["AccountSettingDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3881,6 +5199,7 @@ export interface components {
         ApiResponseSubscriptionDto: {
             /** @description Response data */
             data?: components["schemas"]["SubscriptionDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3903,6 +5222,7 @@ export interface components {
         ApiResponsePlanFeatureLinkedDiffResponse: {
             /** @description Response data */
             data?: components["schemas"]["PlanFeatureLinkedDiffResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3920,10 +5240,17 @@ export interface components {
             phoneNumber?: string;
             address?: string;
         };
+        CustomerUpdateRequest: {
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+            phoneNumber?: string;
+        };
         /** @description Generic API response wrapper */
         ApiResponseListModelPricing: {
             /** @description Response data */
             data?: components["schemas"]["ModelPricing"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -3944,6 +5271,7 @@ export interface components {
         ApiResponsePagedResponseEventDto: {
             /** @description Response data */
             data?: components["schemas"]["PagedResponseEventDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4126,6 +5454,7 @@ export interface components {
         ApiResponseListEventGroupDto: {
             /** @description Response data */
             data?: components["schemas"]["EventGroupDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4157,6 +5486,7 @@ export interface components {
         ApiResponseListCustomerApiKeyDto: {
             /** @description Response data */
             data?: components["schemas"]["CustomerApiKeyDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4165,6 +5495,7 @@ export interface components {
         ApiResponseListCsvUploadInfo: {
             /** @description Response data */
             data?: components["schemas"]["CsvUploadInfo"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4179,10 +5510,77 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        /** @description Agent signup funnel: signups -> first verified job -> claimed -> paid */
+        AgentFunnelResponse: {
+            period?: components["schemas"]["Period"];
+            stages?: components["schemas"]["Stages"];
+            rates?: components["schemas"]["Rates"];
+            /**
+             * Format: int64
+             * @description Signups in the period whose agent_status is EXPIRED
+             */
+            expired?: number;
+            /**
+             * Format: double
+             * @description Median hours from signup to first usage event; null when no agent has sent one
+             */
+            median_hours_signup_to_first_job?: number;
+            /**
+             * Format: double
+             * @description Median hours from signup to first PAID invoice or completed checkout; null when nobody paid
+             */
+            median_hours_signup_to_paid?: number;
+            by_day?: components["schemas"]["Day"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseAgentFunnelResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["AgentFunnelResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Counts keyed by signup date (UTC): how the cohort that signed up that day progressed */
+        Day: {
+            date?: string;
+            /** Format: int64 */
+            signups?: number;
+            /** Format: int64 */
+            claimed?: number;
+            /** Format: int64 */
+            paid?: number;
+            /** Format: int64 */
+            first_verified_job?: number;
+        };
+        Period: {
+            from?: string;
+            to?: string;
+        };
+        /** @description Each rate is a fraction of signups; 0 when there are no signups */
+        Rates: {
+            /** Format: double */
+            activation?: number;
+            /** Format: double */
+            claim?: number;
+            /** Format: double */
+            paid?: number;
+        };
+        Stages: {
+            /** Format: int64 */
+            signups?: number;
+            /** Format: int64 */
+            claimed?: number;
+            /** Format: int64 */
+            paid?: number;
+            /** Format: int64 */
+            first_verified_job?: number;
+        };
         /** @description Generic API response wrapper */
         ApiResponseListSpendUnitDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendUnitDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4191,6 +5589,7 @@ export interface components {
         ApiResponseListSpendAttributionRuleDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAttributionRuleDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4232,6 +5631,7 @@ export interface components {
         ApiResponseSpendUsageReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendUsageReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4303,6 +5703,7 @@ export interface components {
         ApiResponseSpendSavingsReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendSavingsReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4347,6 +5748,7 @@ export interface components {
         ApiResponseSpendReconcileReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendReconcileReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4376,6 +5778,7 @@ export interface components {
         ApiResponseSpendPnlReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendPnlReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4421,6 +5824,7 @@ export interface components {
         ApiResponseSpendOutcomeReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendOutcomeReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4471,6 +5875,7 @@ export interface components {
         ApiResponseListPriceBookModelDto: {
             /** @description Response data */
             data?: components["schemas"]["PriceBookModelDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4502,6 +5907,7 @@ export interface components {
         ApiResponseSpendAllocationReportDto: {
             /** @description Response data */
             data?: components["schemas"]["SpendAllocationReportDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4522,6 +5928,7 @@ export interface components {
         ApiResponseListOutcomeDto: {
             /** @description Response data */
             data?: components["schemas"]["OutcomeDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4530,6 +5937,7 @@ export interface components {
         ApiResponseListOutcomeSourceDto: {
             /** @description Response data */
             data?: components["schemas"]["OutcomeSourceDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4538,6 +5946,7 @@ export interface components {
         ApiResponseListVendorInvoiceDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorInvoiceDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4546,6 +5955,7 @@ export interface components {
         ApiResponseListVendorConnectionDto: {
             /** @description Response data */
             data?: components["schemas"]["VendorConnectionDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4554,6 +5964,7 @@ export interface components {
         ApiResponseListSubscriptionDto: {
             /** @description Response data */
             data?: components["schemas"]["SubscriptionDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4562,6 +5973,7 @@ export interface components {
         ApiResponseListSubscriptionScheduledChangeDto: {
             /** @description Response data */
             data?: components["schemas"]["SubscriptionScheduledChangeDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4570,6 +5982,7 @@ export interface components {
         ApiResponseListPlanDto: {
             /** @description Response data */
             data?: components["schemas"]["PlanDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4578,6 +5991,7 @@ export interface components {
         ApiResponsePlanFeatureLinkedDto: {
             /** @description Response data */
             data?: components["schemas"]["PlanFeatureLinkedDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4620,6 +6034,7 @@ export interface components {
         ApiResponsePlanRevenueResponse: {
             /** @description Response data */
             data?: components["schemas"]["PlanRevenueResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4691,6 +6106,7 @@ export interface components {
         ApiResponseListFeatureDto: {
             /** @description Response data */
             data?: components["schemas"]["FeatureDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4699,6 +6115,7 @@ export interface components {
         ApiResponseCustomerBulkResponse: {
             /** @description Response data */
             data?: components["schemas"]["CustomerBulkResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4744,16 +6161,7 @@ export interface components {
             data?: {
                 [key: string]: number;
             };
-            error?: components["schemas"]["Error"];
-            meta?: unknown[];
-            success?: boolean;
-        };
-        /** @description Generic API response wrapper */
-        ApiResponseMapStringString: {
-            /** @description Response data */
-            data?: {
-                [key: string]: string;
-            };
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4762,6 +6170,7 @@ export interface components {
         ApiResponseListCreditPoolDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditPoolDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4770,6 +6179,7 @@ export interface components {
         ApiResponseListCreditTransactionDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditTransactionDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4778,6 +6188,7 @@ export interface components {
         ApiResponseListCreditGrantDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditGrantDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4786,6 +6197,7 @@ export interface components {
         ApiResponseListPlanCreditAllocationDto: {
             /** @description Response data */
             data?: components["schemas"]["PlanCreditAllocationDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4794,6 +6206,7 @@ export interface components {
         ApiResponseListCreditModelDto: {
             /** @description Response data */
             data?: components["schemas"]["CreditModelDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4802,6 +6215,7 @@ export interface components {
         ApiResponseListInvoiceDto: {
             /** @description Response data */
             data?: components["schemas"]["InvoiceDto"][];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4810,6 +6224,7 @@ export interface components {
         ApiResponseInvoiceDto: {
             /** @description Response data */
             data?: components["schemas"]["InvoiceDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4818,6 +6233,7 @@ export interface components {
         ApiResponseStripeApiKeysResponse: {
             /** @description Response data */
             data?: components["schemas"]["StripeApiKeysResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4836,9 +6252,391 @@ export interface components {
             webhookSecret?: string;
         };
         /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseClientPlanFeatureLinkedDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseClientPlanFeatureLinkedDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Client-facing feature information with pricing type */
+        ClientFeatureDto: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the feature
+             */
+            id?: string;
+            /**
+             * @description Display name of the feature
+             * @example API Access
+             */
+            name?: string;
+            /**
+             * @description Unique key for the feature
+             * @example api_access
+             */
+            key?: string;
+            /** @description Detailed description of the feature */
+            description?: string;
+            /**
+             * @description Pricing type: included, usage_based, or graduated
+             * @example usage_based
+             */
+            pricingType?: string;
+            /** @description Pricing details, null for included features */
+            pricing?: components["schemas"]["ClientFeaturePricingDto"];
+        };
+        /** @description Client-facing pricing details for a feature */
+        ClientFeaturePricingDto: {
+            /**
+             * @description Pricing model type
+             * @example usage
+             */
+            model?: string;
+            /**
+             * @description Price per unit of usage
+             * @example 0.05
+             */
+            pricePerUnit?: number;
+            /**
+             * @description Label for the usage unit
+             * @example messages
+             */
+            unitLabel?: string;
+            /**
+             * @description Maximum usage allowed
+             * @example 10000
+             */
+            maxUsage?: number;
+            /**
+             * @description Usage reset mode
+             * @example reset
+             */
+            resetMode?: string;
+            /** @description Graduated pricing tiers */
+            tiers?: components["schemas"]["ClientPriceTierDto"][];
+        };
+        /** @description Client-facing plan information */
+        ClientPlanDto: {
+            /**
+             * Format: uuid
+             * @description Unique identifier of the plan
+             */
+            id?: string;
+            /**
+             * @description Unique key for the plan
+             * @example pro_monthly
+             */
+            key?: string;
+            /**
+             * @description Display name of the plan
+             * @example Pro Plan
+             */
+            name?: string;
+            /** @description Detailed description of the plan */
+            description?: string;
+            /**
+             * @description Price amount in dollars
+             * @example 49
+             */
+            priceAmount?: number;
+            /**
+             * @description Currency code
+             * @example USD
+             */
+            currency?: string;
+            /**
+             * Format: int32
+             * @description Billing interval in months
+             * @example 1
+             */
+            intervalMonths?: number;
+            /**
+             * @description Billing timing
+             * @example IN_ARREARS
+             */
+            billingTiming?: string;
+            /** @description Additional metadata associated with the plan */
+            metadata?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Client-facing plan with its linked features and pricing details */
+        ClientPlanFeatureLinkedDto: {
+            /** @description Plan details */
+            plan?: components["schemas"]["ClientPlanDto"];
+            /** @description List of features linked to the plan with pricing information */
+            features?: components["schemas"]["ClientFeatureDto"][];
+            /** @description Credit allocations included with this plan */
+            creditAllocations?: components["schemas"]["PlanCreditAllocationDto"][];
+        };
+        /** @description Client-facing graduated pricing tier */
+        ClientPriceTierDto: {
+            /**
+             * @description Upper limit for this tier (number or "inf")
+             * @example 100
+             */
+            upTo?: unknown;
+            /**
+             * @description Price per unit in this tier
+             * @example 0.5
+             */
+            pricePerUnit?: number;
+            /**
+             * @description Flat fee for this tier
+             * @example 5
+             */
+            flatFee?: number;
+        };
+        PaginatedResponseClientPlanFeatureLinkedDto: {
+            items?: components["schemas"]["ClientPlanFeatureLinkedDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        PaginationMeta: {
+            /** Format: int64 */
+            total?: number;
+            /** Format: int32 */
+            limit?: number;
+            /** Format: int32 */
+            offset?: number;
+            hasMore?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseFeatureDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseFeatureDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PaginatedResponseFeatureDto: {
+            items?: components["schemas"]["FeatureDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseSubscriptionEntitlements: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseSubscriptionEntitlements"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        EntitlementSummary: {
+            featureKey?: string;
+            allowed?: boolean;
+        };
+        PaginatedResponseSubscriptionEntitlements: {
+            items?: components["schemas"]["SubscriptionEntitlements"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        SubscriptionEntitlements: {
+            /** Format: uuid */
+            subscriptionId?: string;
+            entitlements?: components["schemas"]["EntitlementSummary"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerUsageResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerUsageResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        CreditPoolUsage: {
+            poolId?: string;
+            denomination?: string;
+            balance?: number;
+            totalConsumed?: number;
+            /** @description Average credits burned per day since the pool was created */
+            averageDailyBurn?: number;
+            /**
+             * Format: date-time
+             * @description Projected date the balance reaches zero at the average burn rate. Null when burn is zero.
+             */
+            projectedDepletionDate?: string;
+            /** @description Current price of one credit from the price book. Null when unpriced. */
+            pricePerCredit?: number;
+            currency?: string;
+        };
+        CustomerUsageResponse: {
+            customerReferenceId?: string;
+            /** Format: date-time */
+            asOf?: string;
+            subscriptions?: components["schemas"]["SubscriptionUsage"][];
+            creditPools?: components["schemas"]["CreditPoolUsage"][];
+        };
+        FeatureUsage: {
+            featureKey?: string;
+            used?: number;
+            limit?: number;
+            remaining?: number;
+            /** @description Linear extrapolation of period usage: used ÷ elapsed period fraction. Null early in the period. */
+            projectedEndOfPeriod?: number;
+            wouldExceedLimit?: boolean;
+        };
+        SubscriptionUsage: {
+            subscriptionId?: string;
+            planKey?: string;
+            /** Format: date-time */
+            currentPeriodStart?: string;
+            /** Format: date-time */
+            currentPeriodEnd?: string;
+            features?: components["schemas"]["FeatureUsage"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseClientCreditPoolDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseClientCreditPoolDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Client-facing credit pool information */
+        ClientCreditPoolDto: {
+            /** @description Unique identifier of the credit pool */
+            id?: string;
+            /** @description Human-readable pool name */
+            name?: string;
+            /** @description Credit denomination (CREDITS, TOKENS, etc.) */
+            denomination?: string;
+            /** @description ISO currency code when denomination is monetary */
+            currency?: string;
+            /** @description Current available balance */
+            balance?: number;
+            /** @description Total credits ever granted */
+            totalGranted?: number;
+            /** @description Total credits consumed */
+            totalConsumed?: number;
+            /** @description Total credits expired */
+            totalExpired?: number;
+            /** @description Total credits reversed */
+            totalReversed?: number;
+            /** @description When true, zero balance blocks feature access */
+            hardLimit?: boolean;
+            /** @description Pool status: ACTIVE, FROZEN, DEPLETED, ARCHIVED */
+            status?: string;
+            /** @description Additional metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date-time
+             * @description Timestamp when the pool was created
+             */
+            createdAt?: string;
+        };
+        PaginatedResponseClientCreditPoolDto: {
+            items?: components["schemas"]["ClientCreditPoolDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseClientCreditPoolDto: {
+            /** @description Response data */
+            data?: components["schemas"]["ClientCreditPoolDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseCreditTransactionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseCreditTransactionDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PaginatedResponseCreditTransactionDto: {
+            items?: components["schemas"]["CreditTransactionDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseClientCreditGrantDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseClientCreditGrantDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Client-facing credit grant information */
+        ClientCreditGrantDto: {
+            /** @description Unique identifier of the grant */
+            id?: string;
+            /** @description Credit pool this grant belongs to */
+            creditPoolId?: string;
+            /** @description Grant type: PLAN_INCLUDED, PURCHASED, PROMOTIONAL, etc. */
+            grantType?: string;
+            /** @description Original grant amount */
+            amount?: number;
+            /** @description Remaining credits from this grant */
+            remaining?: number;
+            /**
+             * Format: date-time
+             * @description When this grant expires
+             */
+            expiresAt?: string;
+            /** @description Human-readable description */
+            description?: string;
+            /** @description Additional metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Format: date-time
+             * @description Timestamp when the grant was created
+             */
+            createdAt?: string;
+        };
+        PaginatedResponseClientCreditGrantDto: {
+            items?: components["schemas"]["ClientCreditGrantDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCheckoutSessionDto: {
+            /** @description Response data */
+            data?: components["schemas"]["CheckoutSessionDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        CheckoutSessionDto: {
+            id?: string;
+            purpose?: string;
+            status?: string;
+            checkoutUrl?: string;
+            subscriptionId?: string;
+            credits?: number;
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            completedAt?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponsePaginatedResponseInvoiceDto: {
+            /** @description Response data */
+            data?: components["schemas"]["PaginatedResponseInvoiceDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        PaginatedResponseInvoiceDto: {
+            items?: components["schemas"]["InvoiceDto"][];
+            pagination?: components["schemas"]["PaginationMeta"];
+        };
+        /** @description Generic API response wrapper */
         ApiResponseRevenueBridgeResponseDto: {
             /** @description Response data */
             data?: components["schemas"]["RevenueBridgeResponseDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -4901,6 +6699,7 @@ export interface components {
         ApiResponseAnalyticsResponseDto: {
             /** @description Response data */
             data?: components["schemas"]["AnalyticsResponseDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -5111,6 +6910,7 @@ export interface components {
         ApiResponseModelsAnalyticsResponseDto: {
             /** @description Response data */
             data?: components["schemas"]["ModelsAnalyticsResponseDto"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
             error?: components["schemas"]["Error"];
             meta?: unknown[];
             success?: boolean;
@@ -5432,6 +7232,105 @@ export interface operations {
             };
         };
     };
+    setOwner: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OwnerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAgentStatusResponse"];
+                };
+            };
+        };
+    };
+    getBudget_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseKeyBudgetDto"];
+                };
+            };
+        };
+    };
+    setBudget_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateKeyBudgetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseKeyBudgetDto"];
+                };
+            };
+        };
+    };
+    clearBudget_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -5478,14 +7377,28 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Customer created as provisional, subscribed to the free default plan; data carries the customer-scoped apiKey (shown once), limits, expires_at, status_url and nextSteps. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseAgentSignupResponse"];
                 };
+            };
+            /** @description No account has this slug, or the operator has not enabled the public catalog or agent signup. error.code=not_found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hourly signup cap reached for this account or IP. error.code=rate_limited; Retry-After header carries the seconds to wait. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -7164,6 +9077,474 @@ export interface operations {
             };
         };
     };
+    createSubscription_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientSubscriptionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successfully created a subscription */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubscribedCustomerResponse"];
+                };
+            };
+            /** @description planId is missing or names no plan on this account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Payment required: the plan is paid and the customer has no usable payment method. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the SubscribedCustomerResponse (checkoutUrl, checkoutSessionId). Customer-scoped (ck_) keys only. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseSubscribedCustomerResponse"];
+                };
+            };
+            /** @description Invalid plan or customer ID */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    changeSubscription: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientChangeSubscriptionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successfully changed the plan or scheduled the change */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+            /** @description Subscription or plan not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelSubscription_1: {
+        parameters: {
+            query?: {
+                cancelMode?: string;
+            };
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully cancelled the subscription */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+            /** @description Subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    record_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OutcomeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseOutcomeDto"];
+                };
+            };
+        };
+    };
+    createEvent: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseEventIngestionResponse"];
+                };
+            };
+        };
+    };
+    evaluateEntitlement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EntitlementEvaluationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseEntitlementResponse"];
+                };
+            };
+        };
+    };
+    postCustomer_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successfully created a new customer */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerClientResponse"];
+                };
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createSetupIntent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseMapStringString"];
+                };
+            };
+        };
+    };
+    setDefaultPaymentMethod: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DefaultPaymentMethodRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    listKeys_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCustomerApiKeyDto"];
+                };
+            };
+        };
+    };
+    createKey_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateCustomerApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerApiKeyDto"];
+                };
+            };
+        };
+    };
+    rotateKey_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                keyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerApiKeyDto"];
+                };
+            };
+        };
+    };
+    purchaseCredits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreditPurchaseRequest"];
+            };
+        };
+        responses: {
+            /** @description Credits purchased and granted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCreditPurchaseResult"];
+                };
+            };
+            /** @description The pool could not be resolved, or no price is published for the denomination */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCreditPurchaseResult"];
+                };
+            };
+            /** @description Payment required: no usable payment method, or the off-session charge was declined. success is false and error is the gate envelope: code=payment_required, gate=payment, action=complete_checkout, url=the checkout URL to hand to a human, poll=the checkout-session GET URL, retry_after=null. data still carries the CreditPurchaseResult (checkoutUrl, checkoutSessionId, declineReason). When the instance has no payment processor at all, url and poll are null and message says to contact the operator. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCreditPurchaseResult"];
+                };
+            };
+        };
+    };
+    createStripeCheckoutSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Checkout session created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStripeCheckoutSessionsResponse"];
+                };
+            };
+            /** @description Invalid subscription or billing state */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStripeCheckoutSessionsResponse"];
+                };
+            };
+            /** @description No DUE invoice found for subscription */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStripeCheckoutSessionsResponse"];
+                };
+            };
+        };
+    };
+    markInvoicePaid: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invoiceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invoice marked as paid successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+            /** @description Invoice not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    createStripeSubscriptionCheckoutSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Endpoint is deprecated and inaccessible */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseStripeCheckoutSessionsResponse"];
+                };
+            };
+        };
+    };
     generateInsights: {
         parameters: {
             query?: never;
@@ -7735,6 +10116,82 @@ export interface operations {
             };
         };
     };
+    getCustomer_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                externalClientCustomerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved customer details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerClientResponse"];
+                };
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Customer not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    patchCustomer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                externalClientCustomerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomerUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successfully updated the customer */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerClientResponse"];
+                };
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Customer not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getPricingCatalog: {
         parameters: {
             query?: never;
@@ -7755,6 +10212,27 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    llmsTxt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain;charset=utf-8": string;
+                    "text/plain; charset=utf-8": string;
                 };
             };
         };
@@ -7862,6 +10340,45 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseListEventGroupDto"];
                 };
+            };
+        };
+    };
+    getAgentFunnel: {
+        parameters: {
+            query?: {
+                /** @description Inclusive start date (UTC), ISO yyyy-MM-dd. Default: 30 days ago. */
+                from?: string;
+                /** @description Exclusive end date (UTC), ISO yyyy-MM-dd. Default: tomorrow, so today is included. */
+                to?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved agent funnel */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAgentFunnelResponse"];
+                };
+            };
+            /** @description from is not before to */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -8624,6 +11141,405 @@ export interface operations {
             };
         };
     };
+    getClientPlansFeatures: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved plan features with pricing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseClientPlanFeatureLinkedDto"];
+                };
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getFeatures_1: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved features */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseFeatureDto"];
+                };
+            };
+            /** @description Access Denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getFeatureByKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                featureKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved feature */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseFeatureDto"];
+                };
+            };
+            /** @description Feature not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCustomerEntitlements: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved customer entitlements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseSubscriptionEntitlements"];
+                };
+            };
+            /** @description Unable to locate customer */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getEntitlementByCustomerReferenceIdAndFeatureKey: {
+        parameters: {
+            query?: {
+                record?: boolean;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                "feature-key": string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved entitlement information */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseEntitlementResponse"];
+                };
+            };
+            /** @description Unable to locate customer */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerUsageResponse"];
+                };
+            };
+        };
+    };
+    status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAgentStatusResponse"];
+                };
+            };
+        };
+    };
+    getCreditPools: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved credit pools */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseClientCreditPoolDto"];
+                };
+            };
+            /** @description Customer not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCreditPool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved credit pool */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseClientCreditPoolDto"];
+                };
+            };
+            /** @description Customer or pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPoolTransactions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved transactions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseCreditTransactionDto"];
+                };
+            };
+            /** @description Customer or pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getPoolGrants: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                poolId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully retrieved grants */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseClientCreditGrantDto"];
+                };
+            };
+            /** @description Customer or pool not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getCurrentPrices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseListCreditPriceDto"];
+                };
+            };
+        };
+    };
+    getCheckoutSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                checkoutSessionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCheckoutSessionDto"];
+                };
+            };
+        };
+    };
+    getInvoicesByExternalClientCustomerId: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                externalClientCustomerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Invoices retrieved successfully */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePaginatedResponseInvoiceDto"];
+                };
+            };
+            /** @description Customer reference not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getRevenueBridge: {
         parameters: {
             query?: {
@@ -8743,6 +11659,71 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    runbook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/markdown;charset=utf-8": string;
+                    "text/markdown; charset=utf-8": string;
+                };
+            };
+        };
+    };
+    agentManifest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    skillsIndex: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -8988,6 +11969,87 @@ export interface operations {
             header?: never;
             path: {
                 priceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+        };
+    };
+    cancelScheduledSubscriptionChanges: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully cancelled scheduled changes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+            /** @description Subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    cancelScheduledSubscriptionCancellation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subscriptionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successfully cancelled the scheduled cancellation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseVoid"];
+                };
+            };
+            /** @description Subscription not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    revokeKey_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+                keyId: string;
             };
             cookie?: never;
         };
