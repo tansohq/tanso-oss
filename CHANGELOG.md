@@ -81,6 +81,10 @@ access, then stalled at pay on a 500.
   instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`
   code but now carry the gate object (`gate: "scope"`, with `use_own_reference`
   or `request_scope` as the action).
+- With Tanso handling billing, a paid subscribe from a customer that has no
+  email answers 402 with `action: "nominate_owner"` and the owner endpoint as
+  `url`, instead of a 500 from Stripe refusing to send the invoice. Nominating
+  an owner also updates the mirrored Stripe customer's email.
 - The discovery documents (`/llms.txt`, `/agent-signup.md`, `agent.json`, the
   skills index) no longer set `produces`, so a client sending
   `Accept: application/json` gets the document instead of a 406.

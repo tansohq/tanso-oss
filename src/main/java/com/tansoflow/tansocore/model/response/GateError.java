@@ -55,6 +55,11 @@ public class GateError extends Error {
                 "Payment is required: hand url to a human to complete checkout, then poll for the outcome.");
     }
 
+    public static GateError ownerEmailRequired(String ownerUrl) {
+        return new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "nominate_owner", ownerUrl, null, null,
+                "Stripe needs an email to send the invoice to; PUT {\"email\": ...} to url, then retry this call.");
+    }
+
     public static GateError paymentRequiredNoProcessor() {
         return new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "complete_checkout", null, null, null,
                 "Payment is required but no payment processor is connected to this instance; contact the operator.");

@@ -94,6 +94,8 @@ class AgentSignupServiceImplTest {
     private StripePaymentMethodService stripePaymentMethodService;
     @Mock
     private CheckoutSessionRepository checkoutSessionRepository;
+    @Mock
+    private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     @InjectMocks
     private AgentSignupServiceImpl service;
@@ -105,7 +107,11 @@ class AgentSignupServiceImplTest {
     private Plan plan;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
+                ((org.springframework.transaction.support.TransactionCallback<Object>) inv.getArgument(0))
+                        .doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus()));
         account = new Account();
         account.setId(accountId);
         account.setSlug("acme");

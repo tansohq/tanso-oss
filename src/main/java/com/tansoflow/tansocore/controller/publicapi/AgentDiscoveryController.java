@@ -479,6 +479,7 @@ public class AgentDiscoveryController {
             | status | code | gate | action | do this |
             |--------|------|------|--------|---------|
             | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
+            | 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to. `PUT {"email": ...}` to `url` (the owner endpoint), then retry the call. Signing up with an email avoids this. |
             | 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window is used up. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
             | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap or the mandate cap. `retry_after` is null; waiting will not help. Ask the owner to raise the cap or make a smaller purchase. |
             | 403 | `forbidden` | `scope` | `use_own_reference` | The key belongs to another customer. Message: "This API key belongs to another customer; use your own customerReferenceId or omit it." |

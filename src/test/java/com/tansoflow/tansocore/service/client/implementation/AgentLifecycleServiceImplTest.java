@@ -74,7 +74,8 @@ class AgentLifecycleServiceImplTest {
         transactionTemplate = mock(TransactionTemplate.class);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
                 ((TransactionCallback<Object>) inv.getArgument(0)).doInTransaction(new SimpleTransactionStatus()));
-        service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, keyBudgetService, transactionTemplate);
+        service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, keyBudgetService, transactionTemplate,
+                mock(com.tansoflow.tansocore.integration.stripe.StripeSyncService.class));
 
         Account account = new Account();
         account.setId(accountId);

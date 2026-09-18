@@ -177,8 +177,11 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                 return stripeCustomerRepository.findByCustomer(customer);
             }
 
+            // Agent-created customers often have no name; "null null" on an invoice is not a name.
+            String name = ((customer.getFirstName() == null ? "" : customer.getFirstName()) + " "
+                    + (customer.getLastName() == null ? "" : customer.getLastName())).trim();
             CustomerCreateParams params = CustomerCreateParams.builder()
-                    .setName(customer.getFirstName() + " " + customer.getLastName())
+                    .setName(name.isEmpty() ? customer.getExternalClientCustomerId() : name)
                     .setEmail(customer.getEmail())
                     .putMetadata("tanso_account_id", accountId.toString())
                     .putMetadata("tanso_customer_id", tansoCustomerId.toString())
@@ -561,6 +564,18 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         stripe.v1().customers().update(stripeCustomerId, update);
         return paymentMethodId;
+    }
+
+    @Override
+    public void syncCustomerEmail(UUID accountId, UUID customerId, String email) throws StripeException {
+        Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
+        StripeCustomer stripeCustomer = stripeCustomerRepository.findByCustomer(customer);
+        if (stripeCustomer == null) {
+            return;
+        }
+        stripeClientFactory.forAccount(accountId).v1().customers().update(
+                stripeCustomer.getStripeCustomerExternalId(),
+                CustomerUpdateParams.builder().setEmail(email).build());
     }
 
     @Override

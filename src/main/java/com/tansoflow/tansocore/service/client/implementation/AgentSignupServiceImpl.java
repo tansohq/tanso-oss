@@ -47,7 +47,6 @@ import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -73,9 +72,11 @@ public class AgentSignupServiceImpl implements AgentSignupService {
     private final ClientEntitlementService clientEntitlementService;
     private final StripePaymentMethodService stripePaymentMethodService;
     private final CheckoutSessionRepository checkoutSessionRepository;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
+    // Not @Transactional on purpose: the Stripe setup session looks the customer up in its own
+    // transaction, so the customer, subscription and key must be committed before the mandate step.
     @Override
-    @Transactional
     public AgentSignupResponse signup(String slug, AgentSignupRequest request, String baseUrl, String clientIp) {
         Account account = accountRepository.findBySlug(slug)
                 .orElseThrow(() -> new ResourceNotFoundException("No signup at this address"));
@@ -105,8 +106,11 @@ public class AgentSignupServiceImpl implements AgentSignupService {
 
         // The owner email is unverified, so it never resolves to an existing customer: that would let
         // anyone who knows the address mint a key for someone else's account.
-        Customer customer = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
-        subscriptionService.subscribe(customer, plan, account.getId().toString());
+        Customer customer = transactionTemplate.execute(status -> {
+            Customer created = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
+            subscriptionService.subscribe(created, plan, account.getId().toString());
+            return created;
+        });
         String referenceId = customer.getExternalClientCustomerId();
 
         CustomerApiKeyDto key = customerApiKeyService.createKey(

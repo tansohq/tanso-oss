@@ -69,6 +69,7 @@ public class SubscriptionClientController {
     private final SubscriptionService subscriptionService;
     private final com.tansoflow.tansocore.service.internal.account.AccountService accountService;
     private final com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
+    private final com.tansoflow.tansocore.service.internal.account.CustomerService customerService;
 
     /** ck_ callers may only touch subscriptions belonging to their own customer. */
     private void requireOwnSubscription(UserContext userContext, String subscriptionId) {
@@ -120,6 +121,21 @@ public class SubscriptionClientController {
                 && "DUE".equals(subscribedCustomerResponse.getInvoice().getStatus())) {
             AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
             if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
+                // Stripe will not send an invoice to a customer without an email. An agent that signed up
+                // without one gets told exactly where to put it instead of a 500.
+                com.tansoflow.tansocore.entity.Customer customer = customerService
+                        .retrieveCustomerByExternalClientCustomerIdAndAccount(
+                                subscriptionRequest.getCustomerReferenceId(), userContext.getAccountId());
+                if (customer.getEmail() == null || customer.getEmail().isBlank()) {
+                    String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+                    String ownerUrl = baseUrl + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/owner";
+                    return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
+                            .body(ApiResponse.<SubscribedCustomerResponse>builder()
+                                    .data(subscribedCustomerResponse)
+                                    .error(GateError.ownerEmailRequired(ownerUrl))
+                                    .success(false)
+                                    .build());
+                }
                 try {
                     StripePaymentLinkDto link = stripeSyncService.syncNewInvoice(
                             UUID.fromString(subscribedCustomerResponse.getInvoice().getId()),

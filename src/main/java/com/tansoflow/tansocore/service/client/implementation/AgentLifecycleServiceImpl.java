@@ -47,6 +47,7 @@ public class AgentLifecycleServiceImpl implements AgentLifecycleService {
     private final CustomerApiKeyService customerApiKeyService;
     private final KeyBudgetService keyBudgetService;
     private final TransactionTemplate transactionTemplate;
+    private final com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
 
     @Override
     @Transactional
@@ -91,6 +92,13 @@ public class AgentLifecycleServiceImpl implements AgentLifecycleService {
             customer.setEmail(customer.getAgentOwnerEmail());
         }
         customerRepository.save(customer);
+        // Stripe refuses to send an invoice to a customer without an email, so the mirror has to learn it too.
+        try {
+            stripeSyncService.syncCustomerEmail(customer.getAccount().getId(), customer.getId(), customer.getEmail());
+        } catch (com.stripe.exception.StripeException e) {
+            throw new IllegalStateException("Stripe rejected the owner email for customer "
+                    + customer.getExternalClientCustomerId() + ": " + e.getMessage(), e);
+        }
     }
 
     @Override

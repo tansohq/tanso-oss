@@ -60,6 +60,9 @@ public interface StripeSyncService {
 
     boolean stripeInvoiceLinked(String stripeInvoiceId);
 
+    /** Pushes a changed email to the mirrored Stripe customer, if one exists. No-op otherwise. */
+    void syncCustomerEmail(UUID accountId, UUID customerId, String email) throws StripeException;
+
     StripeInvoice retrieveStripeInvoiceLinkedData(String stripeInvoiceId);
 
     StripePaymentLinkDto createSubscriptionCheckoutSession(UUID accountId, UUID customerId, UUID planId) throws StripeException;

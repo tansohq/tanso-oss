@@ -166,7 +166,7 @@ class AgentDiscoveryControllerTest {
         for (String code : List.of("payment_required", "budget_exceeded", "spend_cap_exceeded", "scope_denied", "`forbidden`")) {
             assertTrue(body.contains(code), "runbook missing code " + code);
         }
-        for (String action : List.of("complete_checkout", "wait", "raise_spend_cap", "use_own_reference", "request_scope")) {
+        for (String action : List.of("complete_checkout", "nominate_owner", "wait", "raise_spend_cap", "use_own_reference", "request_scope")) {
             assertTrue(body.contains("`" + action + "`"), "runbook missing action " + action);
         }
         assertFalse(body.contains("claim_required"));
