@@ -114,12 +114,19 @@ public class CustomerStatusClientController {
                 customer.getExternalClientCustomerId(), userContext.getAccountId());
 
         Map<String, String> periodByPlan = new LinkedHashMap<>();
+        // The plan an agent cares about is the one it most recently got onto, so a paid upgrade wins over the free default.
+        String plan = null;
+        java.time.Instant newest = null;
         for (com.tansoflow.tansocore.entity.Subscription subscription : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
             Integer months = subscription.getPlan().getIntervalMonths();
             periodByPlan.put(subscription.getPlan().getKey(), months == null || months == 1 ? "month" : months + " months");
+            if (Boolean.TRUE.equals(subscription.getIsActive())
+                    && (newest == null || subscription.getCreatedAt().isAfter(newest))) {
+                newest = subscription.getCreatedAt();
+                plan = subscription.getPlan().getKey();
+            }
         }
 
-        String plan = null;
         Map<String, AgentSignupResponse.FeatureLimit> limits = new LinkedHashMap<>();
         Map<String, BigDecimal> remaining = new LinkedHashMap<>();
         for (CustomerUsageResponse.SubscriptionUsage subscription : usage.getSubscriptions()) {

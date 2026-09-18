@@ -120,6 +120,21 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 : request.getPlanKey();
         Plan plan = planService.retrievePlanByIdOrKey(customer.getAccount(), planIdentifier);
 
+        // An agent that got a 402 retries the same call after paying or nominating an owner. That retry
+        // must hand back the subscription and invoice already waiting, not open a second pair.
+        for (Subscription existing : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
+            if (Boolean.TRUE.equals(existing.getIsActive()) || !existing.getPlan().getId().equals(plan.getId())) {
+                continue;
+            }
+            Invoice due = invoiceService.retrieveCurrentlyDueBySubscription(existing);
+            if (due != null) {
+                SubscribedCustomerResponse pending = new SubscribedCustomerResponse();
+                pending.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(existing));
+                pending.setInvoice(invoiceMapper.invoiceEntityToInvoiceDto(due));
+                return pending;
+            }
+        }
+
         return subscribe(customer, plan, accountId, request.getPaymentMethodId());
     }
 

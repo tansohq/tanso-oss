@@ -617,4 +617,43 @@ class SubscriptionServiceImplTest {
 
         assertNotNull(response);
     }
+
+    // An agent that got a 402 retries the same subscribe after paying or nominating an owner. The retry
+    // must return the subscription and DUE invoice already waiting, not create a second pair.
+    @Test
+    void clientSubscribeRetryReturnsThePendingSubscriptionInsteadOfASecondOne() {
+        customer.setExternalClientCustomerId("agent_retry");
+        plan.setKey("starter");
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        subscription.setIsActive(false);
+        com.tansoflow.tansocore.entity.Invoice due = new com.tansoflow.tansocore.entity.Invoice();
+        due.setId(UUID.randomUUID());
+        due.setSubscription(subscription);
+        due.setStatus(InvoiceStatus.DUE.name());
+        com.tansoflow.tansocore.model.subscription.SubscriptionDto subscriptionDto =
+                new com.tansoflow.tansocore.model.subscription.SubscriptionDto();
+        subscriptionDto.setId(subscriptionId.toString());
+        com.tansoflow.tansocore.model.billing.InvoiceDto invoiceDto = new com.tansoflow.tansocore.model.billing.InvoiceDto();
+        invoiceDto.setId(due.getId().toString());
+        invoiceDto.setStatus("DUE");
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount("agent_retry", account.getId().toString()))
+                .thenReturn(customer);
+        when(planService.retrievePlanByIdOrKey(account, "starter")).thenReturn(plan);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(java.util.List.of(subscription));
+        when(invoiceService.retrieveCurrentlyDueBySubscription(subscription)).thenReturn(due);
+        when(subscriptionMapper.subscriptionEntityToSubscriptionDto(subscription)).thenReturn(subscriptionDto);
+        when(invoiceMapper.invoiceEntityToInvoiceDto(due)).thenReturn(invoiceDto);
+
+        com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest request =
+                new com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest();
+        request.setCustomerReferenceId("agent_retry");
+        request.setPlanKey("starter");
+
+        var response = subscriptionService.clientSubscribeCustomer(request, account.getId().toString());
+
+        assertEquals(subscriptionId.toString(), response.getSubscription().getId());
+        assertEquals("DUE", response.getInvoice().getStatus());
+        verify(invoiceService, org.mockito.Mockito.never()).createNewInvoice(any(), any(), any(), any());
+    }
 }

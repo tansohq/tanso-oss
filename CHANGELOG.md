@@ -85,6 +85,9 @@ access, then stalled at pay on a 500.
   email answers 402 with `action: "nominate_owner"` and the owner endpoint as
   `url`, instead of a 500 from Stripe refusing to send the invoice. Nominating
   an owner also updates the mirrored Stripe customer's email.
+- Retrying a paid subscribe for a plan that already has an inactive subscription
+  and a DUE invoice returns that pair instead of opening a second one, so an
+  agent looping on a 402 does not pile up invoices.
 - The discovery documents (`/llms.txt`, `/agent-signup.md`, `agent.json`, the
   skills index) no longer set `produces`, so a client sending
   `Accept: application/json` gets the document instead of a 406.
