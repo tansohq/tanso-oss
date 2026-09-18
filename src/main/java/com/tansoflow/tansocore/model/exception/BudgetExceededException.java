@@ -40,8 +40,8 @@ public class BudgetExceededException extends RuntimeException {
     public BudgetExceededException(SpendKind kind, BigDecimal limit, BigDecimal spent,
                                    BigDecimal requested, Instant resetsAt) {
         super("This API key's " + (kind == SpendKind.CREDITS ? "credit" : "spend")
-                + " budget of " + limit + " would be exceeded: " + spent
-                + " already used, " + requested + " requested"
+                + " budget of " + plain(limit) + " would be exceeded: " + plain(spent)
+                + " already used, " + plain(requested) + " requested"
                 + (resetsAt != null ? ", window resets at " + resetsAt : ""));
         this.kind = kind;
         this.limit = limit;
@@ -69,6 +69,11 @@ public class BudgetExceededException extends RuntimeException {
         this.spent = spent;
         this.requested = requested;
         this.resetsAt = resetsAt;
+    }
+
+    /** Ledger sums carry six decimals; "10.000000 already used" reads as noise to an agent. */
+    private static String plain(BigDecimal value) {
+        return value == null ? "none" : value.stripTrailingZeros().toPlainString();
     }
 
     public BigDecimal getRemaining() {
