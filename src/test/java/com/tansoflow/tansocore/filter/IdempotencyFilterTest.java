@@ -148,4 +148,31 @@ class IdempotencyFilterTest {
         assertThat(response.getStatus()).isEqualTo(400);
         assertThat(response.getContentAsString()).contains("\"code\":\"validation_failed\"");
     }
+
+    // Regression: the filter read the body to hash it and passed on a wrapper that does not replay it, so the
+    // controller saw an empty body and every POST carrying Idempotency-Key failed as "Malformed request body".
+    // Found by an agent running end to end against the stack with agent-ready, 2026-09-18.
+    @Test
+    void controllerStillReadsTheBodyAfterTheFilterHashedIt() throws ServletException, IOException {
+        authenticate();
+        when(idempotencyService.findReplay(eq(accountId), anyString(), eq("key-1"), eq("hash-1")))
+                .thenReturn(Optional.empty());
+        StringBuilder seenByController = new StringBuilder();
+        StringBuilder seenByReader = new StringBuilder();
+        MockFilterChain chain = new MockFilterChain(new jakarta.servlet.http.HttpServlet() {
+            @Override
+            protected void service(jakarta.servlet.http.HttpServletRequest req, jakarta.servlet.http.HttpServletResponse res)
+                    throws IOException {
+                seenByController.append(new String(req.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+                seenByReader.append(req.getReader().readLine());
+                res.setStatus(201);
+            }
+        });
+
+        filter.doFilter(post("key-1"), new MockHttpServletResponse(), chain);
+
+        assertThat(seenByController.toString()).isEqualTo("{\"planId\":\"p1\"}");
+        assertThat(seenByReader.toString()).isEqualTo("{\"planId\":\"p1\"}");
+        verify(idempotencyService).store(eq(accountId), anyString(), eq("key-1"), eq("hash-1"), eq(201), anyString());
+    }
 }
