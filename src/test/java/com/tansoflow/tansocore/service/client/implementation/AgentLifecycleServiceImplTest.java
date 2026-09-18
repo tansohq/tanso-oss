@@ -63,6 +63,7 @@ class AgentLifecycleServiceImplTest {
     private KeyBudgetService keyBudgetService;
 
     private TransactionTemplate transactionTemplate;
+    private com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
     private AgentLifecycleServiceImpl service;
 
     private final UUID accountId = UUID.randomUUID();
@@ -74,8 +75,9 @@ class AgentLifecycleServiceImplTest {
         transactionTemplate = mock(TransactionTemplate.class);
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
                 ((TransactionCallback<Object>) inv.getArgument(0)).doInTransaction(new SimpleTransactionStatus()));
+        stripeSyncService = mock(com.tansoflow.tansocore.integration.stripe.StripeSyncService.class);
         service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, keyBudgetService, transactionTemplate,
-                mock(com.tansoflow.tansocore.integration.stripe.StripeSyncService.class));
+                stripeSyncService);
 
         Account account = new Account();
         account.setId(accountId);
@@ -173,5 +175,22 @@ class AgentLifecycleServiceImplTest {
 
         assertThat(service.expireProvisional(now)).isEqualTo(0);
         verify(customerApiKeyService, never()).listKeys(any(), any());
+    }
+
+    @Test
+    void ownerEmailFillsABlankEmailAndTellsStripe() throws Exception {
+        customer.setEmail("  ");
+        service.setOwnerEmail(customer, "Owner@Example.com");
+        assertThat(customer.getEmail()).isEqualTo("owner@example.com");
+        verify(stripeSyncService).syncCustomerEmail(accountId, customer.getId(), "owner@example.com");
+    }
+
+    @Test
+    void ownerEmailLeavesAnExistingEmailAndSkipsStripe() throws Exception {
+        customer.setEmail("billing@example.com");
+        service.setOwnerEmail(customer, "owner@example.com");
+        assertThat(customer.getEmail()).isEqualTo("billing@example.com");
+        assertThat(customer.getAgentOwnerEmail()).isEqualTo("owner@example.com");
+        verify(stripeSyncService, never()).syncCustomerEmail(any(), any(), any());
     }
 }

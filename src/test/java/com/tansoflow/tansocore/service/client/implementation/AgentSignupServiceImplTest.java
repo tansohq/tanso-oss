@@ -279,6 +279,25 @@ class AgentSignupServiceImplTest {
         assertThatThrownBy(() -> service.signup("acme", request, "http://x", null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("USD");
+        verify(customerService, never()).createCustomer(anyString(), any());
+        verify(customerApiKeyService, never()).createKey(anyString(), anyString(), any());
+    }
+
+    @Test
+    void aStripeHelperFailureStillReturnsTheKeyWithTheMandateUnavailable() throws Exception {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any()))
+                .thenThrow(new RuntimeException("wrapped: Customer not found"));
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("25"));
+        request.setSpendMandate(mandate);
+
+        AgentSignupResponse response = service.signup("acme", request, "http://x", null);
+
+        assertThat(response.getApiKey()).isEqualTo("ck_test_generated");
+        assertThat(response.getSpendMandate().getStatus()).isEqualTo("unavailable");
     }
 
     @Test

@@ -88,11 +88,16 @@ public class AgentLifecycleServiceImpl implements AgentLifecycleService {
     @Transactional
     public void setOwnerEmail(Customer customer, String email) {
         customer.setAgentOwnerEmail(email.trim().toLowerCase(Locale.ROOT));
-        if (customer.getEmail() == null) {
+        boolean emailWasMissing = customer.getEmail() == null || customer.getEmail().isBlank();
+        if (emailWasMissing) {
             customer.setEmail(customer.getAgentOwnerEmail());
         }
         customerRepository.save(customer);
+        if (!emailWasMissing) {
+            return;
+        }
         // Stripe refuses to send an invoice to a customer without an email, so the mirror has to learn it too.
+        // Only called when the email actually changed, so a Stripe outage does not block re-nominating an owner.
         try {
             stripeSyncService.syncCustomerEmail(customer.getAccount().getId(), customer.getId(), customer.getEmail());
         } catch (com.stripe.exception.StripeException e) {

@@ -104,16 +104,28 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         String ownerEmail = request.getEmail() == null || request.getEmail().isBlank()
                 ? null : request.getEmail().trim().toLowerCase(Locale.ROOT);
 
+        // Everything that can reject the request runs before anything is saved, so a 400 never leaves
+        // behind an account the agent was not given a key for.
+        AgentSignupRequest.SpendMandate requestedMandate = request.getSpendMandate();
+        if (requestedMandate != null && requestedMandate.getCurrency() != null
+                && !requestedMandate.getCurrency().equalsIgnoreCase(settings.getCurrency())) {
+            throw new IllegalArgumentException("spend_mandate.currency must be " + settings.getCurrency()
+                    + ", the account currency");
+        }
+        List<FeatureDto> features = featureService.retrieveFeaturesLinkedToPlan(plan);
+
         // The owner email is unverified, so it never resolves to an existing customer: that would let
         // anyone who knows the address mint a key for someone else's account.
-        // Customer, subscription and key commit together: a customer without a key is one the agent can never reach.
-        record Created(Customer customer, CustomerApiKeyDto key) {}
+        // Customer, subscription, key and limits commit together: a customer without a key is one the
+        // agent can never reach. Only the optional mandate step runs after the commit.
+        record Created(Customer customer, CustomerApiKeyDto key, AgentSignupResponse.AgentLimits limits) {}
         Created created = transactionTemplate.execute(status -> {
             Customer c = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
             subscriptionService.subscribe(c, plan, account.getId().toString());
             CustomerApiKeyDto k = customerApiKeyService.createKey(
                     account.getId().toString(), c.getExternalClientCustomerId(), List.of("read", "purchase"));
-            return new Created(c, k);
+            AgentSignupResponse.AgentLimits l = limits(account, settings, plan, c.getExternalClientCustomerId(), features);
+            return new Created(c, k, l);
         });
         Customer customer = created.customer();
         CustomerApiKeyDto key = created.key();
@@ -121,7 +133,6 @@ public class AgentSignupServiceImpl implements AgentSignupService {
 
         log.info("Agent signup on account {}: customer {} plan {}", account.getId(), referenceId, plan.getKey());
 
-        List<FeatureDto> features = featureService.retrieveFeaturesLinkedToPlan(plan);
         String exampleFeatureKey = features.stream()
                 .map(FeatureDto::getKey)
                 .filter(k -> k != null && !k.isBlank())
@@ -136,7 +147,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 .plan(plan.getKey())
                 .status(customer.getAgentStatus().name().toLowerCase(Locale.ROOT))
                 .expiresAt(customer.getAgentExpiresAt())
-                .limits(limits(account, settings, plan, referenceId, features))
+                .limits(created.limits())
                 .spendMandate(spendMandate(account, settings, customer, key, request.getSpendMandate()))
                 .statusUrl(customerBase + "/status")
                 .ownerUrl(customerBase + "/owner")
@@ -191,12 +202,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
             return null;
         }
         String period = requested.getPeriod() == null ? "month" : requested.getPeriod().toLowerCase(Locale.ROOT);
-        String currency = requested.getCurrency() == null
-                ? settings.getCurrency() : requested.getCurrency().toUpperCase(Locale.ROOT);
-        if (!currency.equalsIgnoreCase(settings.getCurrency())) {
-            throw new IllegalArgumentException("spend_mandate.currency must be " + settings.getCurrency()
-                    + ", the account currency");
-        }
+        String currency = settings.getCurrency();
         AgentSignupResponse.AgentSpendMandate.AgentSpendMandateBuilder mandate = AgentSignupResponse.AgentSpendMandate.builder()
                 .maxAmount(requested.getMaxAmount())
                 .currency(currency)
@@ -215,9 +221,11 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         StripePaymentMethodService.HostedCheckout hosted;
         try {
             hosted = stripePaymentMethodService.createSetupCheckoutSession(account.getId(), customer.getId(), metadata);
-        } catch (StripeException e) {
-            // The mandate is optional; the account and key are still good. The agent can retry via the status endpoint later.
-            log.error("Stripe refused the spend mandate session for agent customer {} on account {}: {}",
+        } catch (StripeException | RuntimeException e) {
+            // The account and key are already committed and the mandate is optional, so a failure here must not
+            // turn a working signup into an error the agent cannot recover from. Stripe helpers also wrap their
+            // failures in RuntimeException, hence both.
+            log.error("Could not open the spend mandate session for agent customer {} on account {}: {}",
                     customer.getExternalClientCustomerId(), account.getId(), e.getMessage(), e);
             return mandate.status("unavailable").build();
         }

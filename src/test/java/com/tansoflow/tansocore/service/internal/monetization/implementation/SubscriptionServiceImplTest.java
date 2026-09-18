@@ -623,6 +623,7 @@ class SubscriptionServiceImplTest {
     @Test
     void clientSubscribeRetryReturnsThePendingSubscriptionInsteadOfASecondOne() {
         customer.setExternalClientCustomerId("agent_retry");
+        customer.setAgentStatus(com.tansoflow.tansocore.entity.AgentStatus.PROVISIONAL);
         plan.setKey("starter");
         plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
         subscription.setIsActive(false);
@@ -655,5 +656,49 @@ class SubscriptionServiceImplTest {
         assertEquals(subscriptionId.toString(), response.getSubscription().getId());
         assertEquals("DUE", response.getInvoice().getStatus());
         verify(invoiceService, org.mockito.Mockito.never()).createNewInvoice(any(), any(), any(), any());
+    }
+
+    // After the agent pays, the same retry must not open a second subscription: it gets the active one back.
+    @Test
+    void clientSubscribeRetryAfterPayingReturnsTheActiveSubscription() {
+        customer.setExternalClientCustomerId("agent_paid");
+        customer.setAgentStatus(com.tansoflow.tansocore.entity.AgentStatus.CLAIMED);
+        plan.setKey("starter");
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        subscription.setIsActive(true);
+        com.tansoflow.tansocore.model.subscription.SubscriptionDto subscriptionDto =
+                new com.tansoflow.tansocore.model.subscription.SubscriptionDto();
+        subscriptionDto.setId(subscriptionId.toString());
+
+        when(customerService.retrieveCustomerByExternalClientCustomerIdAndAccount("agent_paid", account.getId().toString()))
+                .thenReturn(customer);
+        when(planService.retrievePlanByIdOrKey(account, "starter")).thenReturn(plan);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(java.util.List.of(subscription));
+        when(subscriptionMapper.subscriptionEntityToSubscriptionDto(subscription)).thenReturn(subscriptionDto);
+
+        com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest request =
+                new com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest();
+        request.setCustomerReferenceId("agent_paid");
+        request.setPlanKey("starter");
+
+        var response = subscriptionService.clientSubscribeCustomer(request, account.getId().toString());
+
+        assertEquals(subscriptionId.toString(), response.getSubscription().getId());
+        assertEquals(null, response.getInvoice());
+        verify(keyBudgetService, org.mockito.Mockito.never()).assertWithinBudget(any(), any(), any());
+        verify(subscriptionRepository, org.mockito.Mockito.never()).saveAndFlush(any());
+    }
+
+    // A tenant-created customer (no agent status) keeps the old behavior: no short-circuit, the budget check runs.
+    @Test
+    void subscribeForNonAgentCustomerDoesNotReuseAPendingSubscription() {
+        customer.setAgentStatus(null);
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        org.mockito.Mockito.doThrow(new IllegalStateException("stop after the guards")).when(keyBudgetService)
+                .assertWithinBudget(any(), any(), any());
+
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> subscriptionService.subscribe(customer, plan, account.getId().toString(), null));
+        verify(invoiceService, org.mockito.Mockito.never()).retrieveCurrentlyDueBySubscription(any());
     }
 }
