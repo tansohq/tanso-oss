@@ -568,6 +568,11 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
     @Override
     public void syncCustomerEmail(UUID accountId, UUID customerId, String email) throws StripeException {
+        // Disconnecting Stripe deletes the key but leaves the mirror rows; there is nothing to call then.
+        AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
+        if (settings == null || !settings.isStripeEnabled()) {
+            return;
+        }
         Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
         StripeCustomer stripeCustomer = stripeCustomerRepository.findByCustomer(customer);
         if (stripeCustomer == null) {

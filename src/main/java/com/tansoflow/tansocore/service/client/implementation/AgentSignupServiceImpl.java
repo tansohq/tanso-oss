@@ -106,15 +106,18 @@ public class AgentSignupServiceImpl implements AgentSignupService {
 
         // The owner email is unverified, so it never resolves to an existing customer: that would let
         // anyone who knows the address mint a key for someone else's account.
-        Customer customer = transactionTemplate.execute(status -> {
-            Customer created = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
-            subscriptionService.subscribe(created, plan, account.getId().toString());
-            return created;
+        // Customer, subscription and key commit together: a customer without a key is one the agent can never reach.
+        record Created(Customer customer, CustomerApiKeyDto key) {}
+        Created created = transactionTemplate.execute(status -> {
+            Customer c = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
+            subscriptionService.subscribe(c, plan, account.getId().toString());
+            CustomerApiKeyDto k = customerApiKeyService.createKey(
+                    account.getId().toString(), c.getExternalClientCustomerId(), List.of("read", "purchase"));
+            return new Created(c, k);
         });
+        Customer customer = created.customer();
+        CustomerApiKeyDto key = created.key();
         String referenceId = customer.getExternalClientCustomerId();
-
-        CustomerApiKeyDto key = customerApiKeyService.createKey(
-                account.getId().toString(), referenceId, List.of("read", "purchase"));
 
         log.info("Agent signup on account {}: customer {} plan {}", account.getId(), referenceId, plan.getKey());
 
