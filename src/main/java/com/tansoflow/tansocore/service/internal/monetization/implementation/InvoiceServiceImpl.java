@@ -56,6 +56,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import com.tansoflow.tansocore.model.subscription.type.CancelModes;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -446,6 +448,45 @@ public class InvoiceServiceImpl implements InvoiceService {
         markInvoiceAsPaid(invoice);
     }
 
+    /**
+     * A paid plan replaces a free one. An agent signs up onto the free default plan and then pays for a real plan;
+     * without this both stayed active and the free plan kept granting its own entitlements.
+     * Only free plans are retired. Two paid subscriptions is a legitimate setup (a customer on two products), and
+     * cancelling one because another activated would throw away revenue the customer agreed to.
+     */
+    private void retireFreeSubscriptionsReplacedBy(Subscription activated) {
+        if (isFreePlan(activated)) {
+            return;
+        }
+        Instant now = Instant.now();
+        for (Subscription other : subscriptionRepository.findSubscriptionsByCustomer_Id(activated.getCustomer().getId())) {
+            if (other.getId().equals(activated.getId()) || !Boolean.TRUE.equals(other.getIsActive()) || !isFreePlan(other)) {
+                continue;
+            }
+            other.setIsActive(false);
+            other.setCancelledAt(now);
+            other.setCancelMode(CancelModes.IMMEDIATE.name());
+            other.setCancelEffectiveAt(now);
+            other.setCurrentPeriodEnd(now);
+            subscriptionRepository.save(other);
+
+            entitlementService.processEntitlementRevokeForSubscription(other);
+            creditService.clawBackPlanIncludedCredits(other.getId(), other.getAccount().getId());
+
+            log.info("Retired free subscription {} on plan {}; customer {} activated paid plan {}",
+                    other.getId(), other.getPlan().getKey(), activated.getCustomer().getExternalClientCustomerId(),
+                    activated.getPlan().getKey());
+
+            eventPublisher.publishEvent(new com.tansoflow.tansocore.model.event.service.SubscriptionCancelledEvent(
+                    other.getAccount().getId(), other.getId(), CancelModes.IMMEDIATE.name()));
+        }
+    }
+
+    private boolean isFreePlan(Subscription subscription) {
+        BigDecimal price = subscription.getPlan().getPriceAmount();
+        return price == null || price.signum() == 0;
+    }
+
     @Override
     @Transactional
     public void markInvoiceAsPaid(Invoice invoice) {
@@ -475,6 +516,8 @@ public class InvoiceServiceImpl implements InvoiceService {
 
             eventPublisher.publishEvent(new com.tansoflow.tansocore.model.event.service.SubscriptionActivatedEvent(
                     subscription.getAccount().getId(), subscription.getId()));
+
+            retireFreeSubscriptionsReplacedBy(subscription);
         }
 
         entitlementService.processEntitlementsForSubscription(invoice.getSubscription());
