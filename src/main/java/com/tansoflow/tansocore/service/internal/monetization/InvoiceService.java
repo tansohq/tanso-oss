@@ -76,6 +76,10 @@ public interface InvoiceService {
     @Transactional
     void voidOutstandingInvoicesForSubscription(Subscription subscription);
 
+    /** Voids one invoice: an adjustment nobody can pay any more because the plan change it belonged to was replaced. */
+    @Transactional
+    void voidInvoice(Invoice invoice);
+
     @Transactional
     Invoice createCreditInvoice(Subscription subscription, BigDecimal creditAmount, Instant periodStart, Instant periodEnd);
 

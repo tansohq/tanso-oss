@@ -85,6 +85,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final ApplicationEventPublisher eventPublisher;
     private final EventRepository eventRepository;
     private final PlanFeatureRuleRepository planFeatureRuleRepository;
+    private final com.tansoflow.tansocore.repository.SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
 
     @Transactional
     @Override
@@ -477,6 +478,25 @@ public class InvoiceServiceImpl implements InvoiceService {
                     subscription.getAccount().getId(), subscription.getId()));
         }
 
+        // An upgrade an agent has not paid for yet swaps the plan here, when its adjustment invoice is paid.
+        // The Stripe-integration path fulfils its own pending upgrade from the webhook and never sets
+        // adjustmentInvoice, so the two paths cannot both fire for the same change.
+        if (InvoiceType.ADJUSTMENT.name().equals(invoice.getType())) {
+            subscriptionScheduledChangeRepository.findPendingUpgradeByAdjustmentInvoice(invoice)
+                    .ifPresent(pending -> {
+                        Subscription subscription = pending.getSubscription();
+                        subscription.setPlan(pending.getToPlan());
+                        subscriptionRepository.save(subscription);
+
+                        pending.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.COMPLETED.name());
+                        pending.setFulfilledAt(Instant.now());
+                        subscriptionScheduledChangeRepository.save(pending);
+
+                        log.info("Upgrade to plan {} fulfilled for subscription {} by paid adjustment invoice {}",
+                                pending.getToPlan().getKey(), subscription.getId(), invoice.getId());
+                    });
+        }
+
         entitlementService.processEntitlementsForSubscription(invoice.getSubscription());
         creditService.processCreditGrantsForSubscription(invoice.getSubscription());
     }
@@ -664,6 +684,14 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoiceRepository.save(invoice);
             log.info("Voided invoice {} for cancelled subscription {}", invoice.getId(), subscription.getId());
         }
+    }
+
+    @Override
+    @Transactional
+    public void voidInvoice(Invoice invoice) {
+        invoice.setStatus(InvoiceStatus.VOID.name());
+        invoiceRepository.save(invoice);
+        log.info("Voided invoice {}", invoice.getId());
     }
 
     @Override

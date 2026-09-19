@@ -675,6 +675,7 @@ keeps its existing `data` payload. `detail` carries the error id.
 | status | code | gate | action | meaning |
 |--------|------|------|--------|---------|
 | 402 | `payment_required` | `payment` | `complete_checkout` | hand `url` to a human, poll `poll` (`/api/v1/client/checkout-sessions/{id}`). With no processor connected, `url` and `poll` are null and the message says to contact the operator |
+| 402 | `payment_required` | `payment` | `complete_checkout` | on `plan-change`: the upgrade is raised but not granted; hand `url` to a human and poll the customer's status URL until `plan` shows the new plan |
 | 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to; `PUT {"email": ...}` to `url` (the owner endpoint), then retry. Signing up with an email avoids this |
 | 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window is used up; `retry_after` is seconds until it resets |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap or the mandate cap; `retry_after` null, waiting will not help |

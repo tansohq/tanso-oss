@@ -780,7 +780,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      */
     @Transactional
     @Override
-    public void upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+    public UUID upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
         Subscription currentSubscription = subscriptionRepository
                 .findSubscriptionByUuidAndAccountId(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
         Plan subscribedPlan = currentSubscription.getPlan();
@@ -805,6 +805,57 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
         AccountSetting upgAccountSetting = accountService.retrieveAccountSettings(accountId);
         boolean isStripeIntegrationUpgrade = upgAccountSetting != null && upgAccountSetting.getStripeMode().isStripeIntegration();
+
+        // What this upgrade costs now: the remaining period repriced from the old plan to the new one.
+        // Money moving on an API key is capped the same way a paid subscribe is, per transaction and per key.
+        BigDecimal prorationAmount = prorationAmount(subscribedPlan, newPlan, ratio);
+        if (prorationAmount.signum() > 0) {
+            if (AuthContext.currentApiKeyId() != null && upgAccountSetting != null
+                    && upgAccountSetting.getAgentMaxTopupAmount() != null
+                    && prorationAmount.compareTo(upgAccountSetting.getAgentMaxTopupAmount()) > 0) {
+                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
+                        upgAccountSetting.getAgentMaxTopupAmount(), prorationAmount);
+            }
+            keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, prorationAmount);
+        }
+
+        // An agent must not reach a paid tier before its principal pays for it. When the caller holds an API key
+        // and Tanso is collecting the money itself, the adjustment invoice is raised and the plan swap waits on
+        // it; InvoiceServiceImpl.markInvoiceAsPaid completes the change. Operators keep the immediate upgrade.
+        boolean deferUntilPaid = !isStripeIntegrationUpgrade
+                && AuthContext.currentApiKeyId() != null
+                && prorationAmount.signum() > 0
+                && BillingTiming.IN_ADVANCE.name().equals(subscribedPlan.getBillingTiming())
+                && BillingTiming.IN_ADVANCE.name().equals(newPlan.getBillingTiming());
+
+        if (grantNow && deferUntilPaid) {
+            // Asking twice must not raise a second invoice, and an invoice for a change that is being replaced must
+            // not stay payable: paying it would take the money with no pending change left to fulfil.
+            SubscriptionScheduledChange alreadyWaiting = subscriptionScheduledChangeRepository
+                    .findPendingUpgradeBySubscription(currentSubscription).orElse(null);
+            if (alreadyWaiting != null && alreadyWaiting.getAdjustmentInvoice() != null
+                    && !InvoiceStatus.PAID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())
+                    && !InvoiceStatus.VOID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())) {
+                if (alreadyWaiting.getToPlan().getId().equals(newPlan.getId())) {
+                    return alreadyWaiting.getAdjustmentInvoice().getId();
+                }
+                invoiceService.voidInvoice(alreadyWaiting.getAdjustmentInvoice());
+            }
+
+            Invoice adjustedInvoice = invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
+            cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+            scheduledChange.setStatus(SubscriptionScheduledChangeStatus.PENDING.name());
+            scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
+            scheduledChange.setEffectiveAt(now);
+            scheduledChange.setSubscription(currentSubscription);
+            scheduledChange.setFromPlan(subscribedPlan);
+            scheduledChange.setToPlan(newPlan);
+            scheduledChange.setAdjustmentInvoice(adjustedInvoice);
+            subscriptionScheduledChangeRepository.save(scheduledChange);
+            log.info("Upgrade of subscription {} to plan {} waits on adjustment invoice {}",
+                    currentSubscription.getId(), newPlan.getKey(), adjustedInvoice.getId());
+            return adjustedInvoice.getId();
+        }
 
         if (grantNow) {
             if (isStripeIntegrationUpgrade) {
@@ -865,6 +916,16 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // Upgrades happen mid-cycle and should prorate; downgrades are scheduled at period end.
         eventPublisher.publishEvent(new SubscriptionPlanChangedEvent(
                 currentSubscription.getAccount().getId(), currentSubscription.getId(), true));
+        return null;
+    }
+
+    /** What the rest of this period costs to move from one plan to the other; zero when the move is not a charge. */
+    private BigDecimal prorationAmount(Plan subscribedPlan, Plan newPlan, BigDecimal ratio) {
+        BigDecimal oldPrice = subscribedPlan.getPriceAmount() != null ? subscribedPlan.getPriceAmount() : BigDecimal.ZERO;
+        BigDecimal newPrice = newPlan.getPriceAmount() != null ? newPlan.getPriceAmount() : BigDecimal.ZERO;
+        BigDecimal net = ratio.multiply(newPrice).setScale(2, RoundingMode.HALF_UP)
+                .subtract(ratio.multiply(oldPrice).setScale(2, RoundingMode.HALF_UP));
+        return net.signum() > 0 ? net : BigDecimal.ZERO;
     }
 
     /**

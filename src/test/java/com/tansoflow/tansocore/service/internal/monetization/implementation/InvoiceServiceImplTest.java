@@ -96,6 +96,9 @@ class InvoiceServiceImplTest {
     @MockitoBean
     private SubscriptionRepository subscriptionRepository;
 
+    @MockitoBean
+    private com.tansoflow.tansocore.repository.SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
+
     @Test
     void testCreateNewInvoice_CalculatesUsageCosts() {
         // Setup
@@ -1047,5 +1050,87 @@ class InvoiceServiceImplTest {
         when(planFeatureRuleRepository.getPlanFeatureRuleByPlanIn(List.of(plan))).thenReturn(List.of());
 
         assertFalse(invoiceService.planHasAccumulateModeFeatures(plan));
+    }
+
+    // An upgrade an agent has not paid for waits on its adjustment invoice. Paying it is what swaps the plan.
+    // Without this, nothing in pass-through mode ever completed a pending upgrade.
+    @Test
+    void payingTheAdjustmentInvoiceCompletesAPendingUpgrade() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        free.setPriceAmount(BigDecimal.ZERO);
+        Plan starter = new Plan();
+        starter.setId(UUID.randomUUID());
+        starter.setKey("starter");
+        starter.setPriceAmount(new BigDecimal("149.00"));
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setAccount(account);
+        subscription.setPlan(free);
+        subscription.setIsActive(true);
+
+        Invoice adjustment = new Invoice();
+        adjustment.setId(UUID.randomUUID());
+        adjustment.setSubscription(subscription);
+        adjustment.setAmount(new BigDecimal("74.50"));
+        adjustment.setType(InvoiceType.ADJUSTMENT.name());
+
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setFromPlan(free);
+        pending.setToPlan(starter);
+        pending.setAdjustmentInvoice(adjustment);
+        pending.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.PENDING.name());
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByAdjustmentInvoice(adjustment))
+                .thenReturn(java.util.Optional.of(pending));
+
+        invoiceService.markInvoiceAsPaid(adjustment);
+
+        assertEquals(starter, subscription.getPlan());
+        assertEquals(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.COMPLETED.name(),
+                pending.getStatus());
+        verify(entitlementService).processEntitlementsForSubscription(subscription);
+    }
+
+    // The Stripe-integration path fulfils its own pending upgrade from the webhook, and a regular invoice must
+    // not go looking for one at all.
+    @Test
+    void aRegularPaidInvoiceDoesNotLookForAPendingUpgrade() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan plan = new Plan();
+        plan.setId(UUID.randomUUID());
+        plan.setPriceAmount(new BigDecimal("149.00"));
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setAccount(account);
+        subscription.setPlan(plan);
+        subscription.setIsActive(true);
+
+        Invoice regular = new Invoice();
+        regular.setId(UUID.randomUUID());
+        regular.setSubscription(subscription);
+        regular.setAmount(new BigDecimal("149.00"));
+        regular.setType(InvoiceType.REGULAR.name());
+
+        invoiceService.markInvoiceAsPaid(regular);
+
+        verify(subscriptionScheduledChangeRepository, never()).findPendingUpgradeByAdjustmentInvoice(any());
     }
 }

@@ -117,6 +117,9 @@ class SubscriptionServiceImplTest {
     @Mock
     private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
 
+    @Mock
+    private com.tansoflow.tansocore.repository.PlanCreditAllocationRepository planCreditAllocationRepository;
+
     @InjectMocks
     private SubscriptionServiceImpl subscriptionService;
 
@@ -700,5 +703,211 @@ class SubscriptionServiceImplTest {
         org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
                 () -> subscriptionService.subscribe(customer, plan, account.getId().toString(), null));
         verify(invoiceService, org.mockito.Mockito.never()).retrieveCurrentlyDueBySubscription(any());
+    }
+
+    // --- plan change / upgrade -------------------------------------------------------------------------------
+    // The upgrade path had no spend guard at all and granted the new plan before the adjustment invoice was paid,
+    // so a key with no budget could raise its own customer onto an expensive plan. Found reviewing the agent
+    // surface after the 2026-09-17 end-to-end run; filed as issue #37.
+
+    private Subscription subscriptionOnPlanForUpgrade(Plan current, String currentSubscriptionId, String accountIdString) {
+        Subscription existing = new Subscription();
+        existing.setId(UUID.fromString(currentSubscriptionId));
+        existing.setCustomer(customer);
+        existing.setAccount(account);
+        existing.setPlan(current);
+        existing.setIsActive(true);
+        existing.setCurrentPeriodStart(java.time.Instant.now().minus(java.time.Duration.ofDays(15)));
+        existing.setCurrentPeriodEnd(java.time.Instant.now().plus(java.time.Duration.ofDays(15)));
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(
+                UUID.fromString(currentSubscriptionId), UUID.fromString(accountIdString))).thenReturn(existing);
+        return existing;
+    }
+
+    private Plan inAdvancePlan(String key, String price) {
+        Plan p = new Plan();
+        p.setId(UUID.randomUUID());
+        p.setKey(key);
+        p.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        p.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        p.setPriceAmount(new java.math.BigDecimal(price));
+        return p;
+    }
+
+    private void callingWithAnApiKey(Runnable body) {
+        com.tansoflow.tansocore.auth.UserContext ctx = new com.tansoflow.tansocore.auth.UserContext(
+                account.getId().toString(), customer.getId().toString(), "ref", java.util.List.of("read", "purchase"),
+                null, UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new com.tansoflow.tansocore.auth.UserContextAuthentication(ctx, java.util.List.of()));
+        try {
+            body.run();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @org.junit.jupiter.api.Test
+    void upgradeOnAnApiKeyWaitsForTheAdjustmentInvoiceInsteadOfGrantingThePlan() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        com.tansoflow.tansocore.entity.Invoice adjustment = new com.tansoflow.tansocore.entity.Invoice();
+        adjustment.setId(UUID.randomUUID());
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
+                .thenReturn(adjustment);
+
+        callingWithAnApiKey(() -> {
+            UUID pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending).isEqualTo(adjustment.getId());
+        });
+
+        // The plan is not granted and no entitlement moves until the invoice is paid.
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(free);
+        verifyNoInteractions(entitlementService);
+
+        ArgumentCaptor<com.tansoflow.tansocore.entity.SubscriptionScheduledChange> saved =
+                ArgumentCaptor.forClass(com.tansoflow.tansocore.entity.SubscriptionScheduledChange.class);
+        verify(subscriptionScheduledChangeRepository).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getStatus())
+                .isEqualTo(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.PENDING.name());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getAdjustmentInvoice()).isEqualTo(adjustment);
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getToPlan()).isEqualTo(starter);
+    }
+
+    @org.junit.jupiter.api.Test
+    void upgradeOnAnApiKeyStopsWhenTheKeyBudgetCannotCoverTheProration() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        org.mockito.Mockito.doThrow(new com.tansoflow.tansocore.model.exception.BudgetExceededException(
+                        com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                        new java.math.BigDecimal("5.00"), java.math.BigDecimal.ZERO,
+                        new java.math.BigDecimal("74.50"), java.time.Instant.now()))
+                .when(keyBudgetService).assertWithinBudget(any(),
+                        eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), any());
+
+        callingWithAnApiKey(() -> org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.upgradeSubscription(
+                                currentSubscriptionId, accountIdString, starter.getId().toString(), true))
+                .isInstanceOf(com.tansoflow.tansocore.model.exception.BudgetExceededException.class));
+
+        // No invoice was raised and no plan was swapped.
+        verifyNoInteractions(invoiceService);
+        verify(subscriptionScheduledChangeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
+    void askingForTheSameUpgradeTwiceReturnsTheSameInvoiceInsteadOfChargingAgain() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        com.tansoflow.tansocore.entity.Invoice open = new com.tansoflow.tansocore.entity.Invoice();
+        open.setId(UUID.randomUUID());
+        open.setStatus(com.tansoflow.tansocore.model.billing.type.InvoiceStatus.DUE.name());
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange waiting =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        waiting.setSubscription(existing);
+        waiting.setToPlan(starter);
+        waiting.setAdjustmentInvoice(open);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(existing))
+                .thenReturn(java.util.Optional.of(waiting));
+
+        callingWithAnApiKey(() -> {
+            UUID pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending).isEqualTo(open.getId());
+        });
+
+        verifyNoInteractions(invoiceService);
+        verify(subscriptionScheduledChangeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @org.junit.jupiter.api.Test
+    void changingTheTargetPlanVoidsTheInvoiceNobodyCanPayAnyMore() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Plan growth = inAdvancePlan("growth", "499.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(growth.getId().toString()))).thenReturn(growth);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        com.tansoflow.tansocore.entity.Invoice stale = new com.tansoflow.tansocore.entity.Invoice();
+        stale.setId(UUID.randomUUID());
+        stale.setStatus(com.tansoflow.tansocore.model.billing.type.InvoiceStatus.DUE.name());
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange waiting =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        waiting.setSubscription(existing);
+        waiting.setToPlan(starter);
+        waiting.setAdjustmentInvoice(stale);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(existing))
+                .thenReturn(java.util.Optional.of(waiting));
+
+        com.tansoflow.tansocore.entity.Invoice fresh = new com.tansoflow.tansocore.entity.Invoice();
+        fresh.setId(UUID.randomUUID());
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(growth), eq(existing), any(), any()))
+                .thenReturn(fresh);
+
+        callingWithAnApiKey(() -> {
+            UUID pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, growth.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending).isEqualTo(fresh.getId());
+        });
+
+        verify(invoiceService).voidInvoice(stale);
+    }
+
+    @org.junit.jupiter.api.Test
+    void upgradeFromTheConsoleStillSwapsThePlanImmediately() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
+                .thenReturn(new com.tansoflow.tansocore.entity.Invoice());
+
+        // No security context: an operator acting in the console, not an agent holding a key.
+        UUID pending = subscriptionService.upgradeSubscription(
+                currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+
+        org.assertj.core.api.Assertions.assertThat(pending).isNull();
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
+        verify(entitlementService).processEntitlementsForSubscription(existing);
     }
 }

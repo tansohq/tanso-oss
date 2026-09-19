@@ -77,6 +77,18 @@ access, then stalled at pay on a 500.
 
 ### Changed
 
+- **A plan change an agent has to pay for is now a gate, not a silent grant.**
+  `POST /api/v1/client/subscriptions/{id}/plan-change` used to swap the plan and
+  grant its entitlements before the adjustment invoice was paid, and it never
+  consulted the per-key budget, so a key with no budget could raise its own
+  customer onto an expensive plan. An upgrade that costs money and comes from an
+  API key now raises the adjustment invoice, leaves the subscription on its
+  current plan and answers 402 with the invoice URL and the customer's status
+  URL to poll. Paying the invoice completes the change. The proration amount is
+  checked against the account's per-charge cap and the calling key's budget
+  first, which answer 403 as elsewhere. Operators acting in the console keep the
+  immediate upgrade, and Stripe-driven accounts are unchanged.
+
 - A customer key without the `purchase` scope now gets 403 `scope_denied`
   instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`
   code but now carry the gate object (`gate: "scope"`, with `use_own_reference`
