@@ -84,6 +84,7 @@ is hit (see Rate limits).
       "check_entitlement_example": "{base}/api/v1/client/entitlements/agent_7f3c9a2e/ai.chat",
       "record_usage": "{base}/api/v1/client/events",
       "usage_summary": "{base}/api/v1/client/customers/agent_7f3c9a2e/usage",
+      "usage_history": "{base}/api/v1/client/customers/agent_7f3c9a2e/usage/history",
       "credit_balances": "{base}/api/v1/client/credits/agent_7f3c9a2e/pools",
       "buy_credits": "{base}/api/v1/client/credits/purchases",
       "change_plan": "{base}/api/v1/client/subscriptions",
@@ -174,6 +175,8 @@ curl -X POST {base}/api/v1/client/events \
 ```
 
 Usage and burndown: `GET {base}/api/v1/client/customers/agent_7f3c9a2e/usage`.
+Past usage, for audit: `GET {base}/api/v1/client/customers/agent_7f3c9a2e/usage/history?from=&to=`.
+Usage outlives the plan it was recorded on, so a period stays readable after a plan change.
 Buy credits: `POST {base}/api/v1/client/credits/purchases`.
 Change plan: `POST {base}/api/v1/client/subscriptions` with a plan key from pricing.json.
 Change an existing subscription in place: `POST {base}/api/v1/client/subscriptions/{subscriptionId}/plan-change`.

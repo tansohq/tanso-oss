@@ -253,6 +253,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         }
         nextSteps.put("record_usage", baseUrl + "/api/v1/client/events");
         nextSteps.put("usage_summary", baseUrl + "/api/v1/client/customers/" + referenceId + "/usage");
+        nextSteps.put("usage_history", baseUrl + "/api/v1/client/customers/" + referenceId + "/usage/history");
         nextSteps.put("credit_balances", baseUrl + "/api/v1/client/credits/" + referenceId + "/pools");
         nextSteps.put("buy_credits", baseUrl + "/api/v1/client/credits/purchases");
         nextSteps.put("change_plan", baseUrl + "/api/v1/client/subscriptions");

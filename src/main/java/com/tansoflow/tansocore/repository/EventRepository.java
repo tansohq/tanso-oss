@@ -86,6 +86,19 @@ public interface EventRepository extends JpaRepository <Event, UUID>, JpaSpecifi
             @Param("start") Instant start,
             @Param("end") Instant end);
 
+    // Audit read: what a customer recorded over a window, grouped the way it was billed, and readable after the
+    // subscription that carried it has ended.
+    @Query("SELECT e.subscriptionId, e.featureId, e.eventName, SUM(e.usageUnits), COUNT(e), MIN(e.occurredAt), MAX(e.occurredAt) " +
+           "FROM Event e WHERE e.customerId = :customerId " +
+           "AND e.eventType = 'CLIENT_TRACKED' " +
+           "AND e.occurredAt >= :from AND e.occurredAt < :to " +
+           "GROUP BY e.subscriptionId, e.featureId, e.eventName " +
+           "ORDER BY MIN(e.occurredAt)")
+    List<Object[]> sumRecordedUsageByCustomerBetween(
+            @Param("customerId") UUID customerId,
+            @Param("from") Instant from,
+            @Param("to") Instant to);
+
     @Query("SELECT COALESCE(SUM(e.usageUnits), 0) FROM Event e " +
            "WHERE e.customerId = :customerId " +
            "AND e.subscriptionId = :subscriptionId " +

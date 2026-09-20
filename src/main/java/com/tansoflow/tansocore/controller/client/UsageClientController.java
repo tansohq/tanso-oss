@@ -32,6 +32,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -58,5 +59,35 @@ public class UsageClientController {
         customerReferenceId = customerAccessGuard.resolveCustomerRef(userContext, customerReferenceId);
         CustomerUsageResponse usage = usageForecastService.getUsage(customerReferenceId, userContext.getAccountId());
         return ResponseEntity.ok(ApiResponse.<CustomerUsageResponse>builder().data(usage).success(true).build());
+    }
+
+    @GetMapping("/history")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
+    @Operation(summary = "Recorded usage over a window",
+            description = "What the customer recorded between from and to, grouped by subscription, feature and "
+                    + "event name, with an event count per group to reconcile against. Usage outlives the "
+                    + "subscription that carried it, so a period stays readable after a plan change ended that "
+                    + "subscription. Defaults to the last 90 days; the window is capped at 366 days.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse>> getUsageHistory(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String customerReferenceId,
+            @RequestParam(required = false) java.time.Instant from,
+            @RequestParam(required = false) java.time.Instant to,
+            @RequestParam(required = false) String featureKey,
+            @RequestParam(required = false) String subscriptionId) {
+        customerReferenceId = customerAccessGuard.resolveCustomerRef(userContext, customerReferenceId);
+        java.time.Instant end = to != null ? to : java.time.Instant.now();
+        java.time.Instant start = from != null ? from : end.minus(java.time.Duration.ofDays(90));
+        if (!start.isBefore(end)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
+        if (start.isBefore(end.minus(java.time.Duration.ofDays(366)))) {
+            throw new IllegalArgumentException("the window is capped at 366 days; ask for a narrower from and to");
+        }
+        var history = usageForecastService.getUsageHistory(
+                customerReferenceId, userContext.getAccountId(), start, end, featureKey, subscriptionId);
+        return ResponseEntity.ok(ApiResponse.<com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse>builder()
+                .data(history).success(true).build());
     }
 }

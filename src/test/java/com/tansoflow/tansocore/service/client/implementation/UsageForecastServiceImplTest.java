@@ -67,6 +67,10 @@ class UsageForecastServiceImplTest {
     private CreditPoolRepository creditPoolRepository;
     @Mock
     private CreditPriceService creditPriceService;
+    @Mock
+    private com.tansoflow.tansocore.repository.EventRepository eventRepository;
+    @Mock
+    private com.tansoflow.tansocore.repository.FeatureRepository featureRepository;
 
     @InjectMocks
     private UsageForecastServiceImpl service;
@@ -190,5 +194,163 @@ class UsageForecastServiceImplTest {
         CustomerUsageResponse usage = service.getUsage("cust-1", accountId.toString());
         assertThat(usage.getCreditPools().get(0).getProjectedDepletionDate()).isNull();
         assertThat(usage.getCreditPools().get(0).getAverageDailyBurn()).isNull();
+    }
+
+    // An upgrade retires the plan the usage was recorded on. Dropping it here would take the period's record with
+    // it, and that period still has to be auditable. Found by the agent-ready end-to-end run, 2026-09-19.
+    @Test
+    void usageOnAPlanTheCustomerHasLeftIsStillReported() {
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        Subscription ended = new Subscription();
+        ended.setId(UUID.randomUUID());
+        ended.setPlan(free);
+        ended.setIsActive(false);
+        ended.setCurrentPeriodStart(Instant.now().minus(Duration.ofDays(3)));
+        ended.setCurrentPeriodEnd(Instant.now());
+        ended.setCancelledAt(Instant.now());
+
+        Feature chat = new Feature();
+        chat.setId(UUID.randomUUID());
+        chat.setKey("ai.chat");
+        PlanFeatureRule freeRule = new PlanFeatureRule();
+        freeRule.setFeature(chat);
+        when(planFeatureRuleRepository.findPlanFeatureRulesByPlanId(free.getId())).thenReturn(List.of(freeRule));
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(ended, subscription));
+        when(eventRepository.sumUsageUnitsBySubscriptionAndFeatureIdSince(
+                eq(customer.getId()), eq(ended.getId()), eq(chat.getId()), any(), any()))
+                .thenReturn(new BigDecimal("7"));
+        when(clientEntitlementService.checkEntitlement("cust-1", accountId.toString(), "ai.chat", false))
+                .thenReturn(entitlementWithUsage(new BigDecimal("2"), new BigDecimal("2000")));
+
+        CustomerUsageResponse usage = service.getUsage("cust-1", accountId.toString());
+
+        CustomerUsageResponse.SubscriptionUsage left = usage.getSubscriptions().stream()
+                .filter(s -> "developer_demo".equals(s.getPlanKey())).findFirst().orElseThrow();
+        assertThat(left.getStatus()).isEqualTo("ended");
+        assertThat(left.getEndedAt()).isNotNull();
+        assertThat(left.getFeatures().get(0).getUsed()).isEqualByComparingTo("7");
+        // An ended plan grants nothing, so it carries no limit and no projection.
+        assertThat(left.getFeatures().get(0).getLimit()).isNull();
+        assertThat(left.getFeatures().get(0).getProjectedEndOfPeriod()).isNull();
+
+        CustomerUsageResponse.SubscriptionUsage current = usage.getSubscriptions().stream()
+                .filter(s -> "pro".equals(s.getPlanKey())).findFirst().orElseThrow();
+        assertThat(current.getStatus()).isEqualTo("active");
+        assertThat(current.getEndedAt()).isNull();
+    }
+
+    // History has to stop somewhere, or a long-lived customer's usage call grows without bound.
+    @Test
+    void aPlanLeftOverAYearAgoIsNotReported() {
+        Plan old = new Plan();
+        old.setId(UUID.randomUUID());
+        old.setKey("legacy");
+        Subscription ancient = new Subscription();
+        ancient.setId(UUID.randomUUID());
+        ancient.setPlan(old);
+        ancient.setIsActive(false);
+        ancient.setCurrentPeriodStart(Instant.now().minus(Duration.ofDays(800)));
+        ancient.setCurrentPeriodEnd(Instant.now().minus(Duration.ofDays(770)));
+        ancient.setCancelledAt(Instant.now().minus(Duration.ofDays(770)));
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(ancient, subscription));
+        when(clientEntitlementService.checkEntitlement("cust-1", accountId.toString(), "ai.chat", false))
+                .thenReturn(entitlementWithUsage(new BigDecimal("1"), new BigDecimal("2000")));
+
+        CustomerUsageResponse usage = service.getUsage("cust-1", accountId.toString());
+
+        assertThat(usage.getSubscriptions()).extracting(CustomerUsageResponse.SubscriptionUsage::getPlanKey)
+                .containsExactly("pro");
+    }
+
+    // History is keyed by customer and window, not by the subscription, so a plan change does not hide a period.
+    @Test
+    void historyReportsUsageFromTheEndedPlanAndTheCurrentOne() {
+        UUID endedSubId = UUID.randomUUID();
+        UUID featureId = UUID.randomUUID();
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        Subscription ended = new Subscription();
+        ended.setId(endedSubId);
+        ended.setPlan(free);
+        ended.setIsActive(false);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(ended, subscription));
+
+        Feature chat = new Feature();
+        chat.setId(featureId);
+        chat.setKey("ai.chat");
+        when(featureRepository.findByIdAndAccountId(featureId, accountId)).thenReturn(Optional.of(chat));
+
+        Instant first = Instant.now().minus(Duration.ofDays(2));
+        Instant last = Instant.now().minus(Duration.ofDays(1));
+        when(eventRepository.sumRecordedUsageByCustomerBetween(eq(customer.getId()), any(), any()))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{endedSubId, featureId, "chat completion", new BigDecimal("7"), 3L, first, last},
+                        new Object[]{subscription.getId(), featureId, "chat completion", new BigDecimal("2"), 1L, last, last}));
+
+        var history = service.getUsageHistory("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(30)), Instant.now(), null, null);
+
+        assertThat(history.getUsage()).hasSize(2);
+        var fromEndedPlan = history.getUsage().get(0);
+        assertThat(fromEndedPlan.getPlanKey()).isEqualTo("developer_demo");
+        assertThat(fromEndedPlan.getFeatureKey()).isEqualTo("ai.chat");
+        assertThat(fromEndedPlan.getEventName()).isEqualTo("chat completion");
+        assertThat(fromEndedPlan.getUsageUnits()).isEqualByComparingTo("7");
+        // The count is the handle a customer reconciles the total against.
+        assertThat(fromEndedPlan.getEvents()).isEqualTo(3L);
+        assertThat(fromEndedPlan.getFirstOccurredAt()).isEqualTo(first);
+    }
+
+    @Test
+    void historyCanBeNarrowedToOneSubscription() {
+        UUID endedSubId = UUID.randomUUID();
+        UUID featureId = UUID.randomUUID();
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        Subscription ended = new Subscription();
+        ended.setId(endedSubId);
+        ended.setPlan(free);
+        ended.setIsActive(false);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(ended, subscription));
+        Feature chat = new Feature();
+        chat.setId(featureId);
+        chat.setKey("ai.chat");
+        lenient().when(featureRepository.findByIdAndAccountId(featureId, accountId)).thenReturn(Optional.of(chat));
+        when(eventRepository.sumRecordedUsageByCustomerBetween(eq(customer.getId()), any(), any()))
+                .thenReturn(List.<Object[]>of(
+                        new Object[]{endedSubId, featureId, "chat completion", new BigDecimal("7"), 3L, Instant.now(), Instant.now()},
+                        new Object[]{subscription.getId(), featureId, "chat completion", new BigDecimal("2"), 1L, Instant.now(), Instant.now()}));
+
+        var history = service.getUsageHistory("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(30)), Instant.now(), null, endedSubId.toString());
+
+        assertThat(history.getUsage()).hasSize(1);
+        assertThat(history.getUsage().get(0).getSubscriptionId()).isEqualTo(endedSubId.toString());
+    }
+
+    // Usage recorded with no subscription attached is still the customer's, and still has to be auditable.
+    @Test
+    void historyKeepsUsageThatCarriesNoSubscription() {
+        UUID featureId = UUID.randomUUID();
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(List.of());
+        when(featureRepository.findByIdAndAccountId(featureId, accountId)).thenReturn(Optional.empty());
+        when(eventRepository.sumRecordedUsageByCustomerBetween(eq(customer.getId()), any(), any()))
+                .thenReturn(List.<Object[]>of(new Object[]{null, featureId, "ai.chat", new BigDecimal("4"), 2L, Instant.now(), Instant.now()}));
+
+        var history = service.getUsageHistory("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(7)), Instant.now(), null, null);
+
+        assertThat(history.getUsage()).hasSize(1);
+        assertThat(history.getUsage().get(0).getSubscriptionId()).isNull();
+        assertThat(history.getUsage().get(0).getPlanKey()).isNull();
+        assertThat(history.getUsage().get(0).getUsageUnits()).isEqualByComparingTo("4");
     }
 }

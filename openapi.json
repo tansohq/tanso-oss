@@ -6835,6 +6835,77 @@
                 ]
             }
         },
+        "/api/v1/client/customers/{customerReferenceId}/usage/history": {
+            "get": {
+                "tags": [
+                    "Usage"
+                ],
+                "summary": "Recorded usage over a window",
+                "description": "What the customer recorded between from and to, grouped by subscription, feature and event name, with an event count per group to reconcile against. Usage outlives the subscription that carried it, so a period stays readable after a plan change ended that subscription. Defaults to the last 90 days; the window is capped at 366 days.",
+                "operationId": "getUsageHistory",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "featureKey",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "subscriptionId",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCustomerUsageHistoryResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/customers/{customerReferenceId}/status": {
             "get": {
                 "tags": [
@@ -15186,6 +15257,15 @@
                     "planKey": {
                         "type": "string"
                     },
+                    "status": {
+                        "type": "string",
+                        "description": "active for a plan the customer is on now, ended for one they have left. Usage on an ended plan is kept so a period can still be audited after a mid-cycle change."
+                    },
+                    "endedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "description": "When an ended subscription stopped. Null while it is active."
+                    },
                     "currentPeriodStart": {
                         "type": "string",
                         "format": "date-time"
@@ -15199,6 +15279,86 @@
                         "items": {
                             "$ref": "#/components/schemas/FeatureUsage"
                         }
+                    }
+                }
+            },
+            "ApiResponseCustomerUsageHistoryResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CustomerUsageHistoryResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CustomerUsageHistoryResponse": {
+                "type": "object",
+                "description": "Recorded usage over an explicit window, grouped by subscription, feature and event name",
+                "properties": {
+                    "customerReferenceId": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "usage": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecordedUsage"
+                        }
+                    }
+                }
+            },
+            "RecordedUsage": {
+                "type": "object",
+                "description": "One group of recorded events",
+                "properties": {
+                    "subscriptionId": {
+                        "type": "string",
+                        "description": "The subscription the usage was recorded against. Null for usage recorded with no subscription."
+                    },
+                    "planKey": {
+                        "type": "string",
+                        "description": "The plan that subscription was on. Null when the subscription is unknown."
+                    },
+                    "featureKey": {
+                        "type": "string"
+                    },
+                    "eventName": {
+                        "type": "string",
+                        "description": "The name the client sent with the event, which may differ from the feature key"
+                    },
+                    "usageUnits": {
+                        "type": "number"
+                    },
+                    "events": {
+                        "type": "integer",
+                        "format": "int64"
+                    },
+                    "firstOccurredAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "lastOccurredAt": {
+                        "type": "string",
+                        "format": "date-time"
                     }
                 }
             },
