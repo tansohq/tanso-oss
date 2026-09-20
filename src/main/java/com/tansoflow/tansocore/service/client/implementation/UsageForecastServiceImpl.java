@@ -52,6 +52,82 @@ public class UsageForecastServiceImpl implements UsageForecastService {
     private final ClientEntitlementService clientEntitlementService;
     private final CreditPoolRepository creditPoolRepository;
     private final CreditPriceService creditPriceService;
+    private final com.tansoflow.tansocore.repository.EventRepository eventRepository;
+    private final com.tansoflow.tansocore.repository.FeatureRepository featureRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse getUsageHistory(
+            String customerReferenceId, String accountId, Instant from, Instant to,
+            String featureKey, String subscriptionId) {
+        Customer customer = customerService
+                .retrieveCustomerByExternalClientCustomerIdAndAccount(customerReferenceId, accountId);
+
+        java.util.Map<UUID, Subscription> subscriptionsById = new java.util.HashMap<>();
+        for (Subscription subscription : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
+            subscriptionsById.put(subscription.getId(), subscription);
+        }
+
+        List<com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse.RecordedUsage> rows = new ArrayList<>();
+        for (Object[] row : eventRepository.sumRecordedUsageByCustomerBetween(customer.getId(), from, to)) {
+            UUID rowSubscriptionId = (UUID) row[0];
+            UUID featureId = (UUID) row[1];
+            if (subscriptionId != null && !subscriptionId.equals(rowSubscriptionId != null ? rowSubscriptionId.toString() : null)) {
+                continue;
+            }
+            String key = featureId == null ? null : featureRepository.findByIdAndAccountId(featureId, UUID.fromString(accountId))
+                    .map(f -> f.getKey()).orElse(null);
+            if (featureKey != null && !featureKey.equals(key)) {
+                continue;
+            }
+            Subscription subscription = rowSubscriptionId == null ? null : subscriptionsById.get(rowSubscriptionId);
+            rows.add(com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse.RecordedUsage.builder()
+                    .subscriptionId(rowSubscriptionId == null ? null : rowSubscriptionId.toString())
+                    .planKey(subscription == null ? null : subscription.getPlan().getKey())
+                    .featureKey(key)
+                    .eventName((String) row[2])
+                    .usageUnits((BigDecimal) row[3])
+                    .events((Long) row[4])
+                    .firstOccurredAt((Instant) row[5])
+                    .lastOccurredAt((Instant) row[6])
+                    .build());
+        }
+
+        return com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse.builder()
+                .customerReferenceId(customerReferenceId)
+                .from(from)
+                .to(to)
+                .usage(rows)
+                .build();
+    }
+
+    /** When an ended subscription stopped: the moment it was cancelled, else the end of its last period. */
+    private Instant endedAt(Subscription subscription) {
+        return subscription.getCancelledAt() != null ? subscription.getCancelledAt() : subscription.getCurrentPeriodEnd();
+    }
+
+    /**
+     * How far back ended plans are reported. A year covers the periods anyone reconciles against an invoice
+     * without turning this into an unbounded history endpoint.
+     */
+    private boolean endedWithin(Subscription subscription, Instant now) {
+        Instant ended = endedAt(subscription);
+        return ended != null && ended.isAfter(now.minus(Duration.ofDays(365)));
+    }
+
+    /**
+     * What was recorded against an ended subscription over its final period, read from the events themselves.
+     * Entitlements are revoked when a plan ends, so the entitlement path would report nothing here.
+     */
+    private BigDecimal recordedUsage(UUID customerId, Subscription subscription, PlanFeatureRule rule) {
+        Instant start = subscription.getCurrentPeriodStart();
+        Instant end = endedAt(subscription);
+        if (start == null || end == null) {
+            return null;
+        }
+        return eventRepository.sumUsageUnitsBySubscriptionAndFeatureIdSince(
+                customerId, subscription.getId(), rule.getFeature().getId(), start, end);
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -62,13 +138,24 @@ public class UsageForecastServiceImpl implements UsageForecastService {
 
         List<CustomerUsageResponse.SubscriptionUsage> subscriptions = new ArrayList<>();
         for (Subscription subscription : subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())) {
-            if (!Boolean.TRUE.equals(subscription.getIsActive())) {
+            boolean active = Boolean.TRUE.equals(subscription.getIsActive());
+            // A plan the customer has left keeps its usage here. An upgrade retires the plan the usage was
+            // recorded on, and dropping it would take the period's record with it; that period still has to be
+            // auditable. Entitlement questions are answered by the active plans only.
+            if (!active && !endedWithin(subscription, now)) {
                 continue;
             }
             List<CustomerUsageResponse.FeatureUsage> features = new ArrayList<>();
             for (PlanFeatureRule rule : planFeatureRuleRepository
                     .findPlanFeatureRulesByPlanId(subscription.getPlan().getId())) {
                 String featureKey = rule.getFeature().getKey();
+                if (!active) {
+                    features.add(CustomerUsageResponse.FeatureUsage.builder()
+                            .featureKey(featureKey)
+                            .used(recordedUsage(customer.getId(), subscription, rule))
+                            .build());
+                    continue;
+                }
                 EntitlementResponse entitlement = clientEntitlementService
                         .checkEntitlement(customerReferenceId, accountId, featureKey, false);
                 EntitlementResponse.Usage usage = entitlement.getUsage();
@@ -83,6 +170,8 @@ public class UsageForecastServiceImpl implements UsageForecastService {
             subscriptions.add(CustomerUsageResponse.SubscriptionUsage.builder()
                     .subscriptionId(subscription.getId().toString())
                     .planKey(subscription.getPlan().getKey())
+                    .status(active ? "active" : "ended")
+                    .endedAt(active ? null : endedAt(subscription))
                     .currentPeriodStart(subscription.getCurrentPeriodStart())
                     .currentPeriodEnd(subscription.getCurrentPeriodEnd())
                     .features(features)

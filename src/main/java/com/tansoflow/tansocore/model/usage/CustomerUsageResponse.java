@@ -41,6 +41,11 @@ public class CustomerUsageResponse {
     public static class SubscriptionUsage {
         private String subscriptionId;
         private String planKey;
+        @Schema(description = "active for a plan the customer is on now, ended for one they have left. Usage on an "
+                + "ended plan is kept so a period can still be audited after a mid-cycle change.")
+        private String status;
+        @Schema(description = "When an ended subscription stopped. Null while it is active.")
+        private Instant endedAt;
         private Instant currentPeriodStart;
         private Instant currentPeriodEnd;
         private List<FeatureUsage> features;

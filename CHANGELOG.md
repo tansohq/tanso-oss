@@ -75,6 +75,20 @@ access, then stalled at pay on a 500.
   `POST /api/v1/client/credits/purchases`, with the checkout-session polling
   path. The spec previously contained no 402 at all.
 
+### Added
+
+- **Usage survives the plan it was recorded on.**
+  `GET /api/v1/client/customers/{ref}/usage` now also reports plans the customer
+  has left, marked `status: "ended"` with an `endedAt`, for the last year; usage
+  on an ended plan is read from the events themselves, since its entitlements
+  are gone. A plan change used to take the period's record out of this response
+  with it. Alongside it, `GET .../usage/history?from&to` returns what was
+  recorded over an explicit window, grouped by subscription, feature and event
+  name, with an event count per group to reconcile a total against, and
+  optional `featureKey` and `subscriptionId` filters. Keyed by customer and
+  window rather than by subscription, which is what keeps it readable after a
+  subscription ends.
+
 ### Changed
 
 - **`Idempotency-Key` works again.** The filter read the request body to hash it
