@@ -887,6 +887,81 @@ class SubscriptionServiceImplTest {
         verify(invoiceService).voidInvoice(stale);
     }
 
+    // Cancelling a scheduled change leaves its invoice payable unless it is voided, and paying one nobody can
+    // fulfil takes the money for nothing. Every cancel surface goes through this method: the DELETE endpoint,
+    // the console, scheduling a downgrade, and retargeting an upgrade.
+    @org.junit.jupiter.api.Test
+    void cancellingScheduledChangesVoidsTheInvoiceBehindAPendingUpgrade() {
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, account.getId().toString());
+
+        com.tansoflow.tansocore.entity.Invoice open = new com.tansoflow.tansocore.entity.Invoice();
+        open.setId(UUID.randomUUID());
+        open.setStatus(com.tansoflow.tansocore.model.billing.type.InvoiceStatus.DUE.name());
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange waiting =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        waiting.setSubscription(existing);
+        waiting.setToPlan(starter);
+        waiting.setAdjustmentInvoice(open);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(existing))
+                .thenReturn(java.util.Optional.of(waiting));
+
+        subscriptionService.cancelScheduledChangesForSubscription(
+                UUID.fromString(currentSubscriptionId), account.getId());
+
+        verify(invoiceService).voidInvoice(open);
+        verify(subscriptionScheduledChangeRepository).cancelAllScheduledChanges(existing);
+    }
+
+    // An arrears upgrade takes no money on this call, so capping it would refuse an agent over money that has
+    // not moved. The charge lands on the next invoice instead.
+    @org.junit.jupiter.api.Test
+    void anArrearsUpgradeDoesNotConsultTheKeyBudget() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan small = inAdvancePlan("metered_small", "0.00");
+        small.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ARREARS.name());
+        Plan big = inAdvancePlan("metered_big", "499.00");
+        big.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ARREARS.name());
+        Subscription existing = subscriptionOnPlanForUpgrade(small, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(big.getId().toString()))).thenReturn(big);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        callingWithAnApiKey(() -> {
+            UUID pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, big.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending).isNull();
+        });
+
+        verify(keyBudgetService, org.mockito.Mockito.never()).assertWithinBudget(any(), any(), any());
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(big);
+    }
+
+    @org.junit.jupiter.api.Test
+    void aMixedBillingTimingChangeSaysSoInsteadOfDoingNothing() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan advance = inAdvancePlan("starter", "149.00");
+        Plan arrears = inAdvancePlan("metered", "0.00");
+        arrears.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ARREARS.name());
+        subscriptionOnPlanForUpgrade(advance, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(arrears.getId().toString()))).thenReturn(arrears);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> subscriptionService.upgradeSubscription(
+                        currentSubscriptionId, accountIdString, arrears.getId().toString(), true))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Cannot change from an");
+    }
+
     @org.junit.jupiter.api.Test
     void upgradeFromTheConsoleStillSwapsThePlanImmediately() {
         String accountIdString = account.getId().toString();

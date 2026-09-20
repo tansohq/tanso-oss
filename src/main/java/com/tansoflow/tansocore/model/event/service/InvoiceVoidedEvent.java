@@ -19,7 +19,6 @@ package com.tansoflow.tansocore.model.event.service;
 
 import java.util.UUID;
 
-public sealed interface DomainEvent permits CustomerCreatedEvent, CustomerUpdatedEvent, InvoiceCreatedEvent, InvoicePaidEvent, InvoiceVoidedEvent, PlanCreatedEvent, PlanUpdatedEvent, StripeModeChangedEvent, SubscriptionActivatedEvent, SubscriptionCancelledEvent, SubscriptionCreatedEvent, SubscriptionPlanChangedEvent, SubscriptionRolloverEvent {
-    UUID accountId();
+/** A Tanso invoice was voided; the mirrored Stripe invoice must be voided too or a human can still pay it. */
+public record InvoiceVoidedEvent(UUID accountId, UUID invoiceId) implements DomainEvent {
 }
-

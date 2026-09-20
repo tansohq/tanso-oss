@@ -806,10 +806,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         AccountSetting upgAccountSetting = accountService.retrieveAccountSettings(accountId);
         boolean isStripeIntegrationUpgrade = upgAccountSetting != null && upgAccountSetting.getStripeMode().isStripeIntegration();
 
-        // What this upgrade costs now: the remaining period repriced from the old plan to the new one.
-        // Money moving on an API key is capped the same way a paid subscribe is, per transaction and per key.
-        BigDecimal prorationAmount = prorationAmount(subscribedPlan, newPlan, ratio);
-        if (prorationAmount.signum() > 0) {
+        // An upgrade only takes money now when both plans bill in advance; in arrears it lands on the next
+        // invoice, so capping this call would refuse an agent for money that is not moving yet.
+        boolean chargedNow = BillingTiming.IN_ADVANCE.name().equals(subscribedPlan.getBillingTiming())
+                && BillingTiming.IN_ADVANCE.name().equals(newPlan.getBillingTiming());
+        BigDecimal prorationAmount = chargedNow ? prorationAmount(subscribedPlan, newPlan, ratio) : BigDecimal.ZERO;
+        if (grantNow && prorationAmount.signum() > 0) {
             if (AuthContext.currentApiKeyId() != null && upgAccountSetting != null
                     && upgAccountSetting.getAgentMaxTopupAmount() != null
                     && prorationAmount.compareTo(upgAccountSetting.getAgentMaxTopupAmount()) > 0) {
@@ -824,9 +826,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // it; InvoiceServiceImpl.markInvoiceAsPaid completes the change. Operators keep the immediate upgrade.
         boolean deferUntilPaid = !isStripeIntegrationUpgrade
                 && AuthContext.currentApiKeyId() != null
-                && prorationAmount.signum() > 0
-                && BillingTiming.IN_ADVANCE.name().equals(subscribedPlan.getBillingTiming())
-                && BillingTiming.IN_ADVANCE.name().equals(newPlan.getBillingTiming());
+                && prorationAmount.signum() > 0;
 
         if (grantNow && deferUntilPaid) {
             // Asking twice must not raise a second invoice, and an invoice for a change that is being replaced must
@@ -834,16 +834,15 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             SubscriptionScheduledChange alreadyWaiting = subscriptionScheduledChangeRepository
                     .findPendingUpgradeBySubscription(currentSubscription).orElse(null);
             if (alreadyWaiting != null && alreadyWaiting.getAdjustmentInvoice() != null
+                    && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())
                     && !InvoiceStatus.PAID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())
                     && !InvoiceStatus.VOID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())) {
-                if (alreadyWaiting.getToPlan().getId().equals(newPlan.getId())) {
-                    return alreadyWaiting.getAdjustmentInvoice().getId();
-                }
-                invoiceService.voidInvoice(alreadyWaiting.getAdjustmentInvoice());
+                return alreadyWaiting.getAdjustmentInvoice().getId();
             }
 
-            Invoice adjustedInvoice = invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
+            // Voids the invoice behind any upgrade this one replaces, so nobody pays for a change that is gone.
             cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+            Invoice adjustedInvoice = invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
             scheduledChange.setStatus(SubscriptionScheduledChangeStatus.PENDING.name());
             scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
             scheduledChange.setEffectiveAt(now);
@@ -851,6 +850,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             scheduledChange.setFromPlan(subscribedPlan);
             scheduledChange.setToPlan(newPlan);
             scheduledChange.setAdjustmentInvoice(adjustedInvoice);
+            // Which key committed the money, so paying the invoice can draw down that key's budget. The webhook
+            // that reports the payment has no security context, the same reason checkout_sessions carries it.
+            scheduledChange.setApiKeyId(AuthContext.currentApiKeyId());
             subscriptionScheduledChangeRepository.save(scheduledChange);
             log.info("Upgrade of subscription {} to plan {} waits on adjustment invoice {}",
                     currentSubscription.getId(), newPlan.getKey(), adjustedInvoice.getId());
@@ -891,6 +893,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+                } else {
+                    // Mixed billing timing has no proration rule. This used to fall through silently and answer
+                    // 200, telling the caller a plan had changed when nothing had.
+                    throw new IllegalArgumentException("Cannot change from an "
+                            + subscribedPlan.getBillingTiming() + " plan to an " + newPlan.getBillingTiming()
+                            + " plan; cancel the subscription and subscribe to the new plan instead");
                 }
             } else if (subscribedPlan.getBillingTiming().equals(BillingTiming.IN_ARREARS.name())) {
                     currentSubscription.setPlan(newPlan);
@@ -934,29 +942,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      * Existing unused credits are kept — only the difference is topped up.
      */
     private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription) {
-        List<PlanCreditAllocation> oldAllocations = planCreditAllocationRepository.findByPlanIdAndDeletedAtIsNull(oldPlan.getId());
-        List<PlanCreditAllocation> newAllocations = planCreditAllocationRepository.findByPlanIdAndDeletedAtIsNull(newPlan.getId());
-
-        Map<String, BigDecimal> oldAmounts = oldAllocations.stream()
-                .collect(Collectors.toMap(a -> a.getCreditModel().getDenomination(), PlanCreditAllocation::getCreditAmount));
-        Map<String, BigDecimal> newAmounts = newAllocations.stream()
-                .collect(Collectors.toMap(a -> a.getCreditModel().getDenomination(), PlanCreditAllocation::getCreditAmount));
-
-        UUID accountId = subscription.getAccount().getId();
-
-        for (var entry : newAmounts.entrySet()) {
-            String denom = entry.getKey();
-            BigDecimal newAmount = entry.getValue();
-            BigDecimal oldAmount = oldAmounts.getOrDefault(denom, BigDecimal.ZERO);
-            BigDecimal delta = newAmount.subtract(oldAmount);
-
-            if (delta.compareTo(BigDecimal.ZERO) > 0) {
-                creditService.grantDeltaCredits(subscription, denom, delta, accountId);
-                log.info("Upgrade credit delta: +{} {} for subscription {}", delta, denom, subscription.getId());
-            }
-            // If delta <= 0 (downgrade), do nothing — keep existing credits, grant fewer next cycle
-        }
-        // Denominations in old but NOT in new → do nothing (keep existing pool, just stop granting next cycle)
+        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan);
     }
 
     @Override
@@ -1026,7 +1012,25 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             log.warn("Subscription not found with id: {} and account id: {}", subscriptionId, accountId);
             return;
         }
+        voidInvoiceBehindAPendingUpgrade(subscription);
         subscriptionScheduledChangeRepository.cancelAllScheduledChanges(subscription);
+    }
+
+    /**
+     * An upgrade waiting on payment owns an invoice a human can still pay. Cancelling the change without voiding
+     * it leaves a charge with nothing behind it: the money would be taken and no plan would move.
+     */
+    private void voidInvoiceBehindAPendingUpgrade(Subscription subscription) {
+        SubscriptionScheduledChange waiting = subscriptionScheduledChangeRepository
+                .findPendingUpgradeBySubscription(subscription).orElse(null);
+        if (waiting == null || waiting.getAdjustmentInvoice() == null) {
+            return;
+        }
+        String status = waiting.getAdjustmentInvoice().getStatus();
+        if (InvoiceStatus.PAID.name().equals(status) || InvoiceStatus.VOID.name().equals(status)) {
+            return;
+        }
+        invoiceService.voidInvoice(waiting.getAdjustmentInvoice());
     }
 
     @Override

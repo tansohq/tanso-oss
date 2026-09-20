@@ -229,6 +229,19 @@ public class SubscriptionClientController {
                                                                 HttpServletRequest httpRequest) {
         requireOwnSubscription(userContext, subscriptionId);
         customerAccessGuard.requirePurchaseScope(userContext);
+
+        // Stripe will not send an invoice to a customer with no email, so ask for the owner before raising one.
+        // Checking afterwards would leave a DUE invoice nobody could ever pay.
+        com.tansoflow.tansocore.entity.Customer customer = subscriptionService
+                .getSubscriptionById(subscriptionId, userContext.getAccountId()).getCustomer();
+        String base = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+        if (userContext.isCustomerScoped() && request.getChangeType() == SubscriptionChangeType.UPGRADE
+                && (customer.getEmail() == null || customer.getEmail().isBlank())) {
+            String ownerUrl = base + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/owner";
+            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.<Void>builder().error(GateError.ownerEmailRequired(ownerUrl)).success(false).build());
+        }
+
         UUID pendingInvoiceId = null;
         if (request.getChangeType() == SubscriptionChangeType.UPGRADE) {
             pendingInvoiceId = subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
@@ -241,16 +254,7 @@ public class SubscriptionClientController {
         // The upgrade is raised but not granted: the agent gets the invoice to hand to a human, and something to
         // poll. Paying it swaps the plan. An agent must not reach a paid tier before its principal pays for it.
         if (pendingInvoiceId != null) {
-            com.tansoflow.tansocore.entity.Customer customer = subscriptionService
-                    .getSubscriptionById(subscriptionId, userContext.getAccountId()).getCustomer();
-            String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
-            String pollUrl = baseUrl + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/status";
-
-            if (customer.getEmail() == null || customer.getEmail().isBlank()) {
-                String ownerUrl = baseUrl + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/owner";
-                return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
-                        .body(ApiResponse.<Void>builder().error(GateError.ownerEmailRequired(ownerUrl)).success(false).build());
-            }
+            String pollUrl = base + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/status";
 
             AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
             GateError gate;

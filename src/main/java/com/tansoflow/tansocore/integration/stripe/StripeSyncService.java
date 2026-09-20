@@ -84,6 +84,9 @@ public interface StripeSyncService {
 
     void disableAutoAdvanceOnStripeInvoice(String stripeInvoiceId, UUID accountId) throws StripeException;
 
+    /** Voids the mirrored Stripe invoice for a Tanso invoice, so a human cannot pay a charge nobody can fulfil. */
+    void voidStripeInvoiceFor(UUID tansoInvoiceId, UUID accountId) throws StripeException;
+
     void addLineItemToDraftInvoice(String stripeInvoiceId, UUID accountId, BigDecimal amount, String currency, String description) throws StripeException;
 
     void finalizeAndPayStripeInvoice(String stripeInvoiceId, UUID accountId) throws StripeException;

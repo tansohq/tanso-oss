@@ -86,6 +86,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     private final EventRepository eventRepository;
     private final PlanFeatureRuleRepository planFeatureRuleRepository;
     private final com.tansoflow.tansocore.repository.SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
+    private final com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
 
     @Transactional
     @Override
@@ -450,6 +451,13 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public void markInvoiceAsPaid(Invoice invoice) {
+        // A voided invoice grants nothing. If Stripe reports a payment against one, the charge needs a human;
+        // silently flipping it to PAID would claim the customer and grant entitlements for a cancelled change.
+        if (InvoiceStatus.VOID.name().equals(invoice.getStatus())) {
+            log.error("Payment reported for voided invoice {} on subscription {}; not granting anything, this needs a refund",
+                    invoice.getId(), invoice.getSubscription() != null ? invoice.getSubscription().getId() : null);
+            return;
+        }
         invoice.setStatus(InvoiceStatus.PAID.name());
         invoiceRepository.save(invoice);
 
@@ -491,6 +499,15 @@ public class InvoiceServiceImpl implements InvoiceService {
                         pending.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.COMPLETED.name());
                         pending.setFulfilledAt(Instant.now());
                         subscriptionScheduledChangeRepository.save(pending);
+
+                        // The new plan's credits. The period's grant was already made under the old plan and its
+                        // idempotency key is not plan-scoped, so without the delta the upgrade buys no credits.
+                        creditService.grantUpgradeDelta(subscription, pending.getFromPlan(), pending.getToPlan());
+
+                        // Draw down the budget of the key that asked for this change, now that money has moved.
+                        keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),
+                                com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, invoice.getAmount(),
+                                invoice.getId().toString(), "plan_change:" + invoice.getId());
 
                         log.info("Upgrade to plan {} fulfilled for subscription {} by paid adjustment invoice {}",
                                 pending.getToPlan().getKey(), subscription.getId(), invoice.getId());
@@ -586,14 +603,18 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Transactional
     @Override
     public Invoice createAdjustmentInvoice(Plan subscribedPlan, Plan newPlan, Subscription currentSubscription, BigDecimal ratio, Instant now) {
+        // A free plan carries a null price, and free to paid is the ordinary agent upgrade.
+        BigDecimal oldPrice = subscribedPlan.getPriceAmount() != null ? subscribedPlan.getPriceAmount() : BigDecimal.ZERO;
+        BigDecimal newPrice = newPlan.getPriceAmount() != null ? newPlan.getPriceAmount() : BigDecimal.ZERO;
+
         // This is the remaining charge calculated from the current plan
         BigDecimal oldRemaining = ratio
-                .multiply(subscribedPlan.getPriceAmount())
+                .multiply(oldPrice)
                 .setScale(2, RoundingMode.HALF_UP);
 
         // This is the remaining charge calculated from the new plan
         BigDecimal newRemaining = ratio
-                .multiply(newPlan.getPriceAmount())
+                .multiply(newPrice)
                 .setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal credit = oldRemaining.negate();
@@ -692,6 +713,10 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setStatus(InvoiceStatus.VOID.name());
         invoiceRepository.save(invoice);
         log.info("Voided invoice {}", invoice.getId());
+        // A hosted Stripe invoice stays payable until Stripe is told otherwise, and paying one nobody can fulfil
+        // takes the money for nothing.
+        eventPublisher.publishEvent(new com.tansoflow.tansocore.model.event.service.InvoiceVoidedEvent(
+                invoice.getSubscription().getAccount().getId(), invoice.getId()));
     }
 
     @Override

@@ -71,6 +71,10 @@ public class SubscriptionScheduledChange {
     @JoinColumn(name = "adjustment_invoice_id")
     private Invoice adjustmentInvoice;
 
+    /** The API key that asked for a change waiting on payment; its budget is drawn down when the invoice is paid. */
+    @Column(name = "api_key_id")
+    private java.util.UUID apiKeyId;
+
     @Size(max = 32)
     @NotNull
     @Column(name = "status", nullable = false, length = 32)

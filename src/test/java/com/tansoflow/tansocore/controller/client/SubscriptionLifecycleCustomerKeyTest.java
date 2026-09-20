@@ -258,9 +258,6 @@ class SubscriptionLifecycleCustomerKeyTest {
     void anUnpaidPlanChangeWithoutAnEmailAnswers402NominateOwner() throws Exception {
         subscription.getCustomer().setEmail(null);
         subscription.getCustomer().setExternalClientCustomerId("agent_noemail");
-        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
-                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.eq(true))).thenReturn(UUID.randomUUID());
 
         var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
                 new org.springframework.mock.web.MockHttpServletRequest());
@@ -271,5 +268,9 @@ class SubscriptionLifecycleCustomerKeyTest {
         org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("nominate_owner");
         org.assertj.core.api.Assertions.assertThat(gate.getUrl()).endsWith("/api/v1/client/customers/agent_noemail/owner");
         org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
+        // Asked before anything is raised: an invoice with no email behind it could never be paid.
+        org.mockito.Mockito.verify(subscriptionService, org.mockito.Mockito.never())
+                .upgradeSubscription(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 }

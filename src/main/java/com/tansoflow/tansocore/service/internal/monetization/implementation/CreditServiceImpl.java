@@ -787,6 +787,30 @@ public class CreditServiceImpl implements CreditService {
         log.info("Granted delta {} {} to customer {} for subscription upgrade", deltaAmount, denomination, customerId);
     }
 
+    @Override
+    @Transactional
+    public void grantUpgradeDelta(Subscription subscription, com.tansoflow.tansocore.entity.Plan oldPlan,
+                                  com.tansoflow.tansocore.entity.Plan newPlan) {
+        java.util.Map<String, BigDecimal> oldAmounts = planCreditAllocationRepository
+                .findByPlanIdAndDeletedAtIsNull(oldPlan.getId()).stream()
+                .collect(java.util.stream.Collectors.toMap(a -> a.getCreditModel().getDenomination(),
+                        com.tansoflow.tansocore.entity.PlanCreditAllocation::getCreditAmount));
+        java.util.Map<String, BigDecimal> newAmounts = planCreditAllocationRepository
+                .findByPlanIdAndDeletedAtIsNull(newPlan.getId()).stream()
+                .collect(java.util.stream.Collectors.toMap(a -> a.getCreditModel().getDenomination(),
+                        com.tansoflow.tansocore.entity.PlanCreditAllocation::getCreditAmount));
+
+        UUID accountId = subscription.getAccount().getId();
+        for (var entry : newAmounts.entrySet()) {
+            BigDecimal delta = entry.getValue().subtract(oldAmounts.getOrDefault(entry.getKey(), BigDecimal.ZERO));
+            if (delta.compareTo(BigDecimal.ZERO) > 0) {
+                grantDeltaCredits(subscription, entry.getKey(), delta, accountId);
+                log.info("Upgrade credit delta: +{} {} for subscription {}", delta, entry.getKey(), subscription.getId());
+            }
+            // Fewer credits on the new plan keeps what is already granted; the next cycle grants the new amount.
+        }
+    }
+
     // ─── Internal helpers ───
 
     private CreditPool retrievePool(String poolId, String accountId) {

@@ -99,6 +99,9 @@ class InvoiceServiceImplTest {
     @MockitoBean
     private com.tansoflow.tansocore.repository.SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
 
+    @MockitoBean
+    private com.tansoflow.tansocore.service.internal.account.KeyBudgetService keyBudgetService;
+
     @Test
     void testCreateNewInvoice_CalculatesUsageCosts() {
         // Setup
@@ -1090,6 +1093,8 @@ class InvoiceServiceImplTest {
         pending.setFromPlan(free);
         pending.setToPlan(starter);
         pending.setAdjustmentInvoice(adjustment);
+        UUID keyId = UUID.randomUUID();
+        pending.setApiKeyId(keyId);
         pending.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.PENDING.name());
         when(subscriptionScheduledChangeRepository.findPendingUpgradeByAdjustmentInvoice(adjustment))
                 .thenReturn(java.util.Optional.of(pending));
@@ -1100,6 +1105,48 @@ class InvoiceServiceImplTest {
         assertEquals(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.COMPLETED.name(),
                 pending.getStatus());
         verify(entitlementService).processEntitlementsForSubscription(subscription);
+        // The upgrade's own credits: the period's grant was already made on the free plan.
+        verify(creditService).grantUpgradeDelta(subscription, free, starter);
+        // And the key that committed the money has its budget drawn down now that the money moved.
+        verify(keyBudgetService).recordSpend(eq(account.getId()), eq(keyId),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new BigDecimal("74.50")),
+                any(), any());
+    }
+
+    // Paying a voided invoice must grant nothing: the change it belonged to is gone, and flipping it to PAID
+    // would claim the customer and grant entitlements for an upgrade nobody is waiting on.
+    @Test
+    void payingAVoidedInvoiceGrantsNothing() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan plan = new Plan();
+        plan.setId(UUID.randomUUID());
+        plan.setPriceAmount(new BigDecimal("149.00"));
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setAccount(account);
+        subscription.setPlan(plan);
+        subscription.setIsActive(false);
+
+        Invoice voided = new Invoice();
+        voided.setId(UUID.randomUUID());
+        voided.setSubscription(subscription);
+        voided.setAmount(new BigDecimal("74.50"));
+        voided.setType(InvoiceType.IN_ADVANCE_INITIAL.name());
+        voided.setStatus(InvoiceStatus.VOID.name());
+
+        invoiceService.markInvoiceAsPaid(voided);
+
+        assertEquals(InvoiceStatus.VOID.name(), voided.getStatus());
+        assertFalse(subscription.getIsActive());
+        verify(entitlementService, never()).processEntitlementsForSubscription(any());
+        verify(invoiceRepository, never()).save(any());
     }
 
     // The Stripe-integration path fulfils its own pending upgrade from the webhook, and a regular invoice must

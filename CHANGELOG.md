@@ -88,6 +88,15 @@ access, then stalled at pay on a 500.
   checked against the account's per-charge cap and the calling key's budget
   first, which answer 403 as elsewhere. Operators acting in the console keep the
   immediate upgrade, and Stripe-driven accounts are unchanged.
+  Cancelling a plan change now voids the invoice behind it, in Stripe as well as
+  in Tanso, so nobody can pay for a change that no longer exists; that covers
+  the delete-scheduled-change endpoint, the console, scheduling a downgrade and
+  retargeting the upgrade. Paying an invoice that is already void grants
+  nothing and is logged for a refund. Paying the upgrade grants the new plan's
+  credits, which the period's plan grant would otherwise have swallowed, and
+  draws down the budget of the key that asked for the change. A change between
+  an in-advance and an in-arrears plan is refused rather than silently doing
+  nothing and answering 200.
 
 - A customer key without the `purchase` scope now gets 403 `scope_denied`
   instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`

@@ -34,5 +34,8 @@ public interface StripeInvoiceRepository extends JpaRepository <StripeInvoice, U
 
     StripeInvoice findStripeInvoiceByStripeInvoiceExternalId(String invoiceId);
 
+    @Query("SELECT si FROM StripeInvoice si WHERE si.invoice.id = :tansoInvoiceId")
+    StripeInvoice findByTansoInvoiceId(UUID tansoInvoiceId);
+
     boolean existsStripeInvoiceByStripeInvoiceExternalId(String stripeInvoiceExternalId);
 }

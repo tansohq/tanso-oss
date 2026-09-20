@@ -1,0 +1,16 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260919-1"
+      author: tanso
+      comment: >
+        A plan change an agent has to pay for waits on its adjustment invoice,
+        and the key that asked for it is recorded so paying the invoice draws
+        down that key's budget. The webhook that reports the payment carries no
+        security context, the same reason checkout_sessions keeps a key id.
+      changes:
+        - addColumn:
+            tableName: subscription_scheduled_changes
+            columns:
+              - column:
+                  name: api_key_id
+                  type: UUID
