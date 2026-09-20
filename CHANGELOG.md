@@ -3,11 +3,15 @@
 Notable changes to Tanso Core. Releases before 0.9.0 are recorded only as git
 tags; this file starts where the changelog does.
 
-## Unreleased
+## 0.10.0 — 2026-09-20
 
-Found by running an agent through the seven-stage funnel against the quickstart
-stack with `agent-ready`. The agent cleared discover, understand, signup and
-access, then stalled at pay on a 500.
+The release where an agent gets all the way through on its own. Everything here
+was found by running a real agent at the product with `agent-ready`, watching
+where it stopped, and fixing that. It now discovers the catalog, signs up with
+no email and no CAPTCHA, checks an entitlement, records usage, asks for a paid
+plan, hands its principal one link to pay, and picks the account up once the
+money lands. The only human step is the payment itself, which is the one step
+that should need a human.
 
 ### Fixed
 

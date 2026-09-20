@@ -46,7 +46,7 @@ spring:
         enabled: false
         protocol: STREAMABLE
         name: tanso-mcp
-        version: ${TANSO_MCP_SERVER_VERSION:0.9.0}
+        version: ${TANSO_MCP_SERVER_VERSION:0.10.0}
         streamable-http:
           mcp-endpoint: /mcp
   datasource:
