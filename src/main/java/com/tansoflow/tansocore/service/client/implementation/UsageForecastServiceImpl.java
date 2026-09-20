@@ -57,6 +57,57 @@ public class UsageForecastServiceImpl implements UsageForecastService {
 
     @Override
     @Transactional(readOnly = true)
+    public com.tansoflow.tansocore.model.usage.CustomerEventsResponse getRecordedEvents(
+            String customerReferenceId, String accountId, Instant from, Instant to,
+            String featureKey, int page, int limit) {
+        Customer customer = customerService
+                .retrieveCustomerByExternalClientCustomerIdAndAccount(customerReferenceId, accountId);
+
+        UUID featureId = null;
+        if (featureKey != null) {
+            featureId = featureRepository.findByKeyAndAccountId(featureKey, UUID.fromString(accountId))
+                    .map(f -> f.getId()).orElse(null);
+            if (featureId == null) {
+                // A feature nobody has heard of matches nothing, rather than matching everything.
+                return com.tansoflow.tansocore.model.usage.CustomerEventsResponse.builder()
+                        .customerReferenceId(customerReferenceId).from(from).to(to)
+                        .hasMore(false).events(List.of()).build();
+            }
+        }
+
+        org.springframework.data.domain.Page<com.tansoflow.tansocore.entity.Event> found =
+                eventRepository.findRecordedEvents(customer.getId(), UUID.fromString(accountId), from, to, featureId,
+                        org.springframework.data.domain.PageRequest.of(page, limit));
+
+        java.util.Map<UUID, String> featureKeys = new java.util.HashMap<>();
+        List<com.tansoflow.tansocore.model.usage.CustomerEventsResponse.RecordedEvent> events = new ArrayList<>();
+        for (com.tansoflow.tansocore.entity.Event event : found.getContent()) {
+            String key = event.getFeatureId() == null ? null : featureKeys.computeIfAbsent(event.getFeatureId(),
+                    id -> featureRepository.findByIdAndAccountId(id, UUID.fromString(accountId))
+                            .map(f -> f.getKey()).orElse(null));
+            events.add(com.tansoflow.tansocore.model.usage.CustomerEventsResponse.RecordedEvent.builder()
+                    .id(event.getId() == null ? null : event.getId().toString())
+                    .eventIdempotencyKey(event.getEventIdempotencyKey())
+                    .eventName(event.getEventName())
+                    .featureKey(key)
+                    .subscriptionId(event.getSubscriptionId() == null ? null : event.getSubscriptionId().toString())
+                    .usageUnits(event.getUsageUnits())
+                    .usageUnitType(event.getUsageUnitType())
+                    .occurredAt(event.getOccurredAt())
+                    .build());
+        }
+
+        return com.tansoflow.tansocore.model.usage.CustomerEventsResponse.builder()
+                .customerReferenceId(customerReferenceId)
+                .from(from)
+                .to(to)
+                .hasMore(found.hasNext())
+                .events(events)
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse getUsageHistory(
             String customerReferenceId, String accountId, Instant from, Instant to,
             String featureKey, String subscriptionId) {

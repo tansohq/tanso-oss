@@ -3,6 +3,18 @@
 Notable changes to Tanso Core. Releases before 0.9.0 are recorded only as git
 tags; this file starts where the changelog does.
 
+## Unreleased
+
+### Added
+
+- **The events behind a usage total can be read back.**
+  `GET /api/v1/client/customers/{ref}/usage/events` returns the individual
+  events a customer recorded, newest first, with the idempotency key each was
+  written under, so an aggregate can be checked against its records. Optional
+  `featureKey`, page-based paging, a window that defaults to 90 days and is
+  capped at 366. The events endpoint was write-only; recorded usage stays
+  append-only, and a correction is another event.
+
 ## 0.10.0 — 2026-09-20
 
 The release where an agent gets all the way through on its own. Everything here

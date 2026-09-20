@@ -6906,6 +6906,89 @@
                 ]
             }
         },
+        "/api/v1/client/customers/{customerReferenceId}/usage/events": {
+            "get": {
+                "tags": [
+                    "Usage"
+                ],
+                "summary": "The events behind a usage total",
+                "description": "The individual events a customer recorded, newest first, so an aggregate can be checked against the records it was built from. Recorded usage is append-only: a correction is another event, so what comes back is what was written. Defaults to the last 90 days; the window is capped at 366 days and the page at 200.",
+                "operationId": "getRecordedEvents",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "from",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "to",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "format": "date-time"
+                        }
+                    },
+                    {
+                        "name": "featureKey",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 0
+                        }
+                    },
+                    {
+                        "name": "limit",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "format": "int32",
+                            "default": 50
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseCustomerEventsResponse"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/customers/{customerReferenceId}/status": {
             "get": {
                 "tags": [
@@ -15357,6 +15440,87 @@
                         "format": "date-time"
                     },
                     "lastOccurredAt": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "ApiResponseCustomerEventsResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/CustomerEventsResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "CustomerEventsResponse": {
+                "type": "object",
+                "description": "Events a customer recorded, newest first",
+                "properties": {
+                    "customerReferenceId": {
+                        "type": "string"
+                    },
+                    "from": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "to": {
+                        "type": "string",
+                        "format": "date-time"
+                    },
+                    "hasMore": {
+                        "type": "boolean",
+                        "description": "True when more events exist before this page's oldest entry; ask again with a higher offset"
+                    },
+                    "events": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/RecordedEvent"
+                        }
+                    }
+                }
+            },
+            "RecordedEvent": {
+                "type": "object",
+                "description": "One recorded event, as it was written",
+                "properties": {
+                    "id": {
+                        "type": "string"
+                    },
+                    "eventIdempotencyKey": {
+                        "type": "string",
+                        "description": "The key the client sent to make the write idempotent. Null when none was sent."
+                    },
+                    "eventName": {
+                        "type": "string"
+                    },
+                    "featureKey": {
+                        "type": "string"
+                    },
+                    "subscriptionId": {
+                        "type": "string",
+                        "description": "The subscription the event was recorded against. Null when it carried none."
+                    },
+                    "usageUnits": {
+                        "type": "number"
+                    },
+                    "usageUnitType": {
+                        "type": "string"
+                    },
+                    "occurredAt": {
                         "type": "string",
                         "format": "date-time"
                     }

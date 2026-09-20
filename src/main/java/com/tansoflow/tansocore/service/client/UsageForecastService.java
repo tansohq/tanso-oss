@@ -35,6 +35,18 @@ public interface UsageForecastService {
      * @param featureKey      optional filter
      * @param subscriptionId  optional filter
      */
+    /**
+     * The individual events behind a usage total, newest first. Recorded usage is append-only, so this is what
+     * was written at the time; a correction is another event.
+     *
+     * @param featureKey optional filter
+     * @param page       zero-based page number
+     * @param limit      page size, capped by the service
+     */
+    com.tansoflow.tansocore.model.usage.CustomerEventsResponse getRecordedEvents(
+            String customerReferenceId, String accountId, java.time.Instant from, java.time.Instant to,
+            String featureKey, int page, int limit);
+
     com.tansoflow.tansocore.model.usage.CustomerUsageHistoryResponse getUsageHistory(
             String customerReferenceId, String accountId, java.time.Instant from, java.time.Instant to,
             String featureKey, String subscriptionId);

@@ -50,6 +50,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -352,5 +354,66 @@ class UsageForecastServiceImplTest {
         assertThat(history.getUsage().get(0).getSubscriptionId()).isNull();
         assertThat(history.getUsage().get(0).getPlanKey()).isNull();
         assertThat(history.getUsage().get(0).getUsageUnits()).isEqualByComparingTo("4");
+    }
+
+    // The aggregate on the usage endpoints has to be checkable against the records it was built from.
+    @Test
+    void recordedEventsComeBackWithTheirIdempotencyKeyAndFeature() {
+        UUID featureId = UUID.randomUUID();
+        Feature chat = new Feature();
+        chat.setId(featureId);
+        chat.setKey("ai.chat");
+        when(featureRepository.findByIdAndAccountId(featureId, accountId)).thenReturn(Optional.of(chat));
+
+        com.tansoflow.tansocore.entity.Event event = new com.tansoflow.tansocore.entity.Event();
+        event.setId(UUID.randomUUID());
+        event.setEventIdempotencyKey("run-1-evt-1");
+        event.setEventName("chat completion");
+        event.setFeatureId(featureId);
+        event.setSubscriptionId(subscription.getId());
+        event.setUsageUnits(new BigDecimal("3"));
+        event.setOccurredAt(Instant.now().minus(Duration.ofHours(2)));
+        when(eventRepository.findRecordedEvents(eq(customer.getId()), eq(accountId), any(), any(), eq(null), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(event),
+                        org.springframework.data.domain.PageRequest.of(0, 50), 1));
+
+        var events = service.getRecordedEvents("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(7)), Instant.now(), null, 0, 50);
+
+        assertThat(events.getEvents()).hasSize(1);
+        var only = events.getEvents().get(0);
+        assertThat(only.getEventIdempotencyKey()).isEqualTo("run-1-evt-1");
+        assertThat(only.getFeatureKey()).isEqualTo("ai.chat");
+        assertThat(only.getEventName()).isEqualTo("chat completion");
+        assertThat(only.getUsageUnits()).isEqualByComparingTo("3");
+        assertThat(events.getHasMore()).isFalse();
+    }
+
+    @Test
+    void moreEventsThanAPageSaysSo() {
+        com.tansoflow.tansocore.entity.Event event = new com.tansoflow.tansocore.entity.Event();
+        event.setId(UUID.randomUUID());
+        event.setOccurredAt(Instant.now());
+        when(eventRepository.findRecordedEvents(eq(customer.getId()), eq(accountId), any(), any(), eq(null), any()))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(event),
+                        org.springframework.data.domain.PageRequest.of(0, 1), 5));
+
+        var events = service.getRecordedEvents("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(7)), Instant.now(), null, 0, 1);
+
+        assertThat(events.getHasMore()).isTrue();
+    }
+
+    // A feature nobody has heard of matches nothing, rather than silently matching everything.
+    @Test
+    void anUnknownFeatureFilterReturnsNothing() {
+        when(featureRepository.findByKeyAndAccountId("nope", accountId)).thenReturn(Optional.empty());
+
+        var events = service.getRecordedEvents("cust-1", accountId.toString(),
+                Instant.now().minus(Duration.ofDays(7)), Instant.now(), "nope", 0, 50);
+
+        assertThat(events.getEvents()).isEmpty();
+        assertThat(events.getHasMore()).isFalse();
+        verify(eventRepository, never()).findRecordedEvents(any(), any(), any(), any(), any(), any());
     }
 }
