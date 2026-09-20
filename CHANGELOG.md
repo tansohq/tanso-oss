@@ -77,6 +77,14 @@ access, then stalled at pay on a 500.
 
 ### Changed
 
+- **`Idempotency-Key` works again.** The filter read the request body to hash it
+  and passed on a wrapper that does not replay what was read, so every POST that
+  carried the header reached the controller with an empty body and failed as
+  400 "Malformed request body". The 400 was then stored, so retries with the
+  same key replayed it. Found by an agent running end to end with agent-ready.
+- A 402 whose `url` is a hosted invoice now sets `poll` to the customer's status
+  URL instead of null.
+
 - A customer key without the `purchase` scope now gets 403 `scope_denied`
   instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`
   code but now carry the gate object (`gate: "scope"`, with `use_own_reference`
