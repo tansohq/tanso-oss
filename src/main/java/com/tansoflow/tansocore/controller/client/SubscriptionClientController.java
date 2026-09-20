@@ -160,11 +160,12 @@ public class SubscriptionClientController {
 
         GateError gateError = null;
         if (status == HttpStatus.PAYMENT_REQUIRED) {
-            String pollUrl = null;
-            if (subscribedCustomerResponse.getCheckoutSessionId() != null) {
-                String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
-                pollUrl = baseUrl + "/api/v1/client/checkout-sessions/" + subscribedCustomerResponse.getCheckoutSessionId();
-            }
+            String baseUrl = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+            // A hosted invoice link has no checkout session to poll; the customer's status shows the plan and
+            // claim flip once the invoice is paid, so an agent is never left without something to watch.
+            String pollUrl = subscribedCustomerResponse.getCheckoutSessionId() != null
+                    ? baseUrl + "/api/v1/client/checkout-sessions/" + subscribedCustomerResponse.getCheckoutSessionId()
+                    : baseUrl + "/api/v1/client/customers/" + subscriptionRequest.getCustomerReferenceId() + "/status";
             gateError = GateError.paymentRequired(subscribedCustomerResponse.getCheckoutUrl(), pollUrl);
         }
 

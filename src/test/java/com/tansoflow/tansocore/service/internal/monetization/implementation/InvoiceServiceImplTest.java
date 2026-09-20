@@ -1055,6 +1055,96 @@ class InvoiceServiceImplTest {
         assertFalse(invoiceService.planHasAccumulateModeFeatures(plan));
     }
 
+    private Subscription subscriptionOn(Customer customer, Account account, String planKey, BigDecimal price, boolean active) {
+        Plan plan = new Plan();
+        plan.setId(UUID.randomUUID());
+        plan.setKey(planKey);
+        plan.setPriceAmount(price);
+        plan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setAccount(account);
+        subscription.setPlan(plan);
+        subscription.setIsActive(active);
+        subscription.setCurrentPeriodStart(Instant.now().minus(1, java.time.temporal.ChronoUnit.DAYS));
+        subscription.setCurrentPeriodEnd(Instant.now().plus(29, java.time.temporal.ChronoUnit.DAYS));
+        return subscription;
+    }
+
+    private Invoice initialInvoiceFor(Subscription subscription, BigDecimal amount) {
+        Invoice invoice = new Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setSubscription(subscription);
+        invoice.setAmount(amount);
+        invoice.setType(InvoiceType.IN_ADVANCE_INITIAL.name());
+        return invoice;
+    }
+
+    // An agent signs up onto the free default plan, then pays for a real plan. Both used to stay active and the
+    // free plan kept granting its own entitlements. Found by the agent-ready end-to-end run, 2026-09-17.
+    @Test
+    void payingForAPaidPlanRetiresTheFreePlanTheCustomerWasOn() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        customer.setExternalClientCustomerId("agent_7f3a");
+
+        Subscription free = subscriptionOn(customer, account, "developer_demo", BigDecimal.ZERO, true);
+        Subscription paid = subscriptionOn(customer, account, "starter", new BigDecimal("149.00"), false);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(List.of(free, paid));
+
+        invoiceService.markInvoiceAsPaid(initialInvoiceFor(paid, new BigDecimal("149.00")));
+
+        assertTrue(paid.getIsActive());
+        assertFalse(free.getIsActive());
+        assertEquals(com.tansoflow.tansocore.model.subscription.type.CancelModes.IMMEDIATE.name(), free.getCancelMode());
+        verify(entitlementService).processEntitlementRevokeForSubscription(free);
+        verify(creditService).clawBackPlanIncludedCredits(free.getId(), account.getId());
+    }
+
+    // Two paid subscriptions is a legitimate setup: a customer on two products. Cancelling one because the other
+    // activated would throw away revenue the customer agreed to.
+    @Test
+    void payingForAPaidPlanLeavesAnotherPaidSubscriptionAlone() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        customer.setExternalClientCustomerId("cust_42");
+
+        Subscription otherPaid = subscriptionOn(customer, account, "analytics", new BigDecimal("49.00"), true);
+        Subscription paid = subscriptionOn(customer, account, "starter", new BigDecimal("149.00"), false);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(List.of(otherPaid, paid));
+
+        invoiceService.markInvoiceAsPaid(initialInvoiceFor(paid, new BigDecimal("149.00")));
+
+        assertTrue(otherPaid.getIsActive());
+        verify(entitlementService, never()).processEntitlementRevokeForSubscription(otherPaid);
+    }
+
+    // The free default plan activating must not retire anything; it is what the agent starts on.
+    @Test
+    void activatingAFreePlanRetiresNothing() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Subscription free = subscriptionOn(customer, account, "developer_demo", BigDecimal.ZERO, false);
+        Subscription otherFree = subscriptionOn(customer, account, "trial", BigDecimal.ZERO, true);
+
+        invoiceService.markInvoiceAsPaid(initialInvoiceFor(free, BigDecimal.ZERO));
+
+        assertTrue(otherFree.getIsActive());
+        verify(subscriptionRepository, never()).findSubscriptionsByCustomer_Id(customer.getId());
+    }
+
     // An upgrade an agent has not paid for waits on its adjustment invoice. Paying it is what swaps the plan.
     // Without this, nothing in pass-through mode ever completed a pending upgrade.
     @Test

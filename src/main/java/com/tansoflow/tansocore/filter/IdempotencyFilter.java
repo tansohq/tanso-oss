@@ -32,7 +32,6 @@ import org.springframework.lang.NonNull;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
-import org.springframework.web.util.ContentCachingRequestWrapper;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 
 import java.io.IOException;
@@ -89,10 +88,12 @@ public class IdempotencyFilter extends OncePerRequestFilter {
         UUID accountId = UUID.fromString(ctx.getAccountId());
         String endpoint = request.getMethod() + " " + request.getRequestURI();
 
-        ContentCachingRequestWrapper wrappedRequest = new ContentCachingRequestWrapper(request);
-        // Force the body into the cache so the hash covers the full payload
-        wrappedRequest.getInputStream().readAllBytes();
-        String requestHash = idempotencyService.hash(wrappedRequest.getContentAsByteArray());
+        // Read the body once, hash it, and hand the controller a request that serves the same bytes again.
+        // ContentCachingRequestWrapper only records what was read; it does not replay it, so the controller
+        // used to get an empty body and every keyed POST failed as "Malformed request body".
+        byte[] requestBody = request.getInputStream().readAllBytes();
+        CachedBodyRequest wrappedRequest = new CachedBodyRequest(request, requestBody);
+        String requestHash = idempotencyService.hash(requestBody);
 
         Optional<IdempotencyService.StoredResponse> replay;
         try {
@@ -122,6 +123,58 @@ public class IdempotencyFilter extends OncePerRequestFilter {
             }
             wrappedResponse.setHeader(HEADER, idempotencyKey);
             wrappedResponse.copyBodyToResponse();
+        }
+    }
+
+    /** A request whose body can be read again after the filter hashed it. */
+    static final class CachedBodyRequest extends jakarta.servlet.http.HttpServletRequestWrapper {
+        private final byte[] body;
+
+        CachedBodyRequest(HttpServletRequest request, byte[] body) {
+            super(request);
+            this.body = body;
+        }
+
+        @Override
+        public jakarta.servlet.ServletInputStream getInputStream() {
+            java.io.ByteArrayInputStream source = new java.io.ByteArrayInputStream(body);
+            return new jakarta.servlet.ServletInputStream() {
+                @Override
+                public boolean isFinished() {
+                    return source.available() == 0;
+                }
+
+                @Override
+                public boolean isReady() {
+                    return true;
+                }
+
+                @Override
+                public void setReadListener(jakarta.servlet.ReadListener listener) {
+                    throw new UnsupportedOperationException("Async reads are not used for idempotent requests");
+                }
+
+                @Override
+                public int read() {
+                    return source.read();
+                }
+            };
+        }
+
+        @Override
+        public java.io.BufferedReader getReader() {
+            String encoding = getCharacterEncoding() != null ? getCharacterEncoding() : StandardCharsets.UTF_8.name();
+            return new java.io.BufferedReader(new java.io.InputStreamReader(getInputStream(), java.nio.charset.Charset.forName(encoding)));
+        }
+
+        @Override
+        public int getContentLength() {
+            return body.length;
+        }
+
+        @Override
+        public long getContentLengthLong() {
+            return body.length;
         }
     }
 }

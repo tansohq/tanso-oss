@@ -77,6 +77,13 @@ access, then stalled at pay on a 500.
 
 ### Changed
 
+- **`Idempotency-Key` works again.** The filter read the request body to hash it
+  and passed on a wrapper that does not replay what was read, so every POST that
+  carried the header reached the controller with an empty body and failed as
+  400 "Malformed request body". The 400 was then stored, so retries with the
+  same key replayed it. Found by an agent running end to end with agent-ready.
+- A 402 whose `url` is a hosted invoice now sets `poll` to the customer's status
+  URL instead of null.
 - **A plan change an agent has to pay for is now a gate, not a silent grant.**
   `POST /api/v1/client/subscriptions/{id}/plan-change` used to swap the plan and
   grant its entitlements before the adjustment invoice was paid, and it never

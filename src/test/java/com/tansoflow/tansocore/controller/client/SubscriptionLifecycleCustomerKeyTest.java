@@ -151,6 +151,10 @@ class SubscriptionLifecycleCustomerKeyTest {
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getCheckoutUrl())
                 .isEqualTo("https://invoice.stripe.com/i/acct_test/inv_test");
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getSubscription().getIsActive()).isFalse();
+        // No checkout session behind a hosted invoice, so the agent polls its own status instead of getting null.
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getPoll()).endsWith("/api/v1/client/customers/cust-ref/status");
     }
 
     // Stripe refuses to send an invoice to a customer without an email. An agent that signed up with no
