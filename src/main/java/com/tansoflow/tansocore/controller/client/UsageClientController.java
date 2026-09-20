@@ -61,6 +61,40 @@ public class UsageClientController {
         return ResponseEntity.ok(ApiResponse.<CustomerUsageResponse>builder().data(usage).success(true).build());
     }
 
+    @GetMapping("/events")
+    @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
+    @Operation(summary = "The events behind a usage total",
+            description = "The individual events a customer recorded, newest first, so an aggregate can be checked "
+                    + "against the records it was built from. Recorded usage is append-only: a correction is "
+                    + "another event, so what comes back is what was written. Defaults to the last 90 days; the "
+                    + "window is capped at 366 days and the page at 200.",
+            security = @SecurityRequirement(name = "Bearer"))
+    public ResponseEntity<ApiResponse<com.tansoflow.tansocore.model.usage.CustomerEventsResponse>> getRecordedEvents(
+            @AuthenticationPrincipal UserContext userContext,
+            @PathVariable String customerReferenceId,
+            @RequestParam(required = false) java.time.Instant from,
+            @RequestParam(required = false) java.time.Instant to,
+            @RequestParam(required = false) String featureKey,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int limit) {
+        customerReferenceId = customerAccessGuard.resolveCustomerRef(userContext, customerReferenceId);
+        java.time.Instant end = to != null ? to : java.time.Instant.now();
+        java.time.Instant start = from != null ? from : end.minus(java.time.Duration.ofDays(90));
+        if (!start.isBefore(end)) {
+            throw new IllegalArgumentException("from must be before to");
+        }
+        if (start.isBefore(end.minus(java.time.Duration.ofDays(366)))) {
+            throw new IllegalArgumentException("the window is capped at 366 days; ask for a narrower from and to");
+        }
+        if (page < 0 || limit < 1) {
+            throw new IllegalArgumentException("page must be 0 or more and limit at least 1");
+        }
+        var events = usageForecastService.getRecordedEvents(
+                customerReferenceId, userContext.getAccountId(), start, end, featureKey, page, Math.min(limit, 200));
+        return ResponseEntity.ok(ApiResponse.<com.tansoflow.tansocore.model.usage.CustomerEventsResponse>builder()
+                .data(events).success(true).build());
+    }
+
     @GetMapping("/history")
     @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
     @Operation(summary = "Recorded usage over a window",

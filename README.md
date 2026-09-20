@@ -613,6 +613,7 @@ are unchanged.
     "record_usage": "https://your-host/api/v1/client/events",
     "usage_summary": "https://your-host/api/v1/client/customers/agent_7f3c9a2e/usage",
     "usage_history": "https://your-host/api/v1/client/customers/agent_7f3c9a2e/usage/history",
+    "usage_events": "https://your-host/api/v1/client/customers/agent_7f3c9a2e/usage/events",
     "credit_balances": "https://your-host/api/v1/client/credits/agent_7f3c9a2e/pools",
     "buy_credits": "https://your-host/api/v1/client/credits/purchases",
     "change_plan": "https://your-host/api/v1/client/subscriptions",
