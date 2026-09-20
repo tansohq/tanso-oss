@@ -63,8 +63,14 @@ public interface SubscriptionService {
     @Transactional
     void subscriptionInvoicePaid(String invoiceId, String accountId);
 
+    /**
+     * Moves a subscription to a more expensive plan.
+     *
+     * @return the id of an adjustment invoice the upgrade is waiting on, when the caller holds an API key and
+     *         Tanso collects the money itself; null when the plan was swapped immediately or Stripe drives it.
+     */
     @Transactional
-    void upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow);
+    UUID upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow);
 
     void scheduleDowngradeSubscription(String currentSubscriptionId, String accountId, String newPlanId);
 

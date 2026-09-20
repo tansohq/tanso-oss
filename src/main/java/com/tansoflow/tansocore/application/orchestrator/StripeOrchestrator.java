@@ -111,6 +111,14 @@ public class StripeOrchestrator {
         stripeSyncService.createStripeSubscription(event.subscriptionId(), event.accountId());
     }
 
+    // A hosted invoice stays payable in Stripe after Tanso voids its own row, and paying one nobody can fulfil
+    // takes the money for nothing. This runs in every mode: pass-through is where those invoices are minted.
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onInvoiceVoided(com.tansoflow.tansocore.model.event.service.InvoiceVoidedEvent event) throws StripeException {
+        log.info("Received InvoiceVoidedEvent: {}", event);
+        stripeSyncService.voidStripeInvoiceFor(event.invoiceId(), event.accountId());
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSubscriptionPlanChanged(SubscriptionPlanChangedEvent event) throws StripeException {
         log.info("Received SubscriptionPlanChangedEvent: {}", event);

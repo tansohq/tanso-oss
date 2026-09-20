@@ -215,18 +215,63 @@ public class SubscriptionClientController {
     @Operation(summary = "Change plan", description = "Changes a customer subscription to a new plan by upgrading or downgrading", security = @SecurityRequirement(name = "Bearer"))
     @ApiResponses(value = {
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Successfully changed the plan or scheduled the change"),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "402", description =
+                    "The upgrade costs money and the caller holds an API key: the plan change waits on payment. "
+                            + "error.code=payment_required, gate=payment, action=complete_checkout with the hosted "
+                            + "invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the "
+                            + "invoice is paid. Customer-scoped (ck_) keys only."),
+            @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description =
+                    "The proration charge exceeds the account's spend cap or the calling key's budget: "
+                            + "error.code=spend_cap_exceeded or budget_exceeded", content = @Content),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Subscription or plan not found", content = @Content)
     })
     public ResponseEntity<ApiResponse<Void>> changeSubscription(@AuthenticationPrincipal UserContext userContext,
-                                                                @Valid @RequestBody ClientChangeSubscriptionRequest request, @PathVariable("subscriptionId") String subscriptionId) {
+                                                                @Valid @RequestBody ClientChangeSubscriptionRequest request, @PathVariable("subscriptionId") String subscriptionId,
+                                                                HttpServletRequest httpRequest) {
         requireOwnSubscription(userContext, subscriptionId);
         customerAccessGuard.requirePurchaseScope(userContext);
+
+        // Stripe will not send an invoice to a customer with no email, so ask for the owner before raising one.
+        // Checking afterwards would leave a DUE invoice nobody could ever pay.
+        com.tansoflow.tansocore.entity.Customer customer = subscriptionService
+                .getSubscriptionById(subscriptionId, userContext.getAccountId()).getCustomer();
+        String base = httpRequest.getRequestURL().toString().replace(httpRequest.getRequestURI(), "");
+        if (userContext.isCustomerScoped() && request.getChangeType() == SubscriptionChangeType.UPGRADE
+                && (customer.getEmail() == null || customer.getEmail().isBlank())) {
+            String ownerUrl = base + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/owner";
+            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.<Void>builder().error(GateError.ownerEmailRequired(ownerUrl)).success(false).build());
+        }
+
+        UUID pendingInvoiceId = null;
         if (request.getChangeType() == SubscriptionChangeType.UPGRADE) {
-            subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
+            pendingInvoiceId = subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
         }
 
         if (request.getChangeType() == SubscriptionChangeType.DOWNGRADE) {
             subscriptionService.scheduleDowngradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId());
+        }
+
+        // The upgrade is raised but not granted: the agent gets the invoice to hand to a human, and something to
+        // poll. Paying it swaps the plan. An agent must not reach a paid tier before its principal pays for it.
+        if (pendingInvoiceId != null) {
+            String pollUrl = base + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/status";
+
+            AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
+            GateError gate;
+            if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
+                try {
+                    StripePaymentLinkDto link = stripeSyncService.syncNewInvoice(pendingInvoiceId, UUID.fromString(userContext.getAccountId()));
+                    gate = GateError.paymentRequired(link.getPaymentLink(), pollUrl);
+                } catch (StripeException e) {
+                    throw new IllegalStateException("Could not create the Stripe payment link for adjustment invoice "
+                            + pendingInvoiceId + ": " + e.getMessage(), e);
+                }
+            } else {
+                gate = GateError.paymentRequiredNoProcessor();
+            }
+            return ResponseEntity.status(HttpStatus.PAYMENT_REQUIRED).contentType(MediaType.APPLICATION_JSON)
+                    .body(ApiResponse.<Void>builder().error(gate).success(false).build());
         }
 
         ApiResponse<Void> apiResponse = ApiResponse.<Void>builder().success(true).build();

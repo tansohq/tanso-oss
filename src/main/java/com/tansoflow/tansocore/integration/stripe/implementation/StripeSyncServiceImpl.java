@@ -1175,6 +1175,17 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     }
 
     @Override
+    public void voidStripeInvoiceFor(UUID tansoInvoiceId, UUID accountId) throws StripeException {
+        com.tansoflow.tansocore.entity.StripeInvoice mirrored = stripeInvoiceRepository.findByTansoInvoiceId(tansoInvoiceId);
+        if (mirrored == null || mirrored.getStripeInvoiceExternalId() == null) {
+            return;
+        }
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+        stripeClient.v1().invoices().voidInvoice(mirrored.getStripeInvoiceExternalId());
+        log.info("Voided Stripe invoice {} for Tanso invoice {}", mirrored.getStripeInvoiceExternalId(), tansoInvoiceId);
+    }
+
+    @Override
     public void addLineItemToDraftInvoice(String stripeInvoiceId, UUID accountId, BigDecimal amount, String currency, String description) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
 

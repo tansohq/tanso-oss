@@ -84,6 +84,26 @@ access, then stalled at pay on a 500.
   same key replayed it. Found by an agent running end to end with agent-ready.
 - A 402 whose `url` is a hosted invoice now sets `poll` to the customer's status
   URL instead of null.
+- **A plan change an agent has to pay for is now a gate, not a silent grant.**
+  `POST /api/v1/client/subscriptions/{id}/plan-change` used to swap the plan and
+  grant its entitlements before the adjustment invoice was paid, and it never
+  consulted the per-key budget, so a key with no budget could raise its own
+  customer onto an expensive plan. An upgrade that costs money and comes from an
+  API key now raises the adjustment invoice, leaves the subscription on its
+  current plan and answers 402 with the invoice URL and the customer's status
+  URL to poll. Paying the invoice completes the change. The proration amount is
+  checked against the account's per-charge cap and the calling key's budget
+  first, which answer 403 as elsewhere. Operators acting in the console keep the
+  immediate upgrade, and Stripe-driven accounts are unchanged.
+  Cancelling a plan change now voids the invoice behind it, in Stripe as well as
+  in Tanso, so nobody can pay for a change that no longer exists; that covers
+  the delete-scheduled-change endpoint, the console, scheduling a downgrade and
+  retargeting the upgrade. Paying an invoice that is already void grants
+  nothing and is logged for a refund. Paying the upgrade grants the new plan's
+  credits, which the period's plan grant would otherwise have swallowed, and
+  draws down the budget of the key that asked for the change. A change between
+  an in-advance and an in-arrears plan is refused rather than silently doing
+  nothing and answering 200.
 
 - A customer key without the `purchase` scope now gets 403 `scope_denied`
   instead of `forbidden`. Cross-customer and role 403s keep the `forbidden`

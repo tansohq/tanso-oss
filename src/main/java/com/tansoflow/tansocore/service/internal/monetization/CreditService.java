@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.service.internal.monetization;
 
+import com.tansoflow.tansocore.entity.Plan;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.model.credit.CreditGrantDto;
 import com.tansoflow.tansocore.model.credit.CreditModelDto;
@@ -129,4 +130,12 @@ public interface CreditService {
 
     @Transactional
     void grantDeltaCredits(Subscription subscription, String denomination, BigDecimal deltaAmount, UUID accountId);
+
+    /**
+     * Tops up every denomination the new plan grants more of than the old one. The period's plan grant has already
+     * been made under the old plan, and its idempotency key is not plan-scoped, so without this an upgrade buys
+     * no extra credits at all.
+     */
+    @Transactional
+    void grantUpgradeDelta(Subscription subscription, Plan oldPlan, Plan newPlan);
 }

@@ -98,7 +98,16 @@ public class SubscriptionTools {
         }
         try {
             if ("UPGRADE".equalsIgnoreCase(changeType)) {
-                subscriptionService.upgradeSubscription(subscriptionId, getAccountId(), newPlanId, true);
+                java.util.UUID pendingInvoiceId =
+                        subscriptionService.upgradeSubscription(subscriptionId, getAccountId(), newPlanId, true);
+                // The upgrade costs money and the caller holds an API key: nothing changed yet, and saying
+                // "success" here would tell an agent it has a plan it cannot use.
+                if (pendingInvoiceId != null) {
+                    return "{\"success\": false, \"error\": {\"code\": \"payment_required\", \"gate\": \"payment\", "
+                            + "\"action\": \"complete_checkout\", \"invoiceId\": \"" + pendingInvoiceId + "\", "
+                            + "\"message\": \"The plan change waits on invoice " + pendingInvoiceId
+                            + "; a human must pay it, and the plan changes when they do.\"}}";
+                }
             } else if ("DOWNGRADE".equalsIgnoreCase(changeType)) {
                 subscriptionService.scheduleDowngradeSubscription(subscriptionId, getAccountId(), newPlanId);
             } else {

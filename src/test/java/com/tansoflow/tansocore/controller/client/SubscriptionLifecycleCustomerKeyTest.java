@@ -208,4 +208,73 @@ class SubscriptionLifecycleCustomerKeyTest {
         org.assertj.core.api.Assertions.assertThat(response.getBody().getData().getCheckoutUrl()).isNull();
         org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
     }
+
+    private com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest upgradeTo(String planId) {
+        com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest request =
+                new com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest();
+        request.setChangeType(com.tansoflow.tansocore.model.subscription.type.SubscriptionChangeType.UPGRADE);
+        request.setChangeToPlanId(planId);
+        return request;
+    }
+
+    // An upgrade an agent has not paid for comes back as a gate, not a 200 that hides a plan it cannot use yet.
+    @Test
+    void anUnpaidPlanChangeAnswers402WithTheInvoiceLinkAndAStatusPoll() throws Exception {
+        UUID adjustmentInvoiceId = UUID.randomUUID();
+        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
+                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(adjustmentInvoiceId);
+        when(accountService.retrieveAccountSettings(accountId))
+                .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH));
+        com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto link =
+                new com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto();
+        link.setPaymentLink("https://invoice.stripe.com/i/acct_test/inv_adjust");
+        when(stripeSyncService.syncNewInvoice(adjustmentInvoiceId, UUID.fromString(accountId))).thenReturn(link);
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isFalse();
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("complete_checkout");
+        org.assertj.core.api.Assertions.assertThat(gate.getUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/inv_adjust");
+        org.assertj.core.api.Assertions.assertThat(gate.getPoll()).endsWith("/status");
+    }
+
+    @Test
+    void aPlanChangeThatNeedsNoPaymentStays200() throws Exception {
+        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
+                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(null);
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(200);
+        org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isTrue();
+        org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
+    }
+
+    // Stripe will not send an invoice to a customer with no email, so the agent is told where to put one.
+    @Test
+    void anUnpaidPlanChangeWithoutAnEmailAnswers402NominateOwner() throws Exception {
+        subscription.getCustomer().setEmail(null);
+        subscription.getCustomer().setExternalClientCustomerId("agent_noemail");
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("nominate_owner");
+        org.assertj.core.api.Assertions.assertThat(gate.getUrl()).endsWith("/api/v1/client/customers/agent_noemail/owner");
+        org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
+        // Asked before anything is raised: an invoice with no email behind it could never be paid.
+        org.mockito.Mockito.verify(subscriptionService, org.mockito.Mockito.never())
+                .upgradeSubscription(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
+    }
 }
