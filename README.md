@@ -477,7 +477,6 @@ supply them via environment variables. The common ones:
 | `APP_WEBHOOK_ENDPOINT` | Public Stripe webhook URL |
 | `CORS_ALLOWED_ORIGINS` | Allowed dashboard origins |
 | `MASTER_ACCOUNT_ID` / `DEFAULT_FREE_PLAN_ID` | Dogfooding identifiers |
-| `TANSO_TELEMETRY_ENABLED` | Anonymous instance telemetry (`true` by default, set `false` to opt out) |
 | `APP_MODULES_MONETIZATION_ENABLED` | Monetization — plans, features, customers, subscriptions, credits, invoices, the client API, Stripe and the billing jobs (`true` by default; `false` for an internal-spend-only install: those routes answer 404 `module_disabled` and the console shows Internal spend alone). |
 | `APP_MODULES_BUILD_ENABLED` | Internal AI spend — the console's Internal spend section and `/api/v1/spend/**` (`true` by default; `false` for a serve-side-only install) When `false`, every `/api/v1/spend/**` call answers 404 with `error.code: module_disabled`, which is what the console keys on to hide the Internal spend group |
 | `APP_SPEND_ANTHROPIC_BASE_URL` / `APP_SPEND_OPENAI_BASE_URL` | Where internal spend pulls usage and cost from (defaults: the vendors' APIs; set to a gateway or proxy) |
@@ -488,37 +487,6 @@ supply them via environment variables. The common ones:
 
 > The non-`dev` config files reference a `your-domain.com` placeholder for
 > webhook, CORS, and cross-environment URLs — replace these with your own.
-
-### Telemetry
-
-Tanso sends **one anonymous ping per day** so we know how many self-hosted
-instances exist and roughly how they're used. No customer PII, no financial
-data, no keys — ever. The entire telemetry surface is one class,
-[`TelemetryPingJob`](src/main/java/com/tansoflow/tansocore/jobs/scheduler/telemetry/TelemetryPingJob.java),
-so you can audit it in under a minute. The exact payload:
-
-```json
-{
-  "instance_id": "a8098c1a-f86e-11da-bd1a-00112444be1e",
-  "version": "0.9.0",
-  "accounts": 2,
-  "customers": 10,
-  "plans": 3,
-  "subscriptions": 8,
-  "events_last_24h": "101-1k",
-  "mcp_enabled": true,
-  "dogfooding_enabled": false
-}
-```
-
-`instance_id` is a random UUID generated at first boot — it identifies the
-installation, not you. Event volume is reported as a coarse bucket, never an
-exact count. Opt out any time with `TANSO_TELEMETRY_ENABLED=false`.
-
-The ping posts to `https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping`
-(`app.telemetry.endpoint`) — a Supabase edge function owned and operated by the
-Tanso team. The random-looking hostname is just Supabase's auto-generated
-project ID, not a third party.
 
 ---
 

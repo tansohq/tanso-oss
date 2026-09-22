@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260922-1"
+      author: tanso
+      comment: >
+        Instance telemetry is removed. instance_telemetry only held the random
+        instance ID and last ping time for the daily ping, which no longer runs.
+      changes:
+        - dropTable:
+            tableName: instance_telemetry
