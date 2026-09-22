@@ -824,7 +824,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // An agent must not reach a paid tier before its principal pays for it. When the caller holds an API key
         // and Tanso is collecting the money itself, the adjustment invoice is raised and the plan swap waits on
         // it; InvoiceServiceImpl.markInvoiceAsPaid completes the change. Operators keep the immediate upgrade.
+        // STRIPE_DRIVEN is left out: Stripe collects there, through the price change published below, so an
+        // invoice Tanso raises has nothing to pay it.
+        boolean isStripeDriven = upgAccountSetting != null && upgAccountSetting.getStripeMode() == StripeMode.STRIPE_DRIVEN;
         boolean deferUntilPaid = !isStripeIntegrationUpgrade
+                && !isStripeDriven
                 && AuthContext.currentApiKeyId() != null
                 && prorationAmount.signum() > 0;
 

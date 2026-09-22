@@ -15,6 +15,16 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Fixed
+
+- **An agent can change plans on a Stripe-driven account again.** 0.10.0 held
+  a paid plan change made with a customer key until Tanso's adjustment invoice
+  was paid, and that applied to Stripe-driven accounts too, where nothing pays
+  a Tanso invoice. The agent got a 402 saying no payment processor was
+  connected, and an unpayable invoice was left behind. Stripe-driven accounts
+  now change plan straight away and Stripe charges the difference, as the
+  0.10.0 notes said they would.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;

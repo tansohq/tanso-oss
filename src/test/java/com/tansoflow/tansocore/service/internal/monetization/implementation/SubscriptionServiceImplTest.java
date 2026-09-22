@@ -985,4 +985,30 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
         verify(entitlementService).processEntitlementsForSubscription(existing);
     }
+
+    @org.junit.jupiter.api.Test
+    void upgradeOnAnApiKeyOnAStripeDrivenAccountSwapsThePlanForStripeToCharge() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_DRIVEN);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
+                .thenReturn(new com.tansoflow.tansocore.entity.Invoice());
+
+        // Stripe collects on a STRIPE_DRIVEN account, so no Tanso invoice should hold the change back.
+        callingWithAnApiKey(() -> {
+            UUID pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending).isNull();
+        });
+
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
+        verify(entitlementService).processEntitlementsForSubscription(existing);
+    }
 }
