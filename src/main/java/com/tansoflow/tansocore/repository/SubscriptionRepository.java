@@ -19,10 +19,12 @@ package com.tansoflow.tansocore.repository;
 
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.entity.Subscription;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -36,6 +38,12 @@ import java.util.UUID;
 public interface SubscriptionRepository extends JpaRepository<Subscription, UUID> {
     @Query("SELECT subscription FROM Subscription subscription WHERE subscription.id = :uuid AND subscription.account.id = :accountId")
     Subscription findSubscriptionByUuidAndAccountId(UUID uuid, UUID accountId);
+
+    // Row lock for a plan change: two concurrent calls on one subscription must run one after the other, or both
+    // see no pending upgrade and both raise an adjustment invoice.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT subscription FROM Subscription subscription WHERE subscription.id = :uuid AND subscription.account.id = :accountId")
+    Subscription findSubscriptionByUuidAndAccountIdForUpdate(UUID uuid, UUID accountId);
 
     List<Subscription> findSubscriptionsByCustomer(Customer customer);
 

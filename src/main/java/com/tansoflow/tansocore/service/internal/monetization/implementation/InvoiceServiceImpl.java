@@ -446,7 +446,14 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void markInvoiceAsPaid(String invoiceId) {
-        Invoice invoice = invoiceRepository.findById(UUID.fromString(invoiceId)).orElseThrow(() -> new IllegalArgumentException("Invoice not found with id: " + invoiceId));
+        // Locked until this transaction ends. Stripe reports one payment as both invoice.paid and
+        // invoice.payment_succeeded (different event ids), and both arrive here; the second must wait for the first
+        // and then find the invoice already PAID instead of fulfilling the same upgrade again.
+        Invoice invoice = invoiceRepository.findByIdForUpdate(UUID.fromString(invoiceId)).orElseThrow(() -> new IllegalArgumentException("Invoice not found with id: " + invoiceId));
+        if (InvoiceStatus.PAID.name().equals(invoice.getStatus())) {
+            log.info("Invoice {} is already PAID, skipping", invoiceId);
+            return;
+        }
         markInvoiceAsPaid(invoice);
     }
 
@@ -559,7 +566,7 @@ public class InvoiceServiceImpl implements InvoiceService {
 
                         // The new plan's credits. The period's grant was already made under the old plan and its
                         // idempotency key is not plan-scoped, so without the delta the upgrade buys no credits.
-                        creditService.grantUpgradeDelta(subscription, pending.getFromPlan(), pending.getToPlan());
+                        creditService.grantUpgradeDelta(subscription, pending.getFromPlan(), pending.getToPlan(), pending.getId());
 
                         // Draw down the budget of the key that asked for this change, now that money has moved.
                         keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),

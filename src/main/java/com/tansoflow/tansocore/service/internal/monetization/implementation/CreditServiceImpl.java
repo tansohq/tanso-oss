@@ -760,7 +760,8 @@ public class CreditServiceImpl implements CreditService {
 
     @Override
     @Transactional
-    public void grantDeltaCredits(Subscription subscription, String denomination, BigDecimal deltaAmount, UUID accountId) {
+    public void grantDeltaCredits(Subscription subscription, String denomination, BigDecimal deltaAmount, UUID accountId,
+                                  UUID scheduledChangeId) {
         UUID customerId = subscription.getCustomer().getId();
         UUID subscriptionId = subscription.getId();
 
@@ -773,7 +774,14 @@ public class CreditServiceImpl implements CreditService {
             return;
         }
 
-        String idempotencyKey = "upgrade_delta_" + subscriptionId + "_" + denomination + "_" + Instant.now().toEpochMilli();
+        // One key per upgrade, not per call. The key used to end in the current time, so a second report of the
+        // same paid upgrade (Stripe sends invoice.paid and invoice.payment_succeeded) granted the delta again.
+        String idempotencyKey = "upgrade_delta_" + scheduledChangeId + "_" + denomination;
+        if (creditGrantRepository.existsByAccountIdAndIdempotencyKeyAndDeletedAtIsNull(accountId, idempotencyKey)) {
+            log.info("Upgrade delta {} already granted for scheduled change {} on subscription {}, skipping",
+                    denomination, scheduledChangeId, subscriptionId);
+            return;
+        }
 
         CreditGrantRequest grantRequest = new CreditGrantRequest();
         grantRequest.setCreditPoolId(pool.getId().toString());
@@ -790,7 +798,7 @@ public class CreditServiceImpl implements CreditService {
     @Override
     @Transactional
     public void grantUpgradeDelta(Subscription subscription, com.tansoflow.tansocore.entity.Plan oldPlan,
-                                  com.tansoflow.tansocore.entity.Plan newPlan) {
+                                  com.tansoflow.tansocore.entity.Plan newPlan, UUID scheduledChangeId) {
         java.util.Map<String, BigDecimal> oldAmounts = planCreditAllocationRepository
                 .findByPlanIdAndDeletedAtIsNull(oldPlan.getId()).stream()
                 .collect(java.util.stream.Collectors.toMap(a -> a.getCreditModel().getDenomination(),
@@ -804,7 +812,7 @@ public class CreditServiceImpl implements CreditService {
         for (var entry : newAmounts.entrySet()) {
             BigDecimal delta = entry.getValue().subtract(oldAmounts.getOrDefault(entry.getKey(), BigDecimal.ZERO));
             if (delta.compareTo(BigDecimal.ZERO) > 0) {
-                grantDeltaCredits(subscription, entry.getKey(), delta, accountId);
+                grantDeltaCredits(subscription, entry.getKey(), delta, accountId, scheduledChangeId);
                 log.info("Upgrade credit delta: +{} {} for subscription {}", delta, entry.getKey(), subscription.getId());
             }
             // Fewer credits on the new plan keeps what is already granted; the next cycle grants the new amount.
