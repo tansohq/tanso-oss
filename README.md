@@ -169,6 +169,14 @@ for configuration.
    subscribing a paid plan returns a Stripe Checkout URL instead of creating
    the subscription immediately — the subscription is created by webhook once
    the customer pays, so nothing dangles if they never do.
+6. After a Stripe Checkout page, the human lands on
+   `stripeCheckoutSuccessUrl` / `stripeCheckoutCancelUrl` from the account
+   settings. Leave them unset and Tanso sends them to its own plain pages,
+   `/public/checkout/complete` ("You're all set") and
+   `/public/checkout/cancelled` ("Nothing was charged"), on the host the
+   checkout was requested through. Behind a proxy that needs
+   `server.forward-headers-strategy` (see Deployment) so the link carries
+   your public host, not the container's.
 
 <details>
 <summary><strong>Testing Stripe payments locally</strong></summary>

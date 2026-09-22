@@ -1380,9 +1380,9 @@ class InvoiceServiceImplTest {
         leftoverUpgrade.setAmount(new BigDecimal("74.50"));
         leftoverUpgrade.setType(InvoiceType.ADJUSTMENT.name());
         leftoverUpgrade.setStatus(InvoiceStatus.DUE.name());
-        when(invoiceRepository.findOutstandingInvoicesBySubscription(free)).thenReturn(List.of(leftoverUpgrade));
+        when(invoiceRepository.findVoidableInvoicesBySubscription(eq(free), any())).thenReturn(List.of(leftoverUpgrade));
 
-        // An adjustment invoice that has gone past due is not "outstanding" to that query but is still payable.
+        // An adjustment invoice that has gone past due is still payable, whichever query surfaces it.
         Invoice pastDueUpgrade = new Invoice();
         pastDueUpgrade.setId(UUID.randomUUID());
         pastDueUpgrade.setSubscription(free);
@@ -1423,7 +1423,7 @@ class InvoiceServiceImplTest {
         due.setId(UUID.randomUUID());
         due.setSubscription(subscription);
         due.setStatus(InvoiceStatus.DUE.name());
-        when(invoiceRepository.findOutstandingInvoicesBySubscription(subscription)).thenReturn(List.of(due));
+        when(invoiceRepository.findVoidableInvoicesBySubscription(eq(subscription), any())).thenReturn(List.of(due));
 
         invoiceService.voidOutstandingInvoicesForSubscription(subscription);
 

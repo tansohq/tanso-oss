@@ -179,6 +179,23 @@ public class StripeWebhookImpl implements StripeWebhook {
                         handleStripeDrivenInvoicePaymentFailed(invoice);
                     }
                 }
+                // Charge-first upgrades exist only where Stripe holds the subscription.
+                case "invoice.voided" -> {
+                    Invoice invoice = deserializeEvent(event, Invoice.class);
+                    log.info("Invoice voided. Invoice Id: {}", invoice.getId());
+
+                    if (stripeMode == StripeMode.STRIPE_DRIVEN || stripeMode.isStripeIntegration()) {
+                        handleInvoiceVoided(invoice);
+                    }
+                }
+                case "invoice.marked_uncollectible" -> {
+                    Invoice invoice = deserializeEvent(event, Invoice.class);
+                    log.info("Invoice marked uncollectible. Invoice Id: {}", invoice.getId());
+
+                    if (stripeMode == StripeMode.STRIPE_DRIVEN || stripeMode.isStripeIntegration()) {
+                        handleInvoiceMarkedUncollectible(invoice);
+                    }
+                }
                 case "customer.subscription.created" -> {
                     com.stripe.model.Subscription stripeSub = deserializeEvent(event, com.stripe.model.Subscription.class);
                     log.info("Subscription created. Subscription Id: {}", stripeSub.getId());
@@ -1253,6 +1270,63 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} expired unpaid",
                             bridge.getSubscription().getId(), pending.getToPlan().getKey(), pending.getStripeInvoiceId());
                 });
+    }
+
+    /**
+     * STRIPE_DRIVEN or STRIPE_INTEGRATION: someone voided a Stripe invoice. An upgrade waiting on it can never be
+     * paid, so it is cancelled. Voiding already dropped any pending_update; on send_invoice Stripe moved the price
+     * when it raised the invoice, so the price goes back.
+     */
+    @Transactional
+    protected void handleInvoiceVoided(Invoice stripeInvoice) throws StripeException {
+        var linked = stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoice.getId());
+        if (linked != null && linked.getInvoice() != null) {
+            // Set directly: invoiceService.voidInvoice would tell Stripe to void it again.
+            linked.getInvoice().setStatus(InvoiceStatus.VOID.name());
+            log.info("Marked Tanso invoice {} as VOID from Stripe invoice {}", linked.getInvoice().getId(), stripeInvoice.getId());
+        }
+
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        if (pending == null) {
+            return;
+        }
+        Subscription subscription = pending.getSubscription();
+        stripeSyncService.restorePriceAfterDroppedUpgrade(subscription.getId(), subscription.getAccount().getId());
+        cancelUpgradeWaitingOn(pending, stripeInvoice.getId(), "voided");
+    }
+
+    /**
+     * STRIPE_DRIVEN or STRIPE_INTEGRATION: someone wrote a Stripe invoice off. Stripe still accepts payment on an
+     * uncollectible invoice, and paying the one behind an upgrade Tanso gives up on would take money for nothing,
+     * so that invoice is voided and the price restored, like any dropped upgrade.
+     */
+    @Transactional
+    protected void handleInvoiceMarkedUncollectible(Invoice stripeInvoice) throws StripeException {
+        var linked = stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoice.getId());
+        if (linked != null && linked.getInvoice() != null) {
+            linked.getInvoice().setStatus(InvoiceStatus.PAST_DUE.name());
+            log.info("Marked Tanso invoice {} as PAST_DUE from uncollectible Stripe invoice {}",
+                    linked.getInvoice().getId(), stripeInvoice.getId());
+        }
+
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        if (pending == null) {
+            return;
+        }
+        Subscription subscription = pending.getSubscription();
+        stripeSyncService.cancelUnpaidUpgrade(stripeInvoice.getId(), subscription.getId(), subscription.getAccount().getId());
+        cancelUpgradeWaitingOn(pending, stripeInvoice.getId(), "marked uncollectible");
+    }
+
+    private void cancelUpgradeWaitingOn(com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending,
+                                        String stripeInvoiceId, String reason) {
+        pending.setStatus(SubscriptionScheduledChangeStatus.CANCELLED.name());
+        pending.setPaymentUrl(null);
+        subscriptionScheduledChangeRepository.save(pending);
+        log.info("Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} was {}",
+                pending.getSubscription().getId(), pending.getToPlan().getKey(), stripeInvoiceId, reason);
     }
 
     private static BigDecimal amountPaidOf(Invoice stripeInvoice) {

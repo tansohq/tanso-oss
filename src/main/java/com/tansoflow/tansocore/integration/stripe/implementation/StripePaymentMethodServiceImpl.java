@@ -30,6 +30,7 @@ import com.tansoflow.tansocore.auth.AuthContext;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.entity.StripeCustomer;
+import com.tansoflow.tansocore.integration.stripe.CheckoutReturnUrls;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripePaymentMethodService;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
@@ -162,10 +163,8 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
-        String successUrl = settings.getStripeCheckoutSuccessUrl() != null
-                ? settings.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = settings.getStripeCheckoutCancelUrl() != null
-                ? settings.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = CheckoutReturnUrls.successUrl(settings, CheckoutReturnUrls.KIND_PAYMENT);
+        String cancelUrl = CheckoutReturnUrls.cancelUrl(settings);
 
         long amountMinor = amount.multiply(new BigDecimal("100")).setScale(0, RoundingMode.HALF_UP).longValueExact();
         com.stripe.param.checkout.SessionCreateParams.Builder params =
@@ -198,10 +197,8 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
         StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
         Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
-        String successUrl = settings.getStripeCheckoutSuccessUrl() != null
-                ? settings.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = settings.getStripeCheckoutCancelUrl() != null
-                ? settings.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = CheckoutReturnUrls.successUrl(settings, CheckoutReturnUrls.KIND_SETUP);
+        String cancelUrl = CheckoutReturnUrls.cancelUrl(settings);
 
         com.stripe.param.checkout.SessionCreateParams.SetupIntentData.Builder setupIntentData =
                 com.stripe.param.checkout.SessionCreateParams.SetupIntentData.builder()
