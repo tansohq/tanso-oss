@@ -98,10 +98,17 @@ public class SubscriptionTools {
         }
         try {
             if ("UPGRADE".equalsIgnoreCase(changeType)) {
-                java.util.UUID pendingInvoiceId =
+                com.tansoflow.tansocore.model.subscription.UpgradeResult upgrade =
                         subscriptionService.upgradeSubscription(subscriptionId, getAccountId(), newPlanId, true);
                 // The upgrade costs money and the caller holds an API key: nothing changed yet, and saying
                 // "success" here would tell an agent it has a plan it cannot use.
+                if (upgrade.stripePaymentUrl() != null) {
+                    return "{\"success\": false, \"error\": {\"code\": \"payment_required\", \"gate\": \"payment\", "
+                            + "\"action\": \"complete_checkout\", \"url\": \"" + upgrade.stripePaymentUrl() + "\", "
+                            + "\"message\": \"Stripe could not charge the saved payment method; a human must pay the "
+                            + "invoice at url, and the plan changes when they do.\"}}";
+                }
+                java.util.UUID pendingInvoiceId = upgrade.pendingInvoiceId();
                 if (pendingInvoiceId != null) {
                     return "{\"success\": false, \"error\": {\"code\": \"payment_required\", \"gate\": \"payment\", "
                             + "\"action\": \"complete_checkout\", \"invoiceId\": \"" + pendingInvoiceId + "\", "

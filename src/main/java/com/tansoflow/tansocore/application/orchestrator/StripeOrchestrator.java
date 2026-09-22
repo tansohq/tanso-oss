@@ -127,7 +127,7 @@ public class StripeOrchestrator {
             return;
         }
 
-        stripeSyncService.updateStripeSubscriptionPrice(event.subscriptionId(), event.accountId(), event.prorate());
+        stripeSyncService.updateStripeSubscriptionPrice(event.subscriptionId(), event.accountId(), event.planId(), event.prorate());
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)

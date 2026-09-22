@@ -17,6 +17,37 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **An agent can change plans on a Stripe-driven account again.** 0.10.0 held
+  a paid plan change made with a customer key until Tanso's adjustment invoice
+  was paid, and that applied to Stripe-driven accounts too, where nothing pays
+  a Tanso invoice. The agent got a 402 saying no payment processor was
+  connected, and an unpayable invoice was left behind. Tanso no longer raises
+  its own adjustment invoice on Stripe-driven accounts; Stripe charges the
+  difference, and the change counts against the calling key's budget.
+- **On a Stripe-driven account, an agent's upgrade is paid for before the plan
+  moves.** A plan change made with an API key now asks Stripe to invoice the
+  prorated difference and charge the saved card at once
+  (`proration_behavior=always_invoice`, `payment_behavior=pending_if_incomplete`).
+  If the charge goes through, the plan changes in the same call. If there is
+  no card or the charge fails, Stripe keeps the old price, the call answers
+  402 with Stripe's hosted invoice as `url` and the customer status URL as
+  `poll`, and the plan changes when that invoice is paid (`invoice.paid`).
+  If nobody pays before Stripe expires the change (about 23 hours), the
+  pending change is cancelled (`customer.subscription.pending_update_expired`).
+  Before, the new price was billed at the next renewal, so the agent had the
+  paid plan for up to a period before anyone paid, and a failed renewal
+  never took it back. Operator changes (no API key) still switch at once.
+  Existing Stripe webhook endpoints need
+  `customer.subscription.pending_update_expired` added to receive expiries;
+  endpoints created from now on include it.
+- **Upgrades on `STRIPE_INTEGRATION` accounts now reach Stripe.** The upgrade
+  waits on payment before Tanso swaps the plan, but the Stripe price update
+  read the plan off the not-yet-swapped subscription, so Stripe was sent the
+  price it already had. No proration was billed, and the pending upgrade only
+  completed when some later invoice was paid, at the old price. The price
+  update now names the target plan explicitly. When the upgrade completes,
+  the customer also gets the new plan's credit difference, which the
+  previous fulfilment path did not grant.
 - **Concurrent agent signups no longer get past the signup caps.** The
   per-account and per-IP counts ran before, and outside, the transaction that
   inserts the customer, so a burst of simultaneous signups all read a count
