@@ -120,6 +120,7 @@ budget, which the status endpoint reports as `spend.cap`.
   page was opened. Hand `setup_url` to your principal, the human who pays. The page tells them they
   are letting you pay without asking, up to `max_amount` per `period`. When they finish, the card is
   saved, the mandate is stored on your customer, and the customer is claimed.
+  Afterwards Stripe shows them a page that says they can close the tab; it sends you nothing.
 
 The mandate covers the whole customer, not one key. Every charge made off-session with the saved
 card (buying credits, subscribing to a paid plan, the prorated part of an upgrade) must fit two
