@@ -152,9 +152,13 @@ public class UsageForecastServiceImpl implements UsageForecastService {
                 .build();
     }
 
-    /** When an ended subscription stopped: the moment it was cancelled, else the end of its last period. */
+    /**
+     * When an ended subscription stopped, or null when nothing has ended it. cancelEffectiveAt comes first: an
+     * end-of-period cancel records cancelledAt when it is asked for, but the plan keeps running to the period end.
+     * A paid plan still waiting on its first payment is inactive with neither set, and has not ended.
+     */
     private Instant endedAt(Subscription subscription) {
-        return subscription.getCancelledAt() != null ? subscription.getCancelledAt() : subscription.getCurrentPeriodEnd();
+        return subscription.getCancelEffectiveAt() != null ? subscription.getCancelEffectiveAt() : subscription.getCancelledAt();
     }
 
     /**

@@ -268,6 +268,70 @@ class UsageForecastServiceImplTest {
                 .containsExactly("pro");
     }
 
+    // A paid plan is inactive until its first invoice is paid, with no cancel recorded. It has not ended, and
+    // reporting it as ended gave it an end date in the future.
+    @Test
+    void aPlanWaitingOnItsFirstPaymentIsNotReportedAsEnded() {
+        Plan starter = new Plan();
+        starter.setId(UUID.randomUUID());
+        starter.setKey("starter");
+        Subscription pending = new Subscription();
+        pending.setId(UUID.randomUUID());
+        pending.setPlan(starter);
+        pending.setIsActive(false);
+        pending.setCurrentPeriodStart(Instant.now());
+        pending.setCurrentPeriodEnd(Instant.now().plus(Duration.ofDays(30)));
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(pending, subscription));
+        when(clientEntitlementService.checkEntitlement("cust-1", accountId.toString(), "ai.chat", false))
+                .thenReturn(entitlementWithUsage(new BigDecimal("1"), new BigDecimal("2000")));
+
+        CustomerUsageResponse usage = service.getUsage("cust-1", accountId.toString());
+
+        assertThat(usage.getSubscriptions()).extracting(CustomerUsageResponse.SubscriptionUsage::getPlanKey)
+                .containsExactly("pro");
+    }
+
+    // An end-of-period cancel records cancelledAt when it is asked for, but the plan runs to the period end, and
+    // usage recorded in between belongs to it.
+    @Test
+    void anEndOfPeriodCancelEndsAtThePeriodEndNotWhenItWasAsked() {
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        Instant askedAt = Instant.now().minus(Duration.ofDays(10));
+        Instant periodEnd = Instant.now().minus(Duration.ofDays(1));
+        Subscription ended = new Subscription();
+        ended.setId(UUID.randomUUID());
+        ended.setPlan(free);
+        ended.setIsActive(false);
+        ended.setCurrentPeriodStart(Instant.now().minus(Duration.ofDays(31)));
+        ended.setCurrentPeriodEnd(periodEnd);
+        ended.setCancelledAt(askedAt);
+        ended.setCancelEffectiveAt(periodEnd);
+
+        Feature chat = new Feature();
+        chat.setId(UUID.randomUUID());
+        chat.setKey("ai.chat");
+        PlanFeatureRule freeRule = new PlanFeatureRule();
+        freeRule.setFeature(chat);
+        when(planFeatureRuleRepository.findPlanFeatureRulesByPlanId(free.getId())).thenReturn(List.of(freeRule));
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId()))
+                .thenReturn(List.of(ended, subscription));
+        when(eventRepository.sumUsageUnitsBySubscriptionAndFeatureIdSince(
+                eq(customer.getId()), eq(ended.getId()), eq(chat.getId()), any(), eq(periodEnd)))
+                .thenReturn(new BigDecimal("12"));
+        when(clientEntitlementService.checkEntitlement("cust-1", accountId.toString(), "ai.chat", false))
+                .thenReturn(entitlementWithUsage(new BigDecimal("2"), new BigDecimal("2000")));
+
+        CustomerUsageResponse usage = service.getUsage("cust-1", accountId.toString());
+
+        CustomerUsageResponse.SubscriptionUsage left = usage.getSubscriptions().stream()
+                .filter(s -> "developer_demo".equals(s.getPlanKey())).findFirst().orElseThrow();
+        assertThat(left.getEndedAt()).isEqualTo(periodEnd);
+        assertThat(left.getFeatures().get(0).getUsed()).isEqualByComparingTo("12");
+    }
+
     // History is keyed by customer and window, not by the subscription, so a plan change does not hide a period.
     @Test
     void historyReportsUsageFromTheEndedPlanAndTheCurrentOne() {
