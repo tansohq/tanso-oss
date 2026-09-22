@@ -43,10 +43,13 @@ import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.monetization.FeatureService;
 import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -64,8 +67,10 @@ import static org.assertj.core.api.Assertions.within;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +101,10 @@ class AgentSignupServiceImplTest {
     private CheckoutSessionRepository checkoutSessionRepository;
     @Mock
     private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    @Mock
+    private EntityManager entityManager;
+    @Mock
+    private Query lockQuery;
 
     @InjectMocks
     private AgentSignupServiceImpl service;
@@ -112,6 +121,8 @@ class AgentSignupServiceImplTest {
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
                 ((org.springframework.transaction.support.TransactionCallback<Object>) inv.getArgument(0))
                         .doInTransaction(new org.springframework.transaction.support.SimpleTransactionStatus()));
+        lenient().when(entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:k))")).thenReturn(lockQuery);
+        lenient().when(lockQuery.setParameter(eq("k"), anyString())).thenReturn(lockQuery);
         account = new Account();
         account.setId(accountId);
         account.setSlug("acme");
@@ -249,6 +260,31 @@ class AgentSignupServiceImplTest {
         assertThatThrownBy(() -> service.signup("acme", new AgentSignupRequest(), "http://x", "9.9.9.9"))
                 .isInstanceOf(RateLimitExceededException.class);
         verify(customerService, never()).createCustomer(anyString(), any());
+    }
+
+    @Test
+    void capsAreCountedUnderTheAccountAndAddressLocksInsideTheSignupTransaction() {
+        service.signup("acme", new AgentSignupRequest(), "http://x", "9.9.9.9");
+
+        // Lock, count, insert — all inside the one transaction, or concurrent signups each read a count under the cap
+        InOrder inOrder = inOrder(transactionTemplate, lockQuery, customerRepository, customerService);
+        inOrder.verify(transactionTemplate).execute(any());
+        inOrder.verify(lockQuery).setParameter("k", "agent-signup:" + accountId);
+        inOrder.verify(lockQuery).getSingleResult();
+        inOrder.verify(lockQuery).setParameter("k", "agent-signup-ip:9.9.9.9");
+        inOrder.verify(lockQuery).getSingleResult();
+        inOrder.verify(customerRepository).countAgentSignupsSince(eq(accountId), any());
+        inOrder.verify(customerRepository).countAgentSignupsFromIpSince(eq("9.9.9.9"), any());
+        inOrder.verify(customerService).createCustomer(eq(accountId.toString()), any(CustomerRequest.class));
+    }
+
+    @Test
+    void withoutAnAddressOnlyTheAccountLockIsTaken() {
+        service.signup("acme", new AgentSignupRequest(), "http://x", null);
+
+        verify(lockQuery).setParameter("k", "agent-signup:" + accountId);
+        verify(lockQuery, times(1)).getSingleResult();
+        verify(customerRepository, never()).countAgentSignupsFromIpSince(any(), any());
     }
 
     @Test

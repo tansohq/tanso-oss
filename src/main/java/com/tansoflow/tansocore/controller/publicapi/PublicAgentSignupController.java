@@ -77,8 +77,10 @@ public class PublicAgentSignupController {
                 ApiResponse.<AgentSignupResponse>builder().data(response).success(true).build());
     }
 
-    // Behind a proxy the real address arrives via server.forward-headers-strategy (set in the prod,
-    // staging and sandbox profiles). Reading X-Forwarded-For here directly would let any caller pick its own IP.
+    // With server.forward-headers-strategy: framework (the prod, staging and sandbox profiles), Spring
+    // replaces the remote address with the leftmost X-Forwarded-For value. That value is only trustworthy
+    // if the proxy in front overwrites the header; a proxy that appends to it (AWS ALB does by default)
+    // passes through whatever the client sent, so the client picks the IP the per-IP cap counts.
     static String clientIp(HttpServletRequest request) {
         return request.getRemoteAddr();
     }

@@ -48,6 +48,48 @@ tags; this file starts where the changelog does.
   update now names the target plan explicitly. When the upgrade completes,
   the customer also gets the new plan's credit difference, which the
   previous fulfilment path did not grant.
+- **Concurrent agent signups no longer get past the signup caps.** The
+  per-account and per-IP counts ran before, and outside, the transaction that
+  inserts the customer, so a burst of simultaneous signups all read a count
+  under the cap and all got in. The counts and the insert now run in one
+  transaction under a Postgres advisory lock on the account, plus one on the
+  address when there is one. The README now says what the per-IP cap needs
+  from a proxy: it counts the leftmost `X-Forwarded-For`, so the proxy must
+  overwrite that header rather than append to it.
+- **Two concurrent plan changes no longer raise two payable invoices.** An
+  agent that retried an upgrade after a timeout could send the same request
+  twice; both calls found no pending upgrade and each created its own
+  adjustment invoice. `upgradeSubscription` now takes a row lock on the
+  subscription first, so the second call waits and then returns the first
+  call's invoice.
+- **One payment reported twice no longer grants upgrade credits twice.**
+  Stripe sends both `invoice.paid` and `invoice.payment_succeeded` for one
+  payment, with different event ids, so the webhook event-id check let both
+  through. Marking an invoice paid now locks the invoice row and does nothing
+  if it is already `PAID`, the pending upgrade row is locked while it is
+  fulfilled, and the upgrade credit delta's idempotency key is the scheduled
+  change id instead of the current time.
+- **Marking an upgrade's adjustment invoice paid granted the new plan's full
+  credits again.** Mark-paid moved the subscription's billing period to the
+  upgrade moment, which changed the key the period credit grant is idempotent
+  on, so the whole new-plan allocation landed on top of the upgrade delta and
+  the billing cycle shifted. Paying an adjustment invoice now leaves the period
+  alone and skips the period grant; the upgrade's credits still come from the
+  delta. This also covered operator upgrades made from the console.
+- **A free plan retired by a paid plan kept its pending upgrade invoice
+  payable.** Paying that leftover invoice later swapped the plan on the retired
+  subscription and granted its entitlements again. Retiring now voids the
+  subscription's outstanding invoices, including a past-due upgrade invoice, and
+  cancels its scheduled changes.
+- **Cancelling a subscription left its Stripe invoices payable.** Voiding a
+  subscription's outstanding invoices on cancel or downgrade only changed
+  Tanso's copy. It now also voids the hosted Stripe invoice, the same way a
+  replaced upgrade's invoice already was.
+- **`GET /usage` reports a plan as ended only once it has ended.** A paid plan
+  waiting on its first payment was listed as `ended`, with an end date in the
+  future. A plan cancelled at the end of its period showed the time the cancel
+  was asked for as its end, and left out usage recorded between then and the
+  real end.
 
 ### Removed
 

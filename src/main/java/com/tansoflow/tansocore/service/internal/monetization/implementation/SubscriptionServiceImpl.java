@@ -588,22 +588,28 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             throw new ResourceNotFoundException("Subscription not found for invoice id: " + invoiceId);
         }
 
-        switch (invoice.getSubscription().getPlan().getBillingTiming()) {
-            case "IN_ADVANCE" -> {
-                subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
-                subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
-            }
-            case "IN_ARREARS" -> {
-                Instant newPeriodStart = invoice.getInvoicePeriodEnd();
-                Instant newPeriodEnd = newPeriodStart
-                        .atOffset(ZoneOffset.UTC)
-                        .plusMonths(subscription.getIntervalMonths())
-                        .toInstant();
+        // An adjustment invoice covers the rest of the current period from the upgrade moment. Moving the period
+        // to its start would corrupt the cycle and change the key the period's credit grant is idempotent on, so
+        // the full plan allocation would be granted again on top of the upgrade delta.
+        boolean isAdjustment = InvoiceType.ADJUSTMENT.name().equals(invoice.getType());
+        if (!isAdjustment) {
+            switch (invoice.getSubscription().getPlan().getBillingTiming()) {
+                case "IN_ADVANCE" -> {
+                    subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
+                    subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
+                }
+                case "IN_ARREARS" -> {
+                    Instant newPeriodStart = invoice.getInvoicePeriodEnd();
+                    Instant newPeriodEnd = newPeriodStart
+                            .atOffset(ZoneOffset.UTC)
+                            .plusMonths(subscription.getIntervalMonths())
+                            .toInstant();
 
-                subscription.setCurrentPeriodStart(newPeriodStart);
-                subscription.setCurrentPeriodEnd(newPeriodEnd);
-            }
+                    subscription.setCurrentPeriodStart(newPeriodStart);
+                    subscription.setCurrentPeriodEnd(newPeriodEnd);
+                }
 
+            }
         }
         invoiceService.markInvoiceAsPaid(invoice);
         subscriptionRepository.save(subscription);
@@ -784,8 +790,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     @Override
     public UpgradeResult upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+        // Locked until this transaction ends. An agent retrying after a timeout sends the same plan change twice;
+        // without the lock both calls see no pending upgrade and each raises its own payable invoice.
         Subscription currentSubscription = subscriptionRepository
-                .findSubscriptionByUuidAndAccountId(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
+                .findSubscriptionByUuidAndAccountIdForUpdate(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
         Plan subscribedPlan = currentSubscription.getPlan();
         Plan newPlan = planService.retrievePlan(currentSubscription.getAccount(), UUID.fromString(newPlanId));
         if (!PlanStatus.ACTIVE.name().equals(newPlan.getStatus())) {
@@ -902,7 +910,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -914,6 +921,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
 
                     // The budget was checked above; draw it down now that the plan has moved. A no-op without a key.
@@ -932,7 +941,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -943,6 +951,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
             }
         }
@@ -1021,7 +1031,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         subscriptionRepository.save(subscription);
 
         entitlementService.processEntitlementsForSubscription(subscription);
-        grantCreditDeltaForUpgrade(pending.getFromPlan(), pending.getToPlan(), subscription);
+        grantCreditDeltaForUpgrade(pending.getFromPlan(), pending.getToPlan(), subscription, pending.getId());
 
         pending.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
         pending.setFulfilledAt(Instant.now());
@@ -1051,8 +1061,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      * for any denomination where the new plan provides more credits.
      * Existing unused credits are kept — only the difference is topped up.
      */
-    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription) {
-        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan);
+    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription, UUID scheduledChangeId) {
+        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan, scheduledChangeId);
     }
 
     @Override
