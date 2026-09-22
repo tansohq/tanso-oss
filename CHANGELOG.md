@@ -15,6 +15,25 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Fixed
+
+- **Marking an upgrade's adjustment invoice paid granted the new plan's full
+  credits again.** Mark-paid moved the subscription's billing period to the
+  upgrade moment, which changed the key the period credit grant is idempotent
+  on, so the whole new-plan allocation landed on top of the upgrade delta and
+  the billing cycle shifted. Paying an adjustment invoice now leaves the period
+  alone and skips the period grant; the upgrade's credits still come from the
+  delta. This also covered operator upgrades made from the console.
+- **A free plan retired by a paid plan kept its pending upgrade invoice
+  payable.** Paying that leftover invoice later swapped the plan on the retired
+  subscription and granted its entitlements again. Retiring now voids the
+  subscription's outstanding invoices, including a past-due upgrade invoice, and
+  cancels its scheduled changes.
+- **Cancelling a subscription left its Stripe invoices payable.** Voiding a
+  subscription's outstanding invoices on cancel or downgrade only changed
+  Tanso's copy. It now also voids the hosted Stripe invoice, the same way a
+  replaced upgrade's invoice already was.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;
