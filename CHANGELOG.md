@@ -114,6 +114,13 @@ tags; this file starts where the changelog does.
   lets it through. It now answers `spend_cap_exceeded` / `raise_spend_cap`
   with `retry_after: null`. A charge that fits the budget but not what is left
   of this window still answers `wait`.
+- **After Stripe Checkout, the human no longer lands on example.com.** With
+  no `stripeCheckoutSuccessUrl` / `stripeCheckoutCancelUrl` set, card setup,
+  spend mandates, credit top-ups and plan checkouts sent the human to
+  `https://example.com/success` or `/cancel`. Tanso now serves its own pages,
+  `/public/checkout/complete` and `/public/checkout/cancelled`, on the host
+  the checkout was requested through, and uses them by default. URLs the
+  operator sets still win.
 
 ### Fixed
 
