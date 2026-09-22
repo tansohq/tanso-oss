@@ -33,6 +33,11 @@ tags; this file starts where the changelog does.
   subscription's outstanding invoices on cancel or downgrade only changed
   Tanso's copy. It now also voids the hosted Stripe invoice, the same way a
   replaced upgrade's invoice already was.
+- **`GET /usage` reports a plan as ended only once it has ended.** A paid plan
+  waiting on its first payment was listed as `ended`, with an end date in the
+  future. A plan cancelled at the end of its period showed the time the cancel
+  was asked for as its end, and left out usage recorded between then and the
+  real end.
 
 ### Removed
 
