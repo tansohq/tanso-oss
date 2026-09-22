@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.KeyBudgetDto;
 import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 
 import java.math.BigDecimal;
@@ -46,7 +47,8 @@ public interface KeyBudgetService {
      * Throws {@link com.tansoflow.tansocore.model.exception.SpendMandateExceededException} if charging
      * the customer {@code amount} off-session would pass the spend mandate its principal approved,
      * summed across all of the customer's keys. No-op when the customer has no mandate. Runs next to
-     * {@link #assertWithinBudget}, never instead of it: a charge must pass both.
+     * {@link #assertWithinBudget}, never instead of it: an off-session charge must pass both. A hosted
+     * page a human pays in person is checked against neither.
      */
     void assertWithinMandate(UUID customerId, BigDecimal amount);
 
@@ -56,8 +58,11 @@ public interface KeyBudgetService {
     record MandateUsage(BigDecimal limit, BigDecimal spent, BigDecimal remaining, BudgetPeriod period,
                         Instant resetsAt) {}
 
-    /** Records spend against a key. Silently ignored when apiKeyId is null. */
-    void recordSpend(UUID accountId, UUID apiKeyId, SpendKind kind, BigDecimal amount,
+    /**
+     * Records spend against a key. Silently ignored when apiKeyId is null. {@code channel} says whether a human
+     * paid on a hosted page; only OFF_SESSION spend counts against the customer's mandate.
+     */
+    void recordSpend(UUID accountId, UUID apiKeyId, SpendKind kind, SpendChannel channel, BigDecimal amount,
                      String referenceId, String idempotencyKey);
 
     KeyBudgetDto describe(AccountApiKey key);

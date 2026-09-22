@@ -23,6 +23,7 @@ import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.KeyBudgetDto;
 import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
@@ -130,7 +131,7 @@ class KeyBudgetServiceImplTest {
 
         service.assertWithinMandate(customer.getId(), new BigDecimal("10000"));
 
-        verify(spendRecordRepository, never()).sumForCustomerSince(any(), any(), any());
+        verify(spendRecordRepository, never()).sumForCustomerSince(any(), any(), any(), any());
     }
 
     @Test
@@ -140,7 +141,7 @@ class KeyBudgetServiceImplTest {
         customer.setMandatePeriod(BudgetPeriod.MONTH);
         customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(3)));
         when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
-        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), eq(SpendChannel.OFF_SESSION), any()))
                 .thenReturn(new BigDecimal("60.00"));
 
         assertThatThrownBy(() -> service.assertWithinMandate(customer.getId(), new BigDecimal("1.00")))
@@ -160,7 +161,7 @@ class KeyBudgetServiceImplTest {
         customer.setMandatePeriod(BudgetPeriod.MONTH);
         customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(3)));
         when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
-        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), eq(SpendChannel.OFF_SESSION), any()))
                 .thenReturn(new BigDecimal("30.00"));
 
         service.assertWithinMandate(customer.getId(), new BigDecimal("20.00"));
@@ -172,7 +173,7 @@ class KeyBudgetServiceImplTest {
         customer.setMandatePeriod(BudgetPeriod.MONTH);
         customer.setMandateStartedAt(Instant.now());
         when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
-        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), eq(SpendChannel.OFF_SESSION), any()))
                 .thenReturn(BigDecimal.ZERO);
 
         assertThatThrownBy(() -> service.assertWithinMandate(customer.getId(), new BigDecimal("60")))
@@ -187,7 +188,7 @@ class KeyBudgetServiceImplTest {
         customer.setMandateAmount(new BigDecimal("50.00"));
         customer.setMandatePeriod(BudgetPeriod.WEEK);
         customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(1)));
-        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), eq(SpendChannel.OFF_SESSION), any()))
                 .thenReturn(new BigDecimal("70.00"));
 
         var usage = service.mandateUsage(customer);
@@ -291,7 +292,7 @@ class KeyBudgetServiceImplTest {
 
     @Test
     void spendIsRecordedAgainstTheKey() {
-        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("12.5"), "event_1", "event:1");
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, SpendChannel.OFF_SESSION, new BigDecimal("12.5"), "event_1", "event:1");
 
         ArgumentCaptor<ApiKeySpendRecord> saved = ArgumentCaptor.forClass(ApiKeySpendRecord.class);
         verify(spendRecordRepository).save(saved.capture());
@@ -304,16 +305,41 @@ class KeyBudgetServiceImplTest {
     void replayedSpendIsNotCountedTwice() {
         when(spendRecordRepository.existsByAccountIdAndIdempotencyKey(accountId, "event:1")).thenReturn(true);
 
-        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("12.5"), "event_1", "event:1");
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, SpendChannel.OFF_SESSION, new BigDecimal("12.5"), "event_1", "event:1");
 
         verify(spendRecordRepository, never()).save(any());
     }
 
     @Test
     void spendWithNoKeyIsIgnored() {
-        service.recordSpend(accountId, null, SpendKind.MONEY, new BigDecimal("5"), null, null);
+        service.recordSpend(accountId, null, SpendKind.MONEY, SpendChannel.OFF_SESSION, new BigDecimal("5"), null, null);
 
         verify(spendRecordRepository, never()).save(any());
+    }
+
+    @Test
+    void spendAHumanPaidOnAHostedPageIsRecordedAsHosted() {
+        service.recordSpend(accountId, keyId, SpendKind.MONEY, SpendChannel.HOSTED, new BigDecimal("40.00"),
+                "cs_1", "checkout_cs_1");
+
+        ArgumentCaptor<ApiKeySpendRecord> saved = ArgumentCaptor.forClass(ApiKeySpendRecord.class);
+        verify(spendRecordRepository).save(saved.capture());
+        assertThat(saved.getValue().getChannel()).isEqualTo(SpendChannel.HOSTED);
+    }
+
+    @Test
+    void theMandateCountsOnlyOffSessionSpend() {
+        // A human paying a hosted page approved that payment there; only charges nobody saw draw on the mandate.
+        customer.setMandateAmount(new BigDecimal("50.00"));
+        customer.setMandatePeriod(BudgetPeriod.MONTH);
+        customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(3)));
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY),
+                eq(SpendChannel.OFF_SESSION), any())).thenReturn(new BigDecimal("10.00"));
+
+        var usage = service.mandateUsage(customer);
+
+        assertThat(usage.spent()).isEqualByComparingTo("10.00");
+        verify(spendRecordRepository, never()).sumForCustomerSince(any(), any(), eq(SpendChannel.HOSTED), any());
     }
 
     @Test
@@ -420,7 +446,7 @@ class KeyBudgetServiceImplTest {
         when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
                 .thenReturn(BigDecimal.ZERO);
 
-        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("50"), "e", "idem-cross");
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, SpendChannel.OFF_SESSION, new BigDecimal("50"), "e", "idem-cross");
 
         assertThat(key.getBudgetAlertAt()).isNotNull();
     }
@@ -434,7 +460,7 @@ class KeyBudgetServiceImplTest {
         when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
                 .thenReturn(BigDecimal.ZERO);
 
-        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("10"), "e", "idem-under");
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, SpendChannel.OFF_SESSION, new BigDecimal("10"), "e", "idem-under");
 
         assertThat(key.getBudgetAlertAt()).isNull();
     }
@@ -444,7 +470,7 @@ class KeyBudgetServiceImplTest {
         key.setBudgetAlertThreshold(null);
         when(accountApiKeyRepository.findById(keyId)).thenReturn(Optional.of(key));
 
-        service.recordSpend(accountId, keyId, SpendKind.CREDITS, new BigDecimal("999"), "e", "idem-none");
+        service.recordSpend(accountId, keyId, SpendKind.CREDITS, SpendChannel.OFF_SESSION, new BigDecimal("999"), "e", "idem-none");
 
         assertThat(key.getBudgetAlertAt()).isNull();
         verify(spendRecordRepository, never()).sumSince(any(), any(), any());

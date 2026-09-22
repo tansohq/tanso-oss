@@ -568,9 +568,12 @@ public class InvoiceServiceImpl implements InvoiceService {
                         // idempotency key is not plan-scoped, so without the delta the upgrade buys no credits.
                         creditService.grantUpgradeDelta(subscription, pending.getFromPlan(), pending.getToPlan(), pending.getId());
 
-                        // Draw down the budget of the key that asked for this change, now that money has moved.
+                        // Draw down the budget of the key that asked for this change, now that money has moved. Tanso
+                        // never charges a card for its own adjustment invoice: a human paid it (the hosted invoice on
+                        // pass-through) or the operator settled it, so it stays out of the mandate.
                         keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),
-                                com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, invoice.getAmount(),
+                                com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                                com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED, invoice.getAmount(),
                                 invoice.getId().toString(), "plan_change:" + invoice.getId());
 
                         log.info("Upgrade to plan {} fulfilled for subscription {} by paid adjustment invoice {}",

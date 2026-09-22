@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.entity;
 
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -59,6 +60,11 @@ public class ApiKeySpendRecord {
     @Enumerated(EnumType.STRING)
     @Column(name = "kind", nullable = false, length = 16, updatable = false)
     private SpendKind kind;
+
+    /** Only OFF_SESSION rows count against the customer's spend mandate; both count against the key budget. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "channel", nullable = false, length = 16, updatable = false)
+    private SpendChannel channel;
 
     @Column(name = "amount", nullable = false, precision = 18, scale = 6, updatable = false)
     private BigDecimal amount;

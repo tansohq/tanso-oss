@@ -20,6 +20,8 @@ package com.tansoflow.tansocore.integration.stripe.implementation;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
+import com.tansoflow.tansocore.model.apikey.type.SpendKind;
+import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.SpendMandateExceededException;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.repository.StripeCustomerRepository;
@@ -48,8 +50,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
- * The mandate bounds charges no human sees. A hosted checkout page is paid by a human in person,
- * so it must not be refused by the mandate.
+ * The mandate and the key budget bound charges no human sees. A hosted checkout page is paid by a human in
+ * person, so neither refuses it; the operator's per-charge cap still does.
  */
 @ExtendWith(MockitoExtension.class)
 class StripePaymentMethodServiceImplMandateTest {
@@ -93,15 +95,40 @@ class StripePaymentMethodServiceImplMandateTest {
     }
 
     @Test
-    void hostedCheckoutIsNotCheckedAgainstTheMandate() {
-        // Stop right after the guards: reaching Stripe proves the mandate did not refuse the page.
+    void anOffSessionChargeOverTheKeyBudgetNeverReachesStripe() {
+        doThrow(new BudgetExceededException(SpendKind.MONEY, new BigDecimal("50"), new BigDecimal("50"),
+                new BigDecimal("60"), Instant.now().plusSeconds(60)))
+                .when(keyBudgetService).assertWithinBudget(any(), any(), any());
+
+        assertThatThrownBy(() -> service.chargeOffSession(accountId, customerId, "pm_1", new BigDecimal("60"),
+                "usd", "top-up", Map.of()))
+                .isInstanceOf(BudgetExceededException.class);
+        verifyNoInteractions(stripeClientFactory);
+    }
+
+    @Test
+    void hostedCheckoutIsCheckedAgainstNeitherTheKeyBudgetNorTheMandate() {
+        // A human pays this page in person. Stop right after the guards: reaching Stripe proves neither limit
+        // refused the page.
         when(stripeClientFactory.forAccount(accountId)).thenThrow(new IllegalStateException("reached stripe"));
 
         assertThatThrownBy(() -> service.createTopupCheckoutSession(accountId, customerId, new BigDecimal("500"),
                 "usd", "top-up", Map.of()))
                 .hasMessage("reached stripe");
         verify(keyBudgetService, never()).assertWithinMandate(any(), any());
-        verify(keyBudgetService).assertWithinBudget(any(), any(), any());
+        verify(keyBudgetService, never()).assertWithinBudget(any(), any(), any());
+    }
+
+    @Test
+    void hostedCheckoutIsStillHeldToTheOperatorsPerChargeCap() {
+        AccountSetting capped = new AccountSetting();
+        capped.setAgentMaxTopupAmount(new BigDecimal("100"));
+        when(accountService.retrieveAccountSettings(accountId.toString())).thenReturn(capped);
+
+        assertThatThrownBy(() -> service.createTopupCheckoutSession(accountId, customerId, new BigDecimal("500"),
+                "usd", "top-up", Map.of()))
+                .isInstanceOf(BudgetExceededException.class);
+        verifyNoInteractions(stripeClientFactory);
     }
 
     @Test

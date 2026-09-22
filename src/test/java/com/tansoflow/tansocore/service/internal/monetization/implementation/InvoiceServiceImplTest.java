@@ -1201,9 +1201,11 @@ class InvoiceServiceImplTest {
         verify(entitlementService).processEntitlementsForSubscription(subscription);
         // The upgrade's own credits: the period's grant was already made on the free plan.
         verify(creditService).grantUpgradeDelta(subscription, free, starter, pending.getId());
-        // And the key that committed the money has its budget drawn down now that the money moved.
+        // And the key that committed the money has its budget drawn down now that the money moved. A human paid the
+        // invoice, so it is recorded as hosted and stays out of the mandate.
         verify(keyBudgetService).recordSpend(eq(account.getId()), eq(keyId),
-                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new BigDecimal("74.50")),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED), eq(new BigDecimal("74.50")),
                 any(), any());
     }
 
@@ -1261,7 +1263,7 @@ class InvoiceServiceImplTest {
         verify(invoiceRepository, never()).findById(any());
         verify(invoiceRepository, times(1)).save(adjustment);
         verify(creditService, times(1)).grantUpgradeDelta(subscription, free, starter, pending.getId());
-        verify(keyBudgetService, times(1)).recordSpend(any(), any(), any(), any(), any(), any());
+        verify(keyBudgetService, times(1)).recordSpend(any(), any(), any(), any(), any(), any(), any());
     }
 
     // Paying a voided invoice must grant nothing: the change it belonged to is gone, and flipping it to PAID

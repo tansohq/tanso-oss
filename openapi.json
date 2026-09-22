@@ -8847,7 +8847,8 @@
                         "type": "number"
                     },
                     "spent": {
-                        "type": "number"
+                        "type": "number",
+                        "description": "What the calling key spent in the current window, off-session and on hosted pages"
                     },
                     "remaining": {
                         "type": "number"
@@ -8870,7 +8871,7 @@
                     },
                     "spent": {
                         "type": "number",
-                        "description": "Off-session spend across all of the customer's keys in the current window"
+                        "description": "Off-session spend across all of the customer's keys in the current window. Hosted pages a human paid in person are not counted."
                     },
                     "remaining": {
                         "type": "number"

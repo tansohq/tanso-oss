@@ -519,9 +519,10 @@ just your team's agents, but your customers' buying agents:
   never touches Tanso); subscribe and credit top-ups charge off-session with
   it. No payment method? The API returns **402** with a checkout URL and a
   checkout session id the agent can poll (`GET /checkout-sessions/{id}`), so
-  no dead-ending at a browser redirect. Agent charges respect the account's
-  spend cap and the calling key's own budget, credit top-ups and paid
-  subscriptions alike.
+  no dead-ending at a browser redirect. Off-session agent charges respect the
+  account's spend cap, the calling key's own budget and the spend mandate,
+  credit top-ups and paid subscriptions alike. A hosted page a human pays is
+  held only to the spend cap.
 - **Bound**: give one key a budget and it cannot spend past it, on usage or on
   money. `PUT /api/v1/client/customers/{ref}/keys/{keyId}/budget` sets
   `creditLimit` and `amountLimit` independently over a rolling `DAY`/`WEEK`/
@@ -631,7 +632,8 @@ when the key has no budget), `owner_email` and `spend_mandate`
 (`{ "status", "setup_url", "max_amount", "spent", "remaining", "period", "resets_at", "currency" }`).
 `status` is `none`, `pending`, `active` or `expired`. `spent`, `remaining`,
 `period` and `resets_at` are filled while a mandate is active and count
-off-session spend across all of the customer's keys. `setup_url` is set while a
+off-session spend across all of the customer's keys; money a human paid on a
+hosted page is in `spend.spent` but not in `spend_mandate.spent`. `setup_url` is set while a
 setup page waits for the principal, including a raise while an older mandate is
 still active. `expired` means the Stripe setup page expired unused after 24
 hours; ask for a new mandate.
@@ -666,8 +668,8 @@ keeps its existing `data` payload. `detail` carries the error id.
 | 402 | `payment_required` | `payment` | `complete_checkout` | hand `url` to a human, poll `poll` (`/api/v1/client/checkout-sessions/{id}`, or the customer's status URL when `url` is a hosted invoice). With no processor connected, `url` and `poll` are null and the message says to contact the operator |
 | 402 | `payment_required` | `payment` | `complete_checkout` | on `plan-change`: the upgrade is raised but not granted; hand `url` to a human and poll the customer's status URL until `plan` shows the new plan. Where Stripe runs the billing (`STRIPE_DRIVEN`, `STRIPE_INTEGRATION`) Stripe charges the prorated amount during the call, so this comes only when there is no card, the charge failed, or the subscription is billed by emailed invoice. Tenant (`sk_`) keys get `202` with `data.paymentUrl` instead of a gate |
 | 402 | `payment_required` | `payment` | `nominate_owner` | only on accounts where Tanso sends Stripe invoices by email, when no card is saved; `PUT {"email": ...}` to `url`, then retry. A completed spend mandate or a signup email avoids this |
-| 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window, or the customer's spend mandate window, is used up; the charge fits once it resets. `retry_after` is seconds until then |
-| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap (`agentMaxTopupAmount`) or larger than the key's whole budget; `retry_after` null, waiting will not help. Ask the operator to raise the cap, or buy less |
+| 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window, or the customer's spend mandate window, is used up; the charge fits once it resets. Off-session charges only, never a hosted page. `retry_after` is seconds until then |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap (`agentMaxTopupAmount`), hosted or not, or an off-session charge is larger than the key's whole budget; `retry_after` null, waiting will not help. Ask the operator to raise the cap, or buy less |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | one off-session charge is larger than the whole spend mandate the principal approved; `retry_after` null, `url` is `POST /api/v1/client/customers/{ref}/spend-mandate`. Open a higher mandate there and hand its `setup_url` to the principal, or buy less |
 | 403 | `forbidden` | `scope` | `use_own_reference` | the key belongs to another customer; use your own `customerReferenceId` or omit it |
 | 403 | `scope_denied` | `scope` | `request_scope` | the key lacks the `purchase` scope |
@@ -688,10 +690,21 @@ the mandate (`max_amount` per `period`) is stored on the customer, and the
 customer is claimed. Key budgets are not touched. Every off-session charge
 (saved-card credit top-up, paid subscribe with a saved card, upgrade proration)
 must fit both the calling key's budget and the mandate, where the mandate
-counts spend summed across all of the customer's keys. Hosted checkout pages
-are not checked against the mandate, since a human pays those in person; money
-paid on them is still recorded against the key that opened them, so it counts
-toward the mandate total.
+counts off-session spend summed across all of the customer's keys.
+
+A hosted page never hits the mandate or the key budget. A Stripe Checkout page
+or a Stripe hosted invoice (credit top-up without a card, paid subscribe
+without a card, a pass-through subscribe or upgrade) is paid by a human in
+person, which is their approval, so neither limit refuses it. Only the
+operator's per-charge cap (`agentMaxTopupAmount`) still applies. Every row in
+`api_key_spend_records` carries a `channel`, `OFF_SESSION` or `HOSTED`: the
+mandate sums only `OFF_SESSION`, the key budget sums both, since the key still
+caused the spend. An upgrade where Stripe runs the billing
+(`STRIPE_INTEGRATION`, `STRIPE_DRIVEN`) tries the saved card in the same call,
+so both limits are checked before it; if it ends in a hosted invoice that is
+paid later, the payment is `HOSTED` only when the subscription is billed by
+emailed invoice (`send_invoice`), since Stripe may retry a saved card
+otherwise.
 
 To ask for a first mandate after signup, or a higher one, call
 `POST /api/v1/client/customers/{ref}/spend-mandate` with
