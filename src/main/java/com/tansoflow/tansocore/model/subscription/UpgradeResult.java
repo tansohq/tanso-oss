@@ -22,7 +22,8 @@ import java.util.UUID;
 /**
  * The outcome of an upgrade call. When the upgrade waits on payment, exactly one of the fields is set:
  * pendingInvoiceId for a Tanso adjustment invoice (Tanso collects), stripePaymentUrl for a Stripe invoice
- * Stripe could not charge (STRIPE_DRIVEN). Both null means nothing is waiting on payment.
+ * not paid yet (STRIPE_DRIVEN, STRIPE_INTEGRATION): the saved card was not charged, or the subscription is billed
+ * by send_invoice. Both null means nothing is waiting on payment.
  */
 public record UpgradeResult(UUID pendingInvoiceId, String stripePaymentUrl) {
 

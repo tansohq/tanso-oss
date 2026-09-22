@@ -302,4 +302,78 @@ class SubscriptionLifecycleCustomerKeyTest {
                 .upgradeSubscription(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(),
                         org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
+
+    // Where Stripe runs the billing and a card is saved, Stripe charges the card and needs no email. The gate used
+    // to stop every agent upgrade without one, in every mode.
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.tansoflow.tansocore.model.api.external.StripeMode.class,
+            names = {"STRIPE_DRIVEN", "STRIPE_INTEGRATION"})
+    void aStripeBilledUpgradeWithASavedCardSkipsTheOwnerGate(com.tansoflow.tansocore.model.api.external.StripeMode stripeMode) {
+        subscription.getCustomer().setEmail(null);
+        subscription.getCustomer().setStripeDefaultPaymentMethodId("pm_saved");
+        when(accountService.retrieveAccountSettings(accountId)).thenReturn(mode(stripeMode));
+        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
+                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(com.tansoflow.tansocore.model.subscription.UpgradeResult.notWaiting());
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(200);
+        org.mockito.Mockito.verify(subscriptionService).upgradeSubscription(subscriptionId, accountId, "starter", true);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.tansoflow.tansocore.model.api.external.StripeMode.class,
+            names = {"STRIPE_DRIVEN", "STRIPE_INTEGRATION"})
+    void aStripeBilledUpgradeWithoutASavedCardKeepsTheOwnerGate(com.tansoflow.tansocore.model.api.external.StripeMode stripeMode) {
+        subscription.getCustomer().setEmail(null);
+        when(accountService.retrieveAccountSettings(accountId)).thenReturn(mode(stripeMode));
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("nominate_owner");
+    }
+
+    // Pass-through sends Tanso's own invoice through Stripe by email, so a saved card does not remove the need.
+    @Test
+    void aPassThroughUpgradeWithASavedCardKeepsTheOwnerGate() {
+        subscription.getCustomer().setEmail(null);
+        subscription.getCustomer().setStripeDefaultPaymentMethodId("pm_saved");
+        when(accountService.retrieveAccountSettings(accountId))
+                .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH));
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("nominate_owner");
+    }
+
+    // A tenant key is the operator's server, not an agent: it gets 202 with the invoice in data, not a gate.
+    @Test
+    void aTenantKeyUpgradeWaitingOnStripeAnswers202WithTheInvoice() {
+        when(accountService.retrieveAccountSettings(accountId))
+                .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION));
+        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
+                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(com.tansoflow.tansocore.model.subscription.UpgradeResult
+                .waitingOnStripe("https://invoice.stripe.com/i/acct_test/inv_proration"));
+
+        var response = controller.changeSubscription(new UserContext(accountId, null), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(202);
+        org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isTrue();
+        org.assertj.core.api.Assertions.assertThat(response.getBody().getError()).isNull();
+        org.assertj.core.api.Assertions.assertThat(response.getBody().getData().status()).isEqualTo("payment_pending");
+        org.assertj.core.api.Assertions.assertThat(response.getBody().getData().paymentUrl())
+                .isEqualTo("https://invoice.stripe.com/i/acct_test/inv_proration");
+    }
 }

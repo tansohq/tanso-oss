@@ -550,9 +550,11 @@ an empty body works.
 }
 ```
 
-The email is optional and unverified. It is recorded as the owner contact
-only, nothing is sent to it, and it never resolves to an existing customer.
-Every signup creates a new provisional customer.
+The email is optional and unverified. It is recorded as the owner contact.
+Tanso sends nothing to it; Stripe may send receipts and invoices to it. It
+never resolves to an existing customer. Every signup creates a new
+provisional customer. Without one, the email the principal types on the
+spend mandate Checkout page is recorded instead.
 
 **Response (201).** New fields are snake_case; the existing camelCase fields
 are unchanged.
@@ -627,7 +629,8 @@ still active. `expired` means the Stripe setup page expired unused after 24
 hours; ask for a new mandate.
 
 **Owner.** `PUT /api/v1/client/customers/{ref}/owner` with `{ "email" }`
-records a human contact and returns the status body. It sends nothing.
+records a human contact and returns the status body. Tanso sends nothing;
+Stripe may send receipts and invoices to it.
 
 **Gate envelope.** Every 402, and every 403 caused by a limit or access rule,
 carries an `error` object an agent can act on without parsing prose. A 402
@@ -653,8 +656,8 @@ keeps its existing `data` payload. `detail` carries the error id.
 | status | code | gate | action | meaning |
 |--------|------|------|--------|---------|
 | 402 | `payment_required` | `payment` | `complete_checkout` | hand `url` to a human, poll `poll` (`/api/v1/client/checkout-sessions/{id}`, or the customer's status URL when `url` is a hosted invoice). With no processor connected, `url` and `poll` are null and the message says to contact the operator |
-| 402 | `payment_required` | `payment` | `complete_checkout` | on `plan-change`: the upgrade is raised but not granted; hand `url` to a human and poll the customer's status URL until `plan` shows the new plan |
-| 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to; `PUT {"email": ...}` to `url` (the owner endpoint), then retry. Signing up with an email avoids this |
+| 402 | `payment_required` | `payment` | `complete_checkout` | on `plan-change`: the upgrade is raised but not granted; hand `url` to a human and poll the customer's status URL until `plan` shows the new plan. Where Stripe runs the billing (`STRIPE_DRIVEN`, `STRIPE_INTEGRATION`) Stripe charges the prorated amount during the call, so this comes only when there is no card, the charge failed, or the subscription is billed by emailed invoice. Tenant (`sk_`) keys get `202` with `data.paymentUrl` instead of a gate |
+| 402 | `payment_required` | `payment` | `nominate_owner` | only on accounts where Tanso sends Stripe invoices by email, when no card is saved; `PUT {"email": ...}` to `url`, then retry. A completed spend mandate or a signup email avoids this |
 | 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window, or the customer's spend mandate window, is used up; the charge fits once it resets. `retry_after` is seconds until then |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap (`agentMaxTopupAmount`) or larger than the key's whole budget; `retry_after` null, waiting will not help. Ask the operator to raise the cap, or buy less |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | one off-session charge is larger than the whole spend mandate the principal approved; `retry_after` null, `url` is `POST /api/v1/client/customers/{ref}/spend-mandate`. Open a higher mandate there and hand its `setup_url` to the principal, or buy less |

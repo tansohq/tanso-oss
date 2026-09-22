@@ -637,7 +637,7 @@
                     "Agent account"
                 ],
                 "summary": "Nominate an owner",
-                "description": "Records the principal's email on the account. Nothing is sent to it; paying is what claims the account.",
+                "description": "Records the principal's email on the account. Tanso sends nothing to it; Stripe may send receipts and invoices to it. Paying is what claims the account.",
                 "operationId": "setOwner",
                 "parameters": [
                     {
@@ -3422,21 +3422,31 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "Successfully changed the plan or scheduled the change",
+                        "description": "The plan changed, or the downgrade was scheduled. Where Stripe runs the billing, an upgrade that costs money answers 200 only after Stripe charged the prorated amount.",
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                    "$ref": "#/components/schemas/ApiResponsePlanChangeResponse"
+                                }
+                            }
+                        }
+                    },
+                    "202": {
+                        "description": "Tenant (sk_) keys on STRIPE_INTEGRATION: the upgrade was invoiced but not paid yet. data.status=payment_pending, data.paymentUrl=Stripe's hosted invoice. The plan changes when it is paid.",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponsePlanChangeResponse"
                                 }
                             }
                         }
                     },
                     "402": {
-                        "description": "The upgrade costs money and the caller holds an API key: the plan change waits on payment. error.code=payment_required, gate=payment, action=complete_checkout with the hosted invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the invoice is paid. On STRIPE_DRIVEN accounts Stripe first tries the saved card; this is returned only when that charge did not go through, and url is Stripe's hosted invoice. Customer-scoped (ck_) keys only.",
+                        "description": "The upgrade costs money and the caller holds a customer key: the plan change waits on payment. error.code=payment_required, gate=payment, action=complete_checkout with the hosted invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the invoice is paid. Where Stripe runs the billing (STRIPE_DRIVEN, STRIPE_INTEGRATION) Stripe first charges the saved card; this is returned when that charge did not go through, or when Stripe sends the invoice by email instead of charging, and url is Stripe's hosted invoice. Also action=nominate_owner when Tanso needs an email to send an invoice to and no card is saved. Customer-scoped (ck_) keys only.",
                         "content": {
                             "*/*": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/ApiResponseVoid"
+                                    "$ref": "#/components/schemas/ApiResponsePlanChangeResponse"
                                 }
                             }
                         }
@@ -8938,7 +8948,7 @@
                     "email": {
                         "type": "string",
                         "format": "email",
-                        "description": "Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.",
+                        "description": "Optional contact email of the agent's principal. Recorded as the owner; Tanso sends nothing to it, Stripe may send receipts and invoices to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.",
                         "maxLength": 255,
                         "minLength": 0
                     },
@@ -16561,6 +16571,42 @@
                         "items": {
                             "type": "string"
                         }
+                    }
+                }
+            },
+            "ApiResponsePlanChangeResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/PlanChangeResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PlanChangeResponse": {
+                "type": "object",
+                "description": "An upgrade that waits on payment. The plan changes when the invoice at paymentUrl is paid.",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "Always payment_pending",
+                        "example": "payment_pending"
+                    },
+                    "paymentUrl": {
+                        "type": "string",
+                        "description": "Stripe's hosted invoice for the prorated charge"
                     }
                 }
             }

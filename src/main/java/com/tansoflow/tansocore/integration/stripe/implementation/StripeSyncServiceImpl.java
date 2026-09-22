@@ -1063,29 +1063,40 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
                 .retrieve(stripeSub.getStripeSubscriptionExternalId());
         String existingItemId = currentStripeSub.getItems().getData().getFirst().getId();
+        // Accumulate-mode plans create send_invoice subscriptions. Stripe only supports pending updates on
+        // charge_automatically subscriptions (docs.stripe.com/billing/subscriptions/pending-updates).
+        boolean sendInvoice = "send_invoice".equals(currentStripeSub.getCollectionMethod());
 
         // always_invoice raises and charges the proration now instead of adding it to the next renewal.
         // pending_if_incomplete makes Stripe apply the new price only if that charge succeeds; otherwise the
         // subscription keeps its old price and carries a pending_update until the invoice is paid or expires.
-        SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+        // On send_invoice Stripe moves the price and sends the invoice; Tanso still waits for it to be paid.
+        SubscriptionUpdateParams.Builder paramsBuilder = SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder()
                         .setId(existingItemId)
                         .setPrice(stripePrice.getStripePriceExternalId())
                         .build())
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
-                .setPaymentBehavior(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE)
-                .addExpand("latest_invoice")
-                .build();
+                .addExpand("latest_invoice");
+        if (!sendInvoice) {
+            paramsBuilder.setPaymentBehavior(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE);
+        }
 
         com.stripe.model.Subscription updated = stripeClient.v1().subscriptions()
-                .update(stripeSub.getStripeSubscriptionExternalId(), params);
+                .update(stripeSub.getStripeSubscriptionExternalId(), paramsBuilder.build());
 
         com.stripe.model.Invoice invoice = updated.getLatestInvoiceObject();
         if (invoice == null) {
             throw new IllegalStateException("Stripe returned no invoice for the upgrade of subscription "
                     + stripeSub.getStripeSubscriptionExternalId());
         }
-        boolean applied = updated.getPendingUpdate() == null;
+        // A draft has no hosted page yet, and the human needs one to pay.
+        if (sendInvoice && "draft".equals(invoice.getStatus())) {
+            invoice = stripeClient.v1().invoices().finalizeInvoice(invoice.getId());
+        }
+        // The plan moves only when Stripe holds the new price AND the money. On send_invoice the first is true at
+        // once, so the invoice status is what decides.
+        boolean applied = updated.getPendingUpdate() == null && "paid".equals(invoice.getStatus());
         if (!applied && invoice.getHostedInvoiceUrl() == null) {
             throw new IllegalStateException("Stripe could not charge the upgrade of subscription "
                     + stripeSub.getStripeSubscriptionExternalId() + " and returned no hosted invoice " + invoice.getId());
@@ -1094,9 +1105,9 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                 ? BigDecimal.valueOf(invoice.getAmountPaid()).movePointLeft(2)
                 : BigDecimal.ZERO;
 
-        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {}: invoice {} applied={}",
+        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {}: invoice {} applied={} sendInvoice={}",
                 stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(), plan.getId(),
-                invoice.getId(), applied);
+                invoice.getId(), applied, sendInvoice);
         return new StripeUpgradeCharge(invoice.getId(), invoice.getHostedInvoiceUrl(), amountPaid, applied);
     }
 
@@ -1105,6 +1116,43 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         stripeClient.v1().invoices().voidInvoice(stripeInvoiceId);
         log.info("Voided Stripe invoice {} for account {}", stripeInvoiceId, accountId);
+    }
+
+    @Override
+    @Transactional
+    public void cancelUnpaidUpgrade(String stripeInvoiceId, UUID subscriptionId, UUID accountId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+        // On charge_automatically this also discards the pending_update, and the old price never left.
+        stripeClient.v1().invoices().voidInvoice(stripeInvoiceId);
+        log.info("Voided Stripe invoice {} behind an unpaid upgrade of subscription {}", stripeInvoiceId, subscriptionId);
+
+        Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
+        StripeSubscription stripeSub = subscription == null ? null
+                : stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);
+        if (stripeSub == null) {
+            throw new IllegalStateException("Subscription " + subscriptionId
+                    + " has no linked Stripe subscription; cannot restore its price after dropping the upgrade");
+        }
+        com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
+                .retrieve(stripeSub.getStripeSubscriptionExternalId());
+        if (!"send_invoice".equals(currentStripeSub.getCollectionMethod())) {
+            return;
+        }
+
+        // send_invoice: Stripe moved to the new price when it raised the invoice. Left there, the next renewal would
+        // bill a plan Tanso never granted.
+        StripePrice stripePrice = latestStripePriceFor(subscription.getPlan(), subscription.getAccount(), accountId);
+        SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+                .addItem(SubscriptionUpdateParams.Item.builder()
+                        .setId(currentStripeSub.getItems().getData().getFirst().getId())
+                        .setPrice(stripePrice.getStripePriceExternalId())
+                        .build())
+                .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.NONE)
+                .build();
+        stripeClient.v1().subscriptions().update(stripeSub.getStripeSubscriptionExternalId(), params);
+        log.info("Restored Stripe subscription {} to price {} of plan {} after dropping an unpaid upgrade",
+                stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(),
+                subscription.getPlan().getId());
     }
 
     /** The newest Stripe price for a plan, creating the product and prices first if the plan was never synced. */

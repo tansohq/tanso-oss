@@ -85,7 +85,8 @@ public class SubscriptionTools {
     }
 
     @Tool(description = "CHANGES a customer's subscription to a different plan. "
-            + "SIDE EFFECT: Upgrades take effect immediately with prorated billing. "
+            + "SIDE EFFECT: Upgrades take effect immediately with prorated billing. Where Stripe runs the billing, "
+            + "the prorated amount is charged first and the plan changes once it is paid. "
             + "Downgrades are scheduled for the end of the current billing period. "
             + "You MUST set confirmAction to true to execute.")
     public String changeSubscriptionPlan(
@@ -105,7 +106,7 @@ public class SubscriptionTools {
                 if (upgrade.stripePaymentUrl() != null) {
                     return "{\"success\": false, \"error\": {\"code\": \"payment_required\", \"gate\": \"payment\", "
                             + "\"action\": \"complete_checkout\", \"url\": \"" + upgrade.stripePaymentUrl() + "\", "
-                            + "\"message\": \"Stripe could not charge the saved payment method; a human must pay the "
+                            + "\"message\": \"Stripe has not been paid for the upgrade yet; a human must pay the "
                             + "invoice at url, and the plan changes when they do.\"}}";
                 }
                 java.util.UUID pendingInvoiceId = upgrade.pendingInvoiceId();

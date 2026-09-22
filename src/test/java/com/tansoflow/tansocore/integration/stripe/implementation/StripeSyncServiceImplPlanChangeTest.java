@@ -77,6 +77,7 @@ class StripeSyncServiceImplPlanChangeTest {
     private Plan oldPlan;
     private Plan newPlan;
     private Subscription subscription;
+    private com.stripe.model.Subscription current;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -104,17 +105,18 @@ class StripeSyncServiceImplPlanChangeTest {
         when(stripeClientFactory.forAccount(accountId)).thenReturn(stripeClient);
         when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), accountId)).thenReturn(subscription);
         when(stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription)).thenReturn(bridge);
-        when(planService.retrievePlan(account, newPlan.getId())).thenReturn(newPlan);
+        org.mockito.Mockito.lenient().when(planService.retrievePlan(account, newPlan.getId())).thenReturn(newPlan);
         org.mockito.Mockito.lenient().when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(oldPlan, account))
                 .thenReturn(Optional.of(oldPrice));
-        when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
+        org.mockito.Mockito.lenient().when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
                 .thenReturn(Optional.of(newPrice));
 
         SubscriptionItem item = new SubscriptionItem();
         item.setId("si_123");
         SubscriptionItemCollection items = new SubscriptionItemCollection();
         items.setData(List.of(item));
-        com.stripe.model.Subscription current = new com.stripe.model.Subscription();
+        current = new com.stripe.model.Subscription();
+        current.setCollectionMethod("charge_automatically");
         current.setItems(items);
         when(stripeClient.v1().subscriptions().retrieve("sub_123")).thenReturn(current);
     }
@@ -163,6 +165,94 @@ class StripeSyncServiceImplPlanChangeTest {
         assertThat(charge.applied()).isFalse();
         assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
         assertThat(charge.amountPaid()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // Stripe applied the price but the invoice is not paid: the plan must not move yet.
+    @Test
+    void aChargeAutomaticallyUpgradeWithAnUnpaidInvoiceIsNotApplied() throws Exception {
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(stripeReply(false, "open", 0L));
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        assertThat(charge.applied()).isFalse();
+    }
+
+    // Stripe supports pending updates only on charge_automatically subscriptions; accumulate-mode plans are
+    // send_invoice, so the update goes without pending_if_incomplete and waits on the emailed invoice.
+    @Test
+    void aSendInvoiceUpgradeIsInvoicedWithoutPendingUpdateAndWaitsForPayment() throws Exception {
+        current.setCollectionMethod("send_invoice");
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(stripeReply(false, "open", 0L));
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
+        assertThat(params.getValue().getPaymentBehavior()).isNull();
+        assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_new");
+
+        assertThat(charge.applied()).isFalse();
+        assertThat(charge.stripeInvoiceId()).isEqualTo("in_proration");
+        assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
+    }
+
+    @Test
+    void aSendInvoiceUpgradeFinalizesADraftSoThereIsAPageToPay() throws Exception {
+        current.setCollectionMethod("send_invoice");
+        com.stripe.model.Subscription draftReply = stripeReply(false, "draft", 0L);
+        draftReply.getLatestInvoiceObject().setHostedInvoiceUrl(null);
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(draftReply);
+        com.stripe.model.Invoice finalized = new com.stripe.model.Invoice();
+        finalized.setId("in_proration");
+        finalized.setStatus("open");
+        finalized.setAmountPaid(0L);
+        finalized.setHostedInvoiceUrl("https://invoice.stripe.com/i/acct_test/in_proration");
+        when(stripeClient.v1().invoices().finalizeInvoice("in_proration")).thenReturn(finalized);
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        assertThat(charge.applied()).isFalse();
+        assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
+    }
+
+    @Test
+    void aSendInvoiceUpgradeAlreadyPaidIsApplied() throws Exception {
+        current.setCollectionMethod("send_invoice");
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(stripeReply(false, "paid", 7450L));
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        assertThat(charge.applied()).isTrue();
+        assertThat(charge.amountPaid()).isEqualByComparingTo(new BigDecimal("74.50"));
+    }
+
+    // Stripe moved a send_invoice subscription to the new price when it raised the invoice; dropping the upgrade
+    // must put it back, or the next renewal bills a plan Tanso never granted.
+    @Test
+    void droppingAnUnpaidSendInvoiceUpgradeVoidsTheInvoiceAndRestoresTheOldPrice() throws Exception {
+        current.setCollectionMethod("send_invoice");
+
+        stripeSyncService.cancelUnpaidUpgrade("in_proration", subscription.getId(), accountId);
+
+        verify(stripeClient.v1().invoices()).voidInvoice("in_proration");
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_old");
+        assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.NONE);
+    }
+
+    @Test
+    void droppingAnUnpaidChargeAutomaticallyUpgradeOnlyVoidsTheInvoice() throws Exception {
+        stripeSyncService.cancelUnpaidUpgrade("in_proration", subscription.getId(), accountId);
+
+        verify(stripeClient.v1().invoices()).voidInvoice("in_proration");
+        verify(stripeClient.v1().subscriptions(), org.mockito.Mockito.never())
+                .update(any(String.class), any(SubscriptionUpdateParams.class));
     }
 
     // The listener used to read subscription.getPlan(), which on STRIPE_INTEGRATION is still the old plan while the
