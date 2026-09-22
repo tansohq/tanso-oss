@@ -17,6 +17,14 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **Concurrent agent signups no longer get past the signup caps.** The
+  per-account and per-IP counts ran before, and outside, the transaction that
+  inserts the customer, so a burst of simultaneous signups all read a count
+  under the cap and all got in. The counts and the insert now run in one
+  transaction under a Postgres advisory lock on the account, plus one on the
+  address when there is one. The README now says what the per-IP cap needs
+  from a proxy: it counts the leftmost `X-Forwarded-For`, so the proxy must
+  overwrite that header rather than append to it.
 - **Two concurrent plan changes no longer raise two payable invoices.** An
   agent that retried an upgrade after a timeout could send the same request
   twice; both calls found no pending upgrade and each created its own
