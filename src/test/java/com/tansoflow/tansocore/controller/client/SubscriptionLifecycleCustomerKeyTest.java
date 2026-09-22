@@ -223,7 +223,7 @@ class SubscriptionLifecycleCustomerKeyTest {
         UUID adjustmentInvoiceId = UUID.randomUUID();
         when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
                 org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.eq(true))).thenReturn(adjustmentInvoiceId);
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(com.tansoflow.tansocore.model.subscription.UpgradeResult.waitingOnInvoice(adjustmentInvoiceId));
         when(accountService.retrieveAccountSettings(accountId))
                 .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH));
         com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto link =
@@ -243,11 +243,36 @@ class SubscriptionLifecycleCustomerKeyTest {
         org.assertj.core.api.Assertions.assertThat(gate.getPoll()).endsWith("/status");
     }
 
+    // STRIPE_DRIVEN: Stripe could not charge the saved card, so the agent gets Stripe's hosted invoice and a poll.
+    @Test
+    void aStripeDrivenUpgradeStripeCouldNotChargeAnswers402WithTheHostedInvoice() throws Exception {
+        when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
+                org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(com.tansoflow.tansocore.model.subscription.UpgradeResult
+                .waitingOnStripe("https://invoice.stripe.com/i/acct_test/inv_proration"));
+        when(accountService.retrieveAccountSettings(accountId))
+                .thenReturn(mode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_DRIVEN));
+
+        var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
+                new org.springframework.mock.web.MockHttpServletRequest());
+
+        org.assertj.core.api.Assertions.assertThat(response.getStatusCode().value()).isEqualTo(402);
+        org.assertj.core.api.Assertions.assertThat(response.getBody().isSuccess()).isFalse();
+        com.tansoflow.tansocore.model.response.GateError gate =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        org.assertj.core.api.Assertions.assertThat(gate.getGate()).isEqualTo("payment");
+        org.assertj.core.api.Assertions.assertThat(gate.getAction()).isEqualTo("complete_checkout");
+        org.assertj.core.api.Assertions.assertThat(gate.getUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/inv_proration");
+        org.assertj.core.api.Assertions.assertThat(gate.getPoll()).endsWith("/status");
+        // Stripe already raised the invoice; Tanso must not mint a second payment link.
+        org.mockito.Mockito.verifyNoInteractions(stripeSyncService);
+    }
+
     @Test
     void aPlanChangeThatNeedsNoPaymentStays200() throws Exception {
         when(subscriptionService.upgradeSubscription(org.mockito.ArgumentMatchers.eq(subscriptionId),
                 org.mockito.ArgumentMatchers.eq(accountId), org.mockito.ArgumentMatchers.any(),
-                org.mockito.ArgumentMatchers.eq(true))).thenReturn(null);
+                org.mockito.ArgumentMatchers.eq(true))).thenReturn(com.tansoflow.tansocore.model.subscription.UpgradeResult.notWaiting());
 
         var response = controller.changeSubscription(customerKey(ownCustomerId), upgradeTo("starter"), subscriptionId,
                 new org.springframework.mock.web.MockHttpServletRequest());
