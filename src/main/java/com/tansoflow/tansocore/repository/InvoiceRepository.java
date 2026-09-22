@@ -99,6 +99,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     @Query("SELECT invoice FROM Invoice invoice WHERE invoice.subscription = :subscription AND invoice.type IN ('REGULAR', 'IN_ADVANCE_INITIAL') AND invoice.status = 'DUE'")
     Invoice getCurrentlyDueInvoiceBySubscription(Subscription subscription);
 
-    @Query("SELECT i FROM Invoice i WHERE i.subscription = :subscription AND i.status IN ('DUE', 'PENDING')")
+    // Every status a customer can still pay. ADJUSTMENT_OPEN is left out: nothing writes it.
+    @Query("SELECT i FROM Invoice i WHERE i.subscription = :subscription AND i.status IN ('DUE', 'PENDING', 'PAST_DUE')")
     List<Invoice> findOutstandingInvoicesBySubscription(Subscription subscription);
 }

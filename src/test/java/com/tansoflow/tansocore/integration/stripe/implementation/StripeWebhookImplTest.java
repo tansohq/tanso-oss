@@ -827,6 +827,78 @@ class StripeWebhookImplTest {
         verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
     }
 
+    private com.tansoflow.tansocore.entity.SubscriptionScheduledChange upgradeWaitingOn(String stripeInvoiceId) {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setToPlan(plan);
+        pending.setStatus("PENDING");
+        pending.setStripeInvoiceId(stripeInvoiceId);
+        pending.setPaymentUrl("https://invoice.stripe.com/i/acct_test/" + stripeInvoiceId);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId(stripeInvoiceId))
+                .thenReturn(Optional.of(pending));
+        return pending;
+    }
+
+    private com.tansoflow.tansocore.entity.Invoice mirroredTansoInvoice(String stripeInvoiceId) {
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = new com.tansoflow.tansocore.entity.Invoice();
+        tansoInvoice.setId(UUID.randomUUID());
+        tansoInvoice.setSubscription(subscription);
+        tansoInvoice.setStatus(InvoiceStatus.DUE.name());
+        StripeInvoice link = new StripeInvoice();
+        link.setInvoice(tansoInvoice);
+        when(stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoiceId)).thenReturn(link);
+        return tansoInvoice;
+    }
+
+    // An unpaid send_invoice upgrade used to wait forever once its invoice was voided: nothing but invoice.paid
+    // ended it, and Stripe stayed on the new price. The invoice is already void, so it must not be voided again.
+    @Test
+    void handleInvoiceVoided_CancelsTheUpgradeWaitingOnItAndRestoresThePrice() throws Exception {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = upgradeWaitingOn("in_proration");
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = mirroredTansoInvoice("in_proration");
+
+        stripeWebhook.handleInvoiceVoided(createStripeInvoiceWithSubscription("in_proration", "sub_si_1"));
+
+        assertEquals("CANCELLED", pending.getStatus());
+        assertEquals(null, pending.getPaymentUrl());
+        verify(subscriptionScheduledChangeRepository).save(pending);
+        verify(stripeSyncService).restorePriceAfterDroppedUpgrade(subscription.getId(), account.getId());
+        verify(stripeSyncService, never()).cancelUnpaidUpgrade(any(), any(), any());
+        verify(stripeSyncService, never()).voidStripeInvoice(any(), any());
+        // Set directly, not through invoiceService.voidInvoice, which would ask Stripe to void it a second time.
+        assertEquals(InvoiceStatus.VOID.name(), tansoInvoice.getStatus());
+        verify(invoiceService, never()).voidInvoice(any());
+    }
+
+    @Test
+    void handleInvoiceVoided_WithNoUpgradeWaitingOnlyMirrorsTheStatus() throws Exception {
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = mirroredTansoInvoice("in_renewal");
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_renewal"))
+                .thenReturn(Optional.empty());
+
+        stripeWebhook.handleInvoiceVoided(createStripeInvoiceWithSubscription("in_renewal", "sub_si_1"));
+
+        assertEquals(InvoiceStatus.VOID.name(), tansoInvoice.getStatus());
+        verify(stripeSyncService, never()).restorePriceAfterDroppedUpgrade(any(), any());
+        verify(subscriptionScheduledChangeRepository, never()).save(any());
+    }
+
+    // Stripe still takes payment on an uncollectible invoice. Left open, paying it would charge for an upgrade
+    // Tanso gave up on, so it goes through the full cancel path: void, then restore the old price.
+    @Test
+    void handleInvoiceMarkedUncollectible_VoidsTheInvoiceAndCancelsTheUpgradeWaitingOnIt() throws Exception {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = upgradeWaitingOn("in_proration");
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = mirroredTansoInvoice("in_proration");
+
+        stripeWebhook.handleInvoiceMarkedUncollectible(createStripeInvoiceWithSubscription("in_proration", "sub_si_1"));
+
+        assertEquals("CANCELLED", pending.getStatus());
+        verify(subscriptionScheduledChangeRepository).save(pending);
+        verify(stripeSyncService).cancelUnpaidUpgrade("in_proration", subscription.getId(), account.getId());
+        assertEquals(InvoiceStatus.PAST_DUE.name(), tansoInvoice.getStatus());
+    }
+
     // ── STRIPE_INTEGRATION charge-first upgrades ──────────────────────────────
 
     private StripeInvoice linkedStripeInvoice(String stripeInvoiceId) {

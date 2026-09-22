@@ -91,6 +91,18 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **An unpaid upgrade ends when its Stripe invoice is voided or written off.**
+  On STRIPE_DRIVEN and STRIPE_INTEGRATION, a charge-first upgrade on a
+  send_invoice subscription waited on `invoice.paid` forever, and Stripe stayed
+  on the new price. `invoice.voided` now cancels the waiting upgrade and puts
+  Stripe back on the old price. `invoice.marked_uncollectible` does the same
+  and also voids the invoice, since Stripe still accepts payment on it. Tanso's
+  copy of the invoice follows: VOID, or PAST_DUE when written off. Both events
+  are registered on new connections and added to existing ones at startup.
+- **Past-due invoices are voided on cancel, downgrade and free-plan
+  retirement.** Only DUE and PENDING invoices were voided, so a PAST_DUE
+  invoice, and its Stripe copy, stayed payable after the subscription behind
+  it was gone.
 - **A renewal invoice no longer completes an unpaid upgrade.** On
   STRIPE_INTEGRATION any paid invoice for the subscription fulfilled the
   waiting upgrade. A charge-first upgrade now completes only on the invoice
