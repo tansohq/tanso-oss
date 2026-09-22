@@ -114,6 +114,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final com.tansoflow.tansocore.repository.StripeSubscriptionRepository stripeSubscriptionRepository;
     // ObjectProvider: StripeWebhookImpl itself depends on SubscriptionService
     private final org.springframework.beans.factory.ObjectProvider<com.tansoflow.tansocore.integration.stripe.StripeWebhook> stripeWebhookProvider;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     @Transactional
     @Override
@@ -797,9 +798,36 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      * @param currentSubscriptionId the current subscription object containing details of the user's active subscription
      * @param newPlanId             the new plan to which the subscription should be upgraded
      */
-    @Transactional
+    // Not @Transactional: a charge-first upgrade calls Stripe, and money must never move inside a transaction that
+    // can still roll back. It used to: a failed commit after Stripe charged left no change for invoice.paid to find.
+    // The decision (lock, checks, the PENDING change) commits first, Stripe is called with no transaction open, and
+    // what Stripe answered is recorded in a transaction of its own.
     @Override
     public UpgradeResult upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+        UpgradeDecision decision = transactionTemplate.execute(status ->
+                decideUpgrade(currentSubscriptionId, accountId, newPlanId, grantNow));
+        if (decision.stripeCharge() == null) {
+            return decision.result();
+        }
+        return chargeStripeThenRecord(decision.stripeCharge());
+    }
+
+    /** A charge-first upgrade committed PENDING and waiting for Stripe. Ids only: the entities are detached by then. */
+    private record StripeChargeToMake(UUID scheduledChangeId, UUID subscriptionId, UUID accountId, UUID toPlanId, String toPlanKey) {
+    }
+
+    /** What the locked part of an upgrade decided: the finished result, or a Stripe charge still to make. */
+    private record UpgradeDecision(UpgradeResult result, StripeChargeToMake stripeCharge) {
+        static UpgradeDecision done(UpgradeResult result) {
+            return new UpgradeDecision(result, null);
+        }
+
+        static UpgradeDecision charge(StripeChargeToMake stripeCharge) {
+            return new UpgradeDecision(null, stripeCharge);
+        }
+    }
+
+    private UpgradeDecision decideUpgrade(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
         // Locked until this transaction ends. An agent retrying after a timeout sends the same plan change twice;
         // without the lock both calls see no pending upgrade and each raises its own payable invoice.
         Subscription currentSubscription = subscriptionRepository
@@ -871,7 +899,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 && (isStripeIntegrationUpgrade || (isStripeDriven && AuthContext.currentApiKeyId() != null));
 
         if (grantNow && chargeStripeFirst) {
-            return chargeStripeBeforeUpgrade(currentSubscription, subscribedPlan, newPlan, now);
+            return recordChargeFirstUpgrade(currentSubscription, subscribedPlan, newPlan, now);
         }
 
         if (grantNow && deferUntilPaid) {
@@ -883,7 +911,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())
                     && !InvoiceStatus.PAID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())
                     && !InvoiceStatus.VOID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())) {
-                return UpgradeResult.waitingOnInvoice(alreadyWaiting.getAdjustmentInvoice().getId());
+                return UpgradeDecision.done(UpgradeResult.waitingOnInvoice(alreadyWaiting.getAdjustmentInvoice().getId()));
             }
 
             // Voids the invoice behind any upgrade this one replaces, so nobody pays for a change that is gone.
@@ -902,7 +930,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             subscriptionScheduledChangeRepository.save(scheduledChange);
             log.info("Upgrade of subscription {} to plan {} waits on adjustment invoice {}",
                     currentSubscription.getId(), newPlan.getKey(), adjustedInvoice.getId());
-            return UpgradeResult.waitingOnInvoice(adjustedInvoice.getId());
+            return UpgradeDecision.done(UpgradeResult.waitingOnInvoice(adjustedInvoice.getId()));
         }
 
         if (grantNow) {
@@ -983,37 +1011,40 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // payment), so the listener reading subscription.getPlan() would re-send the old price.
         eventPublisher.publishEvent(new SubscriptionPlanChangedEvent(
                 currentSubscription.getAccount().getId(), currentSubscription.getId(), newPlan.getId(), true));
-        return UpgradeResult.notWaiting();
+        return UpgradeDecision.done(UpgradeResult.notWaiting());
     }
 
     /**
      * Charge-first upgrade: any STRIPE_INTEGRATION caller, or an agent key on STRIPE_DRIVEN. The change is
      * recorded PENDING and Stripe is asked to charge the proration now; the plan moves only once Stripe has the
-     * money. When the saved card is charged, that happens here. When it is not (no card, a decline, 3-D Secure,
-     * or a send_invoice subscription that waits for a human), the caller gets the hosted invoice and the
+     * money. When the saved card is charged, that happens in this call. When it is not (no card, a decline,
+     * 3-D Secure, or a send_invoice subscription that waits for a human), the caller gets the hosted invoice and the
      * invoice.paid webhook for that invoice completes the change.
+     * <p>
+     * This is the first of three steps and runs inside the upgrade's transaction: it only records the change. The
+     * PENDING row, committed before Stripe is called, is what makes a retry safe: asking again finds it.
      */
-    private UpgradeResult chargeStripeBeforeUpgrade(Subscription currentSubscription, Plan subscribedPlan, Plan newPlan, Instant now) {
-        // Asking again while the same change is still waiting on payment must not raise a second Stripe invoice.
+    private UpgradeDecision recordChargeFirstUpgrade(Subscription currentSubscription, Plan subscribedPlan, Plan newPlan, Instant now) {
         SubscriptionScheduledChange alreadyWaiting = subscriptionScheduledChangeRepository
                 .findPendingUpgradeBySubscription(currentSubscription).orElse(null);
-        if (alreadyWaiting != null && alreadyWaiting.getStripeInvoiceId() != null
-                && alreadyWaiting.getPaymentUrl() != null
-                && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())) {
-            return UpgradeResult.waitingOnStripe(alreadyWaiting.getPaymentUrl());
+        if (alreadyWaiting != null && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())) {
+            // Asking again while the same change is still waiting on payment must not raise a second Stripe invoice.
+            if (alreadyWaiting.getStripeInvoiceId() != null && alreadyWaiting.getPaymentUrl() != null) {
+                return UpgradeDecision.done(UpgradeResult.waitingOnStripe(alreadyWaiting.getPaymentUrl()));
+            }
+            // Recorded, but Stripe's answer never was: the call is still running, its reply was lost, or recording
+            // it failed. Asking Stripe again under the same idempotency key returns its first answer rather than a
+            // second charge, and the answer is recorded this time.
+            if (alreadyWaiting.isStripeChargeFirst() && alreadyWaiting.getStripeInvoiceId() == null) {
+                log.info("Upgrade of subscription {} to plan {} is already recorded as scheduled change {}; asking Stripe again under the same idempotency key",
+                        currentSubscription.getId(), newPlan.getKey(), alreadyWaiting.getId());
+                return UpgradeDecision.charge(new StripeChargeToMake(alreadyWaiting.getId(), currentSubscription.getId(),
+                        currentSubscription.getAccount().getId(), newPlan.getId(), newPlan.getKey()));
+            }
         }
 
         // Voids the Stripe invoice behind any change this one replaces, which discards its pending_update.
         cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
-
-        StripeUpgradeCharge charge;
-        try {
-            charge = stripeSyncService.chargeUpgradeBeforeApplying(
-                    currentSubscription.getId(), currentSubscription.getAccount().getId(), newPlan.getId());
-        } catch (StripeException e) {
-            throw new IllegalStateException("Stripe could not process the upgrade of subscription "
-                    + currentSubscription.getId() + " to plan " + newPlan.getKey() + ": " + e.getMessage(), e);
-        }
 
         SubscriptionScheduledChange scheduledChange = new SubscriptionScheduledChange();
         scheduledChange.setStatus(SubscriptionScheduledChangeStatus.PENDING.name());
@@ -1022,22 +1053,99 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         scheduledChange.setSubscription(currentSubscription);
         scheduledChange.setFromPlan(subscribedPlan);
         scheduledChange.setToPlan(newPlan);
+        scheduledChange.setStripeChargeFirst(true);
         // The webhook that reports a later payment has no security context, so the key rides on the change.
         scheduledChange.setApiKeyId(AuthContext.currentApiKeyId());
-        scheduledChange.setStripeInvoiceId(charge.stripeInvoiceId());
-        if (!charge.applied()) {
-            scheduledChange.setPaymentUrl(charge.hostedInvoiceUrl());
-        }
         subscriptionScheduledChangeRepository.save(scheduledChange);
+
+        return UpgradeDecision.charge(new StripeChargeToMake(scheduledChange.getId(), currentSubscription.getId(),
+                currentSubscription.getAccount().getId(), newPlan.getId(), newPlan.getKey()));
+    }
+
+    /**
+     * Steps two and three of a charge-first upgrade. Stripe is called with no transaction open, so a failed commit
+     * can no longer leave a charge behind with nothing in Tanso to show for it. The PENDING change is committed
+     * by now; if recording Stripe's answer fails, that row is what the invoice.paid webhook, or a retry, completes.
+     */
+    private UpgradeResult chargeStripeThenRecord(StripeChargeToMake toMake) {
+        StripeUpgradeCharge charge;
+        try {
+            charge = stripeSyncService.chargeUpgradeBeforeApplying(
+                    toMake.subscriptionId(), toMake.accountId(), toMake.toPlanId(), toMake.scheduledChangeId());
+        } catch (com.stripe.exception.ApiConnectionException e) {
+            // No answer from Stripe, so it may have charged. The change stays PENDING: a retry asks again under the
+            // same idempotency key and gets Stripe's first answer, and invoice.paid can still find the change.
+            log.error("No answer from Stripe for the upgrade of subscription {} to plan {}; scheduled change {} stays PENDING for a retry",
+                    toMake.subscriptionId(), toMake.toPlanKey(), toMake.scheduledChangeId(), e);
+            throw new IllegalStateException("Stripe could not be reached for the upgrade of subscription "
+                    + toMake.subscriptionId() + " to plan " + toMake.toPlanKey() + ": " + e.getMessage(), e);
+        } catch (StripeException e) {
+            log.error("Stripe refused the upgrade of subscription {} to plan {}; marking scheduled change {} FAILED",
+                    toMake.subscriptionId(), toMake.toPlanKey(), toMake.scheduledChangeId(), e);
+            markChargeFirstUpgradeFailed(toMake.scheduledChangeId());
+            throw new IllegalStateException("Stripe could not process the upgrade of subscription "
+                    + toMake.subscriptionId() + " to plan " + toMake.toPlanKey() + ": " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error("Charging the upgrade of subscription {} to plan {} failed; marking scheduled change {} FAILED",
+                    toMake.subscriptionId(), toMake.toPlanKey(), toMake.scheduledChangeId(), e);
+            markChargeFirstUpgradeFailed(toMake.scheduledChangeId());
+            throw e;
+        }
+
+        try {
+            return transactionTemplate.execute(status -> recordStripeCharge(toMake, charge));
+        } catch (RuntimeException e) {
+            log.error("Stripe raised invoice {} (applied={}) for the upgrade of subscription {} to plan {}, but recording it failed; "
+                            + "scheduled change {} stays PENDING for invoice.paid or a retry",
+                    charge.stripeInvoiceId(), charge.applied(), toMake.subscriptionId(), toMake.toPlanKey(),
+                    toMake.scheduledChangeId(), e);
+            throw e;
+        }
+    }
+
+    /** A change Stripe refused must not hold up the next attempt, which would otherwise re-send the refused request. */
+    private void markChargeFirstUpgradeFailed(UUID scheduledChangeId) {
+        transactionTemplate.executeWithoutResult(status -> subscriptionScheduledChangeRepository
+                .findPendingUpgradeByIdForUpdate(scheduledChangeId)
+                .ifPresent(change -> {
+                    change.setStatus(SubscriptionScheduledChangeStatus.FAILED.name());
+                    subscriptionScheduledChangeRepository.save(change);
+                }));
+    }
+
+    private UpgradeResult recordStripeCharge(StripeChargeToMake toMake, StripeUpgradeCharge charge) {
+        // Locked: the invoice.paid webhook for this charge can arrive before this runs, and only one of the two may
+        // fulfil the change.
+        SubscriptionScheduledChange change = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByIdForUpdate(toMake.scheduledChangeId()).orElse(null);
+        if (change == null) {
+            SubscriptionScheduledChange current = subscriptionScheduledChangeRepository.findById(toMake.scheduledChangeId())
+                    .orElseThrow(() -> new IllegalStateException("Scheduled change " + toMake.scheduledChangeId()
+                            + " for the upgrade of subscription " + toMake.subscriptionId() + " no longer exists"));
+            if (SubscriptionScheduledChangeStatus.COMPLETED.name().equals(current.getStatus())) {
+                log.info("Upgrade of subscription {} to plan {} was already completed by the webhook for Stripe invoice {}",
+                        toMake.subscriptionId(), toMake.toPlanKey(), charge.stripeInvoiceId());
+                return UpgradeResult.notWaiting();
+            }
+            throw new IllegalStateException("Scheduled change " + toMake.scheduledChangeId() + " is " + current.getStatus()
+                    + " but Stripe raised invoice " + charge.stripeInvoiceId() + " (applied=" + charge.applied()
+                    + ") for it; the upgrade of subscription " + toMake.subscriptionId() + " needs a look");
+        }
+
+        change.setStripeInvoiceId(charge.stripeInvoiceId());
+        if (!charge.applied()) {
+            change.setPaymentUrl(charge.hostedInvoiceUrl());
+        }
+        subscriptionScheduledChangeRepository.save(change);
 
         if (charge.applied()) {
             // Stripe charged the saved card during this call, with nobody on a payment page.
-            fulfilPaidUpgrade(scheduledChange, charge.amountPaid(), SpendChannel.OFF_SESSION);
+            fulfilPaidUpgrade(change, charge.amountPaid(), SpendChannel.OFF_SESSION);
             return UpgradeResult.notWaiting();
         }
 
         log.info("Upgrade of subscription {} to plan {} waits on Stripe invoice {}",
-                currentSubscription.getId(), newPlan.getKey(), charge.stripeInvoiceId());
+                toMake.subscriptionId(), toMake.toPlanKey(), charge.stripeInvoiceId());
         return UpgradeResult.waitingOnStripe(charge.hostedInvoiceUrl());
     }
 

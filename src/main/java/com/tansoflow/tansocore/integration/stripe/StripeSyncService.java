@@ -83,8 +83,12 @@ public interface StripeSyncService {
      * succeeds (pending_if_incomplete), otherwise it keeps the old price with a pending_update waiting on the
      * returned invoice. A send_invoice subscription cannot hold a pending_update, so Stripe moves the price and
      * sends the invoice; the result is applied only once that invoice is paid.
+     * <p>
+     * The Stripe calls run outside any transaction; callers must not hold one either. The update carries an
+     * idempotency key derived from scheduledChangeId, so asking again for the same change replays Stripe's first
+     * answer instead of charging twice.
      */
-    com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId) throws StripeException;
+    com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId, UUID scheduledChangeId) throws StripeException;
 
     /** Voids a Stripe invoice by its Stripe id. Voiding the invoice behind a pending_update discards that update. */
     void voidStripeInvoice(String stripeInvoiceId, UUID accountId) throws StripeException;

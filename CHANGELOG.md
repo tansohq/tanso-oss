@@ -92,6 +92,18 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **A charged upgrade can no longer be lost to a failed database commit.**
+  Charge-first upgrades called Stripe inside the database transaction, so a
+  commit that failed after Stripe charged left the customer paying with no
+  change in Tanso for `invoice.paid` to complete. The pending change is now
+  committed before Stripe is called, Stripe is called with no transaction
+  open, and its answer is recorded in a separate transaction. If that last
+  step fails, `invoice.paid` for the upgrade invoice still completes the
+  change, and a retry gets Stripe's first answer back: the Stripe call carries
+  an idempotency key made from the change's id. A change Stripe refused is
+  marked FAILED so the next attempt starts fresh. Schema: new column
+  `subscription_scheduled_changes.stripe_charge_first` (changelog
+  `2026.09.23.20`).
 - **A hosted page a human pays is no longer refused by the key budget or the
   mandate.** Buying credits without a card, subscribing to a paid plan without
   a card, and a subscribe or upgrade on pass-through all hand the agent a

@@ -70,6 +70,18 @@ public interface SubscriptionScheduledChangeRepository extends JpaRepository<Sub
     @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.stripeInvoiceId = :stripeInvoiceId AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
     Optional<SubscriptionScheduledChange> findPendingUpgradeByStripeInvoiceId(String stripeInvoiceId);
 
+    // A charge-first upgrade being recorded after the Stripe call. Locked in the same order as the invoice.paid
+    // webhook (change first), so whichever of the two gets here second sees it is no longer PENDING.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.id = :id AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
+    Optional<SubscriptionScheduledChange> findPendingUpgradeByIdForUpdate(UUID id);
+
+    // A PENDING upgrade that has no Stripe invoice recorded: an in-arrears upgrade waiting on the next paid invoice,
+    // or a charge-first upgrade whose Stripe answer was never written down. Locked for the same reason as above.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.subscription = :subscription AND ssc.stripeInvoiceId IS NULL AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
+    Optional<SubscriptionScheduledChange> findPendingUpgradeWithoutStripeInvoiceBySubscription(Subscription subscription);
+
     boolean existsSubscriptionScheduledChangeBySubscriptionIn(Collection<Subscription> subscriptions);
 
     List<SubscriptionScheduledChange> findSubscriptionScheduledChangesByStatusAndSubscriptionIsIn(String status, Collection<Subscription> subscriptions);

@@ -112,6 +112,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     private final FeatureRepository featureRepository;
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     @Override
     public void syncStripeSubscriptionTansoSubscription(String stripeSubscriptionId, String tansoSubscription, String accountId) {
@@ -1035,28 +1036,41 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                 plan.getId(), prorate);
     }
 
+    /** The Stripe ids a charge-first upgrade needs, read in a short transaction that ends before any charge. */
+    private record UpgradeChargeTarget(String stripeSubscriptionId, String stripePriceId) {
+    }
+
+    // Not @Transactional: the update below can charge a card, and money must not move inside a transaction that can
+    // still roll back. The lookups run in their own short transaction first.
     @Override
-    @Transactional
-    public StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId) throws StripeException {
+    public StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId,
+                                                           UUID scheduledChangeId) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
 
-        Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
-        if (subscription == null) {
-            throw new IllegalArgumentException("Subscription not found for plan change: " + subscriptionId);
-        }
-        // Without a Stripe subscription there is nothing for Stripe to charge, and swapping the plan anyway would
-        // hand an agent a paid tier nobody paid for.
-        StripeSubscription stripeSub = stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);
-        if (stripeSub == null) {
-            throw new IllegalStateException("Subscription " + subscriptionId
-                    + " has no linked Stripe subscription; the upgrade cannot be charged");
-        }
-
-        Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
-        StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
+        UpgradeChargeTarget target = transactionTemplate.execute(status -> {
+            Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
+            if (subscription == null) {
+                throw new IllegalArgumentException("Subscription not found for plan change: " + subscriptionId);
+            }
+            // Without a Stripe subscription there is nothing for Stripe to charge, and swapping the plan anyway would
+            // hand an agent a paid tier nobody paid for.
+            StripeSubscription linked = stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);
+            if (linked == null) {
+                throw new IllegalStateException("Subscription " + subscriptionId
+                        + " has no linked Stripe subscription; the upgrade cannot be charged");
+            }
+            Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
+            try {
+                StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
+                return new UpgradeChargeTarget(linked.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId());
+            } catch (StripeException e) {
+                throw new IllegalStateException("Could not set up the Stripe price of plan " + planId
+                        + " for the upgrade of subscription " + subscriptionId + ": " + e.getMessage(), e);
+            }
+        });
 
         com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
-                .retrieve(stripeSub.getStripeSubscriptionExternalId());
+                .retrieve(target.stripeSubscriptionId());
         String existingItemId = currentStripeSub.getItems().getData().getFirst().getId();
         // Accumulate-mode plans create send_invoice subscriptions. Stripe only supports pending updates on
         // charge_automatically subscriptions (docs.stripe.com/billing/subscriptions/pending-updates).
@@ -1069,7 +1083,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         SubscriptionUpdateParams.Builder paramsBuilder = SubscriptionUpdateParams.builder()
                 .addItem(SubscriptionUpdateParams.Item.builder()
                         .setId(existingItemId)
-                        .setPrice(stripePrice.getStripePriceExternalId())
+                        .setPrice(target.stripePriceId())
                         .build())
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
                 .addExpand("latest_invoice");
@@ -1077,33 +1091,45 @@ public class StripeSyncServiceImpl implements StripeSyncService {
             paramsBuilder.setPaymentBehavior(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE);
         }
 
+        // One key per Tanso scheduled change: a retry after a lost response, or after Tanso failed to record the
+        // answer, gets Stripe's first answer back (for 24 hours) instead of a second charge.
+        com.stripe.net.RequestOptions requestOptions = com.stripe.net.RequestOptions.builder()
+                .setIdempotencyKey(upgradeIdempotencyKey(scheduledChangeId))
+                .build();
         com.stripe.model.Subscription updated = stripeClient.v1().subscriptions()
-                .update(stripeSub.getStripeSubscriptionExternalId(), paramsBuilder.build());
+                .update(target.stripeSubscriptionId(), paramsBuilder.build(), requestOptions);
 
         com.stripe.model.Invoice invoice = updated.getLatestInvoiceObject();
         if (invoice == null) {
             throw new IllegalStateException("Stripe returned no invoice for the upgrade of subscription "
-                    + stripeSub.getStripeSubscriptionExternalId());
+                    + target.stripeSubscriptionId());
         }
         // A draft has no hosted page yet, and the human needs one to pay.
         if (sendInvoice && "draft".equals(invoice.getStatus())) {
-            invoice = stripeClient.v1().invoices().finalizeInvoice(invoice.getId());
+            // Keyed too: a retry replays the update's draft reply, and finalizing it a second time would fail.
+            invoice = stripeClient.v1().invoices().finalizeInvoice(invoice.getId(), com.stripe.net.RequestOptions.builder()
+                    .setIdempotencyKey(upgradeIdempotencyKey(scheduledChangeId) + "-finalize")
+                    .build());
         }
         // The plan moves only when Stripe holds the new price AND the money. On send_invoice the first is true at
         // once, so the invoice status is what decides.
         boolean applied = updated.getPendingUpdate() == null && "paid".equals(invoice.getStatus());
         if (!applied && invoice.getHostedInvoiceUrl() == null) {
             throw new IllegalStateException("Stripe could not charge the upgrade of subscription "
-                    + stripeSub.getStripeSubscriptionExternalId() + " and returned no hosted invoice " + invoice.getId());
+                    + target.stripeSubscriptionId() + " and returned no hosted invoice " + invoice.getId());
         }
         BigDecimal amountPaid = invoice.getAmountPaid() != null
                 ? BigDecimal.valueOf(invoice.getAmountPaid()).movePointLeft(2)
                 : BigDecimal.ZERO;
 
-        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {}: invoice {} applied={} sendInvoice={}",
-                stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(), plan.getId(),
+        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {} (scheduled change {}): invoice {} applied={} sendInvoice={}",
+                target.stripeSubscriptionId(), target.stripePriceId(), planId, scheduledChangeId,
                 invoice.getId(), applied, sendInvoice);
         return new StripeUpgradeCharge(invoice.getId(), invoice.getHostedInvoiceUrl(), amountPaid, applied);
+    }
+
+    static String upgradeIdempotencyKey(UUID scheduledChangeId) {
+        return "tanso-upgrade-" + scheduledChangeId;
     }
 
     @Override

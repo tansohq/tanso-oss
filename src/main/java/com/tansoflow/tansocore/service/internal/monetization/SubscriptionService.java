@@ -69,8 +69,9 @@ public interface SubscriptionService {
      * @return what the upgrade is waiting on when the caller holds an API key and the change costs money: a Tanso
      *         adjustment invoice when Tanso collects, or a Stripe hosted invoice when STRIPE_DRIVEN could not charge
      *         the saved card. Not waiting when the plan was swapped, or Stripe charged and the swap is done.
+     *         Not @Transactional, here or on the implementation: Spring honours either, and a charge-first upgrade
+     *         must call Stripe with no transaction open. The implementation opens its own.
      */
-    @Transactional
     com.tansoflow.tansocore.model.subscription.UpgradeResult upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow);
 
     /**

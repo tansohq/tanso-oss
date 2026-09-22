@@ -20,6 +20,7 @@ package com.tansoflow.tansocore.integration.stripe.implementation;
 import com.stripe.StripeClient;
 import com.stripe.model.SubscriptionItem;
 import com.stripe.model.SubscriptionItemCollection;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.SubscriptionUpdateParams;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.Plan;
@@ -32,6 +33,7 @@ import com.tansoflow.tansocore.repository.StripePriceRepository;
 import com.tansoflow.tansocore.repository.StripeSubscriptionRepository;
 import com.tansoflow.tansocore.repository.SubscriptionRepository;
 import com.tansoflow.tansocore.service.internal.monetization.PlanService;
+import com.tansoflow.tansocore.util.TestTransactionManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,7 +41,10 @@ import org.mockito.Answers;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -72,7 +77,12 @@ class StripeSyncServiceImplPlanChangeTest {
     @Mock
     private PlanService planService;
 
+    private final TestTransactionManager transactionManager = new TestTransactionManager();
+    @Spy
+    private TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+
     private final UUID accountId = UUID.randomUUID();
+    private final UUID changeId = UUID.randomUUID();
     private Account account;
     private Plan oldPlan;
     private Plan newPlan;
@@ -135,15 +145,40 @@ class StripeSyncServiceImplPlanChangeTest {
         return updated;
     }
 
+    // The update that can charge the card used to run inside the caller's transaction and this method's own.
+    @Test
+    void theChargingUpdateRunsOutsideAnyTransactionAndIsKeyedOnTheScheduledChange() throws Exception {
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
+                .thenAnswer(i -> {
+                    assertThat(TransactionSynchronizationManager.isActualTransactionActive())
+                            .as("Stripe charged inside a transaction").isFalse();
+                    return stripeReply(false, "paid", 7450L);
+                });
+
+        // Called the way Spring wires it, so a @Transactional on the method would open a transaction here.
+        org.springframework.aop.framework.ProxyFactory factory = new org.springframework.aop.framework.ProxyFactory(stripeSyncService);
+        factory.addAdvice(new org.springframework.transaction.interceptor.TransactionInterceptor(
+                (org.springframework.transaction.TransactionManager) transactionManager,
+                new org.springframework.transaction.annotation.AnnotationTransactionAttributeSource()));
+        ((com.tansoflow.tansocore.integration.stripe.StripeSyncService) factory.getProxy())
+                .chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
+
+        ArgumentCaptor<RequestOptions> options = ArgumentCaptor.forClass(RequestOptions.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), any(SubscriptionUpdateParams.class), options.capture());
+        assertThat(options.getValue().getIdempotencyKey()).isEqualTo("tanso-upgrade-" + changeId);
+        // The lookups ran in their own transaction, which had ended by the time Stripe was called.
+        assertThat(transactionManager.commits()).isEqualTo(1);
+    }
+
     @Test
     void anAgentUpgradeIsChargedNowAndAppliedOnlyIfPaid() throws Exception {
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(stripeReply(false, "paid", 7450L));
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
-        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture(), any(RequestOptions.class));
         assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
         assertThat(params.getValue().getPaymentBehavior()).isEqualTo(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE);
         assertThat(params.getValue().getItems()).hasSize(1);
@@ -157,10 +192,10 @@ class StripeSyncServiceImplPlanChangeTest {
 
     @Test
     void aChargeStripeCouldNotTakeComesBackPendingWithTheHostedInvoice() throws Exception {
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(stripeReply(true, "open", 0L));
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         assertThat(charge.applied()).isFalse();
         assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
@@ -170,10 +205,10 @@ class StripeSyncServiceImplPlanChangeTest {
     // Stripe applied the price but the invoice is not paid: the plan must not move yet.
     @Test
     void aChargeAutomaticallyUpgradeWithAnUnpaidInvoiceIsNotApplied() throws Exception {
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(stripeReply(false, "open", 0L));
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         assertThat(charge.applied()).isFalse();
     }
@@ -183,13 +218,13 @@ class StripeSyncServiceImplPlanChangeTest {
     @Test
     void aSendInvoiceUpgradeIsInvoicedWithoutPendingUpdateAndWaitsForPayment() throws Exception {
         current.setCollectionMethod("send_invoice");
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(stripeReply(false, "open", 0L));
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
-        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture(), any(RequestOptions.class));
         assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
         assertThat(params.getValue().getPaymentBehavior()).isNull();
         assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_new");
@@ -204,16 +239,16 @@ class StripeSyncServiceImplPlanChangeTest {
         current.setCollectionMethod("send_invoice");
         com.stripe.model.Subscription draftReply = stripeReply(false, "draft", 0L);
         draftReply.getLatestInvoiceObject().setHostedInvoiceUrl(null);
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(draftReply);
         com.stripe.model.Invoice finalized = new com.stripe.model.Invoice();
         finalized.setId("in_proration");
         finalized.setStatus("open");
         finalized.setAmountPaid(0L);
         finalized.setHostedInvoiceUrl("https://invoice.stripe.com/i/acct_test/in_proration");
-        when(stripeClient.v1().invoices().finalizeInvoice("in_proration")).thenReturn(finalized);
+        when(stripeClient.v1().invoices().finalizeInvoice(eq("in_proration"), any(RequestOptions.class))).thenReturn(finalized);
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         assertThat(charge.applied()).isFalse();
         assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
@@ -222,10 +257,10 @@ class StripeSyncServiceImplPlanChangeTest {
     @Test
     void aSendInvoiceUpgradeAlreadyPaidIsApplied() throws Exception {
         current.setCollectionMethod("send_invoice");
-        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
                 .thenReturn(stripeReply(false, "paid", 7450L));
 
-        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
 
         assertThat(charge.applied()).isTrue();
         assertThat(charge.amountPaid()).isEqualByComparingTo(new BigDecimal("74.50"));

@@ -967,8 +967,9 @@ class StripeWebhookImplTest {
         linkedStripeInvoice("in_renewal");
         when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_renewal"))
                 .thenReturn(Optional.empty());
-        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
-                .thenReturn(Optional.of(pending));
+        // The pending change has its invoice recorded, so the lookup for changes without one does not return it.
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeWithoutStripeInvoiceBySubscription(subscription))
+                .thenReturn(Optional.empty());
 
         stripeWebhook.handleFullSyncInvoicePaid(renewal, accountId);
 
@@ -1006,6 +1007,91 @@ class StripeWebhookImplTest {
         assertEquals("PENDING", pending.getStatus());
         verify(stripeSyncService, never()).updateStripeSubscriptionPrice(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
         verify(subscriptionScheduledChangeRepository, never()).save(any());
+    }
+
+    // ── charge-first upgrades whose Stripe answer Tanso never recorded ────────
+    // The upgrade call commits its PENDING change before Stripe charges and writes the invoice id afterwards. If that
+    // write fails (or this webhook wins the race), the change has no invoice id, and invoice.paid must still find it.
+
+    private com.tansoflow.tansocore.entity.SubscriptionScheduledChange chargeFirstChangeWithNoInvoiceRecorded() {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setToPlan(plan);
+        pending.setStatus("PENDING");
+        pending.setStripeChargeFirst(true);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeWithoutStripeInvoiceBySubscription(subscription))
+                .thenReturn(Optional.of(pending));
+        return pending;
+    }
+
+    @Test
+    void handleStripeDrivenInvoicePaid_CompletesAChargeFirstUpgradeWhoseInvoiceWasNeverRecorded() {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = chargeFirstChangeWithNoInvoiceRecorded();
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked(any())).thenReturn(true);
+
+        // A renewal is not the payment for the upgrade.
+        Invoice renewal = createStripeInvoiceWithSubscription("in_renewal", "sub_sd_030");
+        renewal.setBillingReason("subscription_cycle");
+        stripeWebhook.handleStripeDrivenInvoicePaid(renewal, accountId);
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any(), any());
+
+        Invoice proration = createStripeInvoiceWithSubscription("in_proration", "sub_sd_030");
+        proration.setBillingReason("subscription_update");
+        proration.setAmountPaid(7450L);
+        stripeWebhook.handleStripeDrivenInvoicePaid(proration, accountId);
+
+        // charge_automatically: Stripe charged the saved card.
+        verify(subscriptionService).fulfilPaidUpgrade(pending, new BigDecimal("74.50"),
+                com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION);
+        assertEquals("in_proration", pending.getStripeInvoiceId());
+    }
+
+    @Test
+    void handleFullSyncInvoicePaid_CompletesAChargeFirstUpgradeWhoseInvoiceWasNeverRecordedOnlyByTheUpgradeInvoice() {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = chargeFirstChangeWithNoInvoiceRecorded();
+
+        Invoice renewal = createStripeInvoiceWithSubscription("in_renewal", "sub_si_1");
+        renewal.setBillingReason("subscription_cycle");
+        renewal.setAmountPaid(14900L);
+        linkedStripeInvoice("in_renewal");
+        stripeWebhook.handleFullSyncInvoicePaid(renewal, accountId);
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any(), any());
+
+        Invoice proration = createStripeInvoiceWithSubscription("in_proration", "sub_si_1");
+        proration.setBillingReason("subscription_update");
+        proration.setAmountPaid(7450L);
+        // Stripe emailed this one, so a human paid it on the hosted page.
+        proration.setCollectionMethod("send_invoice");
+        linkedStripeInvoice("in_proration");
+        stripeWebhook.handleFullSyncInvoicePaid(proration, accountId);
+
+        verify(subscriptionService).fulfilPaidUpgrade(pending, new BigDecimal("74.50"),
+                com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED);
+        assertEquals("in_proration", pending.getStripeInvoiceId());
+    }
+
+    // The declined first attempt fires invoice.payment_failed while the upgrade call is still waiting on Stripe. The
+    // change has no invoice id yet; treating it as an in-arrears upgrade would revert the price and mark it FAILED.
+    @Test
+    void handleFullSyncInvoicePaymentFailed_LeavesAChargeFirstUpgradeInFlightAlone() throws Exception {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setStatus("PENDING");
+        pending.setStripeChargeFirst(true);
+        linkedStripeInvoice("in_proration");
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
+                .thenReturn(Optional.of(pending));
+
+        stripeWebhook.handleFullSyncInvoicePaymentFailed(createStripeInvoiceWithSubscription("in_proration", "sub_si_1"));
+
+        assertEquals("PENDING", pending.getStatus());
+        verify(stripeSyncService, never()).updateStripeSubscriptionPrice(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     // A proration invoice covers now until period end. Reading the period off it moved the subscription's period
