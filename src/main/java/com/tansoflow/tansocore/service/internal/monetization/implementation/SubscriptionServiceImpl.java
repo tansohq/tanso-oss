@@ -26,7 +26,10 @@ import com.tansoflow.tansocore.entity.Plan;
 import com.tansoflow.tansocore.entity.PlanCreditAllocation;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.entity.SubscriptionScheduledChange;
+import com.stripe.exception.StripeException;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
+import com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge;
+import com.tansoflow.tansocore.model.subscription.UpgradeResult;
 import com.tansoflow.tansocore.mapper.monetization.InvoiceMapper;
 import com.tansoflow.tansocore.mapper.monetization.SubscriptionMapper;
 import com.tansoflow.tansocore.mapper.monetization.SubscriptionScheduledChangeMapper;
@@ -585,22 +588,28 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             throw new ResourceNotFoundException("Subscription not found for invoice id: " + invoiceId);
         }
 
-        switch (invoice.getSubscription().getPlan().getBillingTiming()) {
-            case "IN_ADVANCE" -> {
-                subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
-                subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
-            }
-            case "IN_ARREARS" -> {
-                Instant newPeriodStart = invoice.getInvoicePeriodEnd();
-                Instant newPeriodEnd = newPeriodStart
-                        .atOffset(ZoneOffset.UTC)
-                        .plusMonths(subscription.getIntervalMonths())
-                        .toInstant();
+        // An adjustment invoice covers the rest of the current period from the upgrade moment. Moving the period
+        // to its start would corrupt the cycle and change the key the period's credit grant is idempotent on, so
+        // the full plan allocation would be granted again on top of the upgrade delta.
+        boolean isAdjustment = InvoiceType.ADJUSTMENT.name().equals(invoice.getType());
+        if (!isAdjustment) {
+            switch (invoice.getSubscription().getPlan().getBillingTiming()) {
+                case "IN_ADVANCE" -> {
+                    subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
+                    subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
+                }
+                case "IN_ARREARS" -> {
+                    Instant newPeriodStart = invoice.getInvoicePeriodEnd();
+                    Instant newPeriodEnd = newPeriodStart
+                            .atOffset(ZoneOffset.UTC)
+                            .plusMonths(subscription.getIntervalMonths())
+                            .toInstant();
 
-                subscription.setCurrentPeriodStart(newPeriodStart);
-                subscription.setCurrentPeriodEnd(newPeriodEnd);
-            }
+                    subscription.setCurrentPeriodStart(newPeriodStart);
+                    subscription.setCurrentPeriodEnd(newPeriodEnd);
+                }
 
+            }
         }
         invoiceService.markInvoiceAsPaid(invoice);
         subscriptionRepository.save(subscription);
@@ -780,9 +789,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      */
     @Transactional
     @Override
-    public UUID upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+    public UpgradeResult upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+        // Locked until this transaction ends. An agent retrying after a timeout sends the same plan change twice;
+        // without the lock both calls see no pending upgrade and each raises its own payable invoice.
         Subscription currentSubscription = subscriptionRepository
-                .findSubscriptionByUuidAndAccountId(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
+                .findSubscriptionByUuidAndAccountIdForUpdate(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
         Plan subscribedPlan = currentSubscription.getPlan();
         Plan newPlan = planService.retrievePlan(currentSubscription.getAccount(), UUID.fromString(newPlanId));
         if (!PlanStatus.ACTIVE.name().equals(newPlan.getStatus())) {
@@ -824,9 +835,24 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // An agent must not reach a paid tier before its principal pays for it. When the caller holds an API key
         // and Tanso is collecting the money itself, the adjustment invoice is raised and the plan swap waits on
         // it; InvoiceServiceImpl.markInvoiceAsPaid completes the change. Operators keep the immediate upgrade.
+        // STRIPE_DRIVEN is left out: Stripe collects there, so an invoice Tanso raises has nothing to pay it.
+        // Stripe charges first instead, below.
+        boolean isStripeDriven = upgAccountSetting != null && upgAccountSetting.getStripeMode() == StripeMode.STRIPE_DRIVEN;
         boolean deferUntilPaid = !isStripeIntegrationUpgrade
+                && !isStripeDriven
                 && AuthContext.currentApiKeyId() != null
                 && prorationAmount.signum() > 0;
+
+        // STRIPE_DRIVEN with an API key: Stripe must take the money before the plan moves. A CREATE_PRORATIONS
+        // price change only bills at the next renewal, so the agent used the paid tier for up to a period before
+        // anyone paid, and a failed renewal never took it back.
+        boolean chargeStripeFirst = isStripeDriven
+                && AuthContext.currentApiKeyId() != null
+                && prorationAmount.signum() > 0;
+
+        if (grantNow && chargeStripeFirst) {
+            return chargeStripeBeforeUpgrade(currentSubscription, subscribedPlan, newPlan, now);
+        }
 
         if (grantNow && deferUntilPaid) {
             // Asking twice must not raise a second invoice, and an invoice for a change that is being replaced must
@@ -837,7 +863,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())
                     && !InvoiceStatus.PAID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())
                     && !InvoiceStatus.VOID.name().equals(alreadyWaiting.getAdjustmentInvoice().getStatus())) {
-                return alreadyWaiting.getAdjustmentInvoice().getId();
+                return UpgradeResult.waitingOnInvoice(alreadyWaiting.getAdjustmentInvoice().getId());
             }
 
             // Voids the invoice behind any upgrade this one replaces, so nobody pays for a change that is gone.
@@ -856,7 +882,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             subscriptionScheduledChangeRepository.save(scheduledChange);
             log.info("Upgrade of subscription {} to plan {} waits on adjustment invoice {}",
                     currentSubscription.getId(), newPlan.getKey(), adjustedInvoice.getId());
-            return adjustedInvoice.getId();
+            return UpgradeResult.waitingOnInvoice(adjustedInvoice.getId());
         }
 
         if (grantNow) {
@@ -874,13 +900,16 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 subscriptionScheduledChangeRepository.save(scheduledChange);
             } else if (subscribedPlan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())) {
                 if (newPlan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())) {
-                    Invoice adjustedInvoice = invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
+                    // STRIPE_DRIVEN: Stripe bills the proration from the price change published below, so a Tanso
+                    // adjustment invoice would sit DUE with nothing to pay it.
+                    Invoice adjustedInvoice = isStripeDriven
+                            ? null
+                            : invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
 
                     currentSubscription.setPlan(newPlan);
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -892,7 +921,14 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+
+                    // The budget was checked above; draw it down now that the plan has moved. A no-op without a key.
+                    keyBudgetService.recordSpend(currentSubscription.getAccount().getId(), AuthContext.currentApiKeyId(),
+                            SpendKind.MONEY, prorationAmount, currentSubscription.getId().toString(),
+                            "plan_change:" + scheduledChange.getId());
                 } else {
                     // Mixed billing timing has no proration rule. This used to fall through silently and answer
                     // 200, telling the caller a plan had changed when nothing had.
@@ -905,7 +941,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -916,15 +951,100 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
             }
         }
 
         // Notify Stripe of the plan change so the subscription price is updated.
         // Upgrades happen mid-cycle and should prorate; downgrades are scheduled at period end.
+        // The new plan is named explicitly: STRIPE_INTEGRATION has not swapped the Tanso plan yet (it waits on
+        // payment), so the listener reading subscription.getPlan() would re-send the old price.
         eventPublisher.publishEvent(new SubscriptionPlanChangedEvent(
-                currentSubscription.getAccount().getId(), currentSubscription.getId(), true));
-        return null;
+                currentSubscription.getAccount().getId(), currentSubscription.getId(), newPlan.getId(), true));
+        return UpgradeResult.notWaiting();
+    }
+
+    /**
+     * STRIPE_DRIVEN agent upgrade. The change is recorded PENDING and Stripe is asked to charge the proration
+     * now; the plan moves only once Stripe has the money. When the saved card is charged, that happens here.
+     * When it is not (no card, a decline, 3-D Secure), Stripe keeps the old price with a pending_update, the
+     * agent gets the hosted invoice, and the invoice.paid webhook completes the change when a human pays it.
+     */
+    private UpgradeResult chargeStripeBeforeUpgrade(Subscription currentSubscription, Plan subscribedPlan, Plan newPlan, Instant now) {
+        // Asking again while the same change is still waiting on payment must not raise a second Stripe invoice.
+        SubscriptionScheduledChange alreadyWaiting = subscriptionScheduledChangeRepository
+                .findPendingUpgradeBySubscription(currentSubscription).orElse(null);
+        if (alreadyWaiting != null && alreadyWaiting.getStripeInvoiceId() != null
+                && alreadyWaiting.getPaymentUrl() != null
+                && alreadyWaiting.getToPlan().getId().equals(newPlan.getId())) {
+            return UpgradeResult.waitingOnStripe(alreadyWaiting.getPaymentUrl());
+        }
+
+        // Voids the Stripe invoice behind any change this one replaces, which discards its pending_update.
+        cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+
+        StripeUpgradeCharge charge;
+        try {
+            charge = stripeSyncService.chargeUpgradeBeforeApplying(
+                    currentSubscription.getId(), currentSubscription.getAccount().getId(), newPlan.getId());
+        } catch (StripeException e) {
+            throw new IllegalStateException("Stripe could not process the upgrade of subscription "
+                    + currentSubscription.getId() + " to plan " + newPlan.getKey() + ": " + e.getMessage(), e);
+        }
+
+        SubscriptionScheduledChange scheduledChange = new SubscriptionScheduledChange();
+        scheduledChange.setStatus(SubscriptionScheduledChangeStatus.PENDING.name());
+        scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
+        scheduledChange.setEffectiveAt(now);
+        scheduledChange.setSubscription(currentSubscription);
+        scheduledChange.setFromPlan(subscribedPlan);
+        scheduledChange.setToPlan(newPlan);
+        // The webhook that reports a later payment has no security context, so the key rides on the change.
+        scheduledChange.setApiKeyId(AuthContext.currentApiKeyId());
+        scheduledChange.setStripeInvoiceId(charge.stripeInvoiceId());
+        if (!charge.applied()) {
+            scheduledChange.setPaymentUrl(charge.hostedInvoiceUrl());
+        }
+        subscriptionScheduledChangeRepository.save(scheduledChange);
+
+        if (charge.applied()) {
+            fulfilPaidUpgrade(scheduledChange, charge.amountPaid());
+            return UpgradeResult.notWaiting();
+        }
+
+        log.info("Upgrade of subscription {} to plan {} waits on Stripe invoice {}",
+                currentSubscription.getId(), newPlan.getKey(), charge.stripeInvoiceId());
+        return UpgradeResult.waitingOnStripe(charge.hostedInvoiceUrl());
+    }
+
+    @Override
+    @Transactional
+    public void fulfilPaidUpgrade(SubscriptionScheduledChange pending, BigDecimal amountPaid) {
+        if (!SubscriptionScheduledChangeStatus.PENDING.name().equals(pending.getStatus())) {
+            throw new IllegalStateException("Scheduled change " + pending.getId() + " is " + pending.getStatus()
+                    + ", only a PENDING change can be fulfilled");
+        }
+        Subscription subscription = pending.getSubscription();
+        subscription.setPlan(pending.getToPlan());
+        subscriptionRepository.save(subscription);
+
+        entitlementService.processEntitlementsForSubscription(subscription);
+        grantCreditDeltaForUpgrade(pending.getFromPlan(), pending.getToPlan(), subscription, pending.getId());
+
+        pending.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
+        pending.setFulfilledAt(Instant.now());
+        pending.setPaymentUrl(null);
+        subscriptionScheduledChangeRepository.save(pending);
+
+        // A no-op when no key asked for the change (an operator, or STRIPE_INTEGRATION which does not record one).
+        keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),
+                SpendKind.MONEY, amountPaid, subscription.getId().toString(),
+                "plan_change:" + pending.getId());
+
+        log.info("Upgrade of subscription {} to plan {} fulfilled after payment of {}",
+                subscription.getId(), pending.getToPlan().getKey(), amountPaid);
     }
 
     /** What the rest of this period costs to move from one plan to the other; zero when the move is not a charge. */
@@ -941,8 +1061,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      * for any denomination where the new plan provides more credits.
      * Existing unused credits are kept — only the difference is topped up.
      */
-    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription) {
-        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan);
+    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription, UUID scheduledChangeId) {
+        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan, scheduledChangeId);
     }
 
     @Override
@@ -1023,7 +1143,21 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private void voidInvoiceBehindAPendingUpgrade(Subscription subscription) {
         SubscriptionScheduledChange waiting = subscriptionScheduledChangeRepository
                 .findPendingUpgradeBySubscription(subscription).orElse(null);
-        if (waiting == null || waiting.getAdjustmentInvoice() == null) {
+        if (waiting == null) {
+            return;
+        }
+        // STRIPE_DRIVEN charge-first upgrade still waiting on its Stripe invoice. Voiding that invoice is how
+        // Stripe cancels a pending_update; left open, a human paying it would move Stripe to a plan Tanso dropped.
+        if (waiting.getStripeInvoiceId() != null) {
+            try {
+                stripeSyncService.voidStripeInvoice(waiting.getStripeInvoiceId(), subscription.getAccount().getId());
+            } catch (StripeException e) {
+                throw new IllegalStateException("Could not void Stripe invoice " + waiting.getStripeInvoiceId()
+                        + " behind the pending upgrade of subscription " + subscription.getId() + ": " + e.getMessage(), e);
+            }
+            return;
+        }
+        if (waiting.getAdjustmentInvoice() == null) {
             return;
         }
         String status = waiting.getAdjustmentInvoice().getStatus();
@@ -1105,7 +1239,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
         // Notify Stripe of the plan change. Downgrades happen at period boundary — no proration.
         eventPublisher.publishEvent(new SubscriptionPlanChangedEvent(
-                subscription.getAccount().getId(), subscription.getId(), false));
+                subscription.getAccount().getId(), subscription.getId(), ssc.getToPlan().getId(), false));
     }
 
 }

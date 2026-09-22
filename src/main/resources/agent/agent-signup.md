@@ -183,6 +183,8 @@ Buy credits: `POST {base}/api/v1/client/credits/purchases`.
 Change plan: `POST {base}/api/v1/client/subscriptions` with a plan key from pricing.json.
 Change an existing subscription in place: `POST {base}/api/v1/client/subscriptions/{subscriptionId}/plan-change`.
 An upgrade that costs money answers 402 with the invoice to pay; the plan swaps when the invoice is paid.
+Where Stripe runs the billing and a card is on file, Stripe charges it during the call: a 200 means it was
+paid and the new plan is already yours. The 402 comes only when that charge did not go through.
 Mutating requests accept an `Idempotency-Key` header; replays return the stored response for 24h.
 
 ## 7. Gates: 402 and 403
@@ -237,7 +239,7 @@ What to do per row:
 | status | code | gate | action | do this |
 |--------|------|------|--------|---------|
 | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
-| 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. |
+| 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. A Stripe invoice left unpaid for about 23 hours expires and the change is dropped; ask again after that. |
 | 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to. `PUT {"email": ...}` to `url` (the owner endpoint), then retry the call. Signing up with an email avoids this. |
 | 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window is used up. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap or the mandate cap. `retry_after` is null; waiting will not help. Ask the owner to raise the cap or make a smaller purchase. |

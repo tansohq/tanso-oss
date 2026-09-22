@@ -22,6 +22,7 @@ import com.tansoflow.tansocore.auth.CustomerAccessGuard;
 import com.tansoflow.tansocore.auth.UserContext;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.GateError;
+import com.tansoflow.tansocore.model.subscription.UpgradeResult;
 import com.tansoflow.tansocore.model.subscription.request.ClientChangeSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.request.ClientSubscriptionRequest;
 import com.tansoflow.tansocore.model.subscription.response.SubscribedCustomerResponse;
@@ -219,7 +220,9 @@ public class SubscriptionClientController {
                     "The upgrade costs money and the caller holds an API key: the plan change waits on payment. "
                             + "error.code=payment_required, gate=payment, action=complete_checkout with the hosted "
                             + "invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the "
-                            + "invoice is paid. Customer-scoped (ck_) keys only."),
+                            + "invoice is paid. On STRIPE_DRIVEN accounts Stripe first tries the saved card; this is "
+                            + "returned only when that charge did not go through, and url is Stripe's hosted invoice. "
+                            + "Customer-scoped (ck_) keys only."),
             @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description =
                     "The proration charge exceeds the account's spend cap or the calling key's budget: "
                             + "error.code=spend_cap_exceeded or budget_exceeded", content = @Content),
@@ -243,9 +246,9 @@ public class SubscriptionClientController {
                     .body(ApiResponse.<Void>builder().error(GateError.ownerEmailRequired(ownerUrl)).success(false).build());
         }
 
-        UUID pendingInvoiceId = null;
+        UpgradeResult upgrade = UpgradeResult.notWaiting();
         if (request.getChangeType() == SubscriptionChangeType.UPGRADE) {
-            pendingInvoiceId = subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
+            upgrade = subscriptionService.upgradeSubscription(subscriptionId, userContext.getAccountId(), request.getChangeToPlanId(), true);
         }
 
         if (request.getChangeType() == SubscriptionChangeType.DOWNGRADE) {
@@ -254,12 +257,16 @@ public class SubscriptionClientController {
 
         // The upgrade is raised but not granted: the agent gets the invoice to hand to a human, and something to
         // poll. Paying it swaps the plan. An agent must not reach a paid tier before its principal pays for it.
-        if (pendingInvoiceId != null) {
+        if (upgrade.waitingOnPayment()) {
             String pollUrl = base + "/api/v1/client/customers/" + customer.getExternalClientCustomerId() + "/status";
+            UUID pendingInvoiceId = upgrade.pendingInvoiceId();
 
             AccountSetting accountSetting = accountService.retrieveAccountSettings(userContext.getAccountId());
             GateError gate;
-            if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
+            if (upgrade.stripePaymentUrl() != null) {
+                // STRIPE_DRIVEN: Stripe could not charge the saved card and holds the change as a pending_update.
+                gate = GateError.paymentRequired(upgrade.stripePaymentUrl(), pollUrl);
+            } else if (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH) {
                 try {
                     StripePaymentLinkDto link = stripeSyncService.syncNewInvoice(pendingInvoiceId, UUID.fromString(userContext.getAccountId()));
                     gate = GateError.paymentRequired(link.getPaymentLink(), pollUrl);

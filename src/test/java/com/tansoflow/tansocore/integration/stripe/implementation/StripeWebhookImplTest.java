@@ -136,6 +136,9 @@ class StripeWebhookImplTest {
     @Mock
     private com.tansoflow.tansocore.service.client.AgentLifecycleService agentLifecycleService;
 
+    @Mock
+    private com.tansoflow.tansocore.repository.SubscriptionScheduledChangeRepository subscriptionScheduledChangeRepository;
+
     // Regression: a hosted checkout completes in a browser, so the webhook is the
     // only place the money can be charged back to the key that opened it. The
     // security context is gone by then, which is why the key and amount ride on
@@ -747,6 +750,81 @@ class StripeWebhookImplTest {
 
         verify(invoiceService).markInvoiceAsPaid(tansoInvoiceId.toString());
         verify(creditService).processCreditGrantsForSubscription(subscription);
+    }
+
+    // An agent upgrade Stripe could not charge at the time completes when a human pays its invoice. The paired
+    // invoice.paid / invoice.payment_succeeded (or a redelivery) must not fulfil it twice.
+    @Test
+    void handleStripeDrivenInvoicePaid_FulfilsTheUpgradeWaitingOnThatInvoiceOnce() {
+        UUID tansoInvoiceId = UUID.randomUUID();
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = new com.tansoflow.tansocore.entity.Invoice();
+        tansoInvoice.setId(tansoInvoiceId);
+        StripeInvoice stripeInvoiceEntity = new StripeInvoice();
+        stripeInvoiceEntity.setInvoice(tansoInvoice);
+
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("in_proration", "sub_sd_030");
+        stripeInvoice.setAmountPaid(7450L);
+        stripeInvoice.setStatus("paid");
+
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setStripeInvoiceId("in_proration");
+
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked("in_proration")).thenReturn(true);
+        when(stripeSyncService.retrieveStripeInvoiceLinkedData("in_proration")).thenReturn(stripeInvoiceEntity);
+        // Once fulfilled the change is COMPLETED, so the locked PENDING lookup finds nothing on the second delivery.
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_proration"))
+                .thenReturn(Optional.of(pending))
+                .thenReturn(Optional.empty());
+
+        stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
+        stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
+
+        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"));
+    }
+
+    @Test
+    void handleStripeDrivenInvoicePaymentFailed_LeavesTheWaitingUpgradePending() {
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("in_proration", "sub_sd_030");
+        when(stripeSyncService.stripeInvoiceLinked("in_proration")).thenReturn(false);
+
+        stripeWebhook.handleStripeDrivenInvoicePaymentFailed(stripeInvoice);
+
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+        verifyNoInteractions(subscriptionScheduledChangeRepository);
+    }
+
+    @Test
+    void handleStripeDrivenPendingUpdateExpired_CancelsTheUpgradeNobodyPaidFor() {
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        Plan starter = new Plan();
+        starter.setKey("starter");
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setToPlan(starter);
+        pending.setStatus("PENDING");
+        pending.setStripeInvoiceId("in_proration");
+        pending.setPaymentUrl("https://invoice.stripe.com/i/acct_test/in_proration");
+
+        com.stripe.model.Subscription stripeSub = new com.stripe.model.Subscription();
+        stripeSub.setId("sub_sd_030");
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
+                .thenReturn(Optional.of(pending));
+
+        stripeWebhook.handleStripeDrivenPendingUpdateExpired(stripeSub);
+
+        assertEquals("CANCELLED", pending.getStatus());
+        verify(subscriptionScheduledChangeRepository).save(pending);
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
     }
 
     @Test

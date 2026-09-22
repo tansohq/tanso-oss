@@ -196,6 +196,7 @@ public class StripeServiceImpl implements StripeService {
                 WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__SUBSCRIPTION__DELETED.getValue(),
                 WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__SUBSCRIPTION__PAUSED.getValue(),
                 WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__SUBSCRIPTION__RESUMED.getValue(),
+                WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__SUBSCRIPTION__PENDING_UPDATE_EXPIRED.getValue(),
 
                 // customer events
                 WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__CREATED.getValue(),

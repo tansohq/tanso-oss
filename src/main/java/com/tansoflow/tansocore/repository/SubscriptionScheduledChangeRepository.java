@@ -20,9 +20,12 @@ package com.tansoflow.tansocore.repository;
 import com.tansoflow.tansocore.entity.Invoice;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.entity.SubscriptionScheduledChange;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
@@ -55,9 +58,17 @@ public interface SubscriptionScheduledChangeRepository extends JpaRepository<Sub
     @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.subscription = :subscription AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
     Optional<SubscriptionScheduledChange> findPendingUpgradeBySubscription(Subscription subscription);
 
-    // An upgrade an agent has not paid for yet: the plan swap waits on this adjustment invoice.
+    // An upgrade an agent has not paid for yet: the plan swap waits on this adjustment invoice. Locked so two
+    // concurrent payments of one invoice cannot both fulfil the change; the second sees it COMPLETED.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.adjustmentInvoice = :adjustmentInvoice AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
     Optional<SubscriptionScheduledChange> findPendingUpgradeByAdjustmentInvoice(Invoice adjustmentInvoice);
+
+    // A STRIPE_DRIVEN agent upgrade waiting on the Stripe invoice that charges for it. Locked so invoice.paid and
+    // invoice.payment_succeeded arriving together cannot both fulfil it.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT ssc FROM SubscriptionScheduledChange ssc WHERE ssc.stripeInvoiceId = :stripeInvoiceId AND ssc.status = 'PENDING' AND ssc.type = 'UPGRADE'")
+    Optional<SubscriptionScheduledChange> findPendingUpgradeByStripeInvoiceId(String stripeInvoiceId);
 
     boolean existsSubscriptionScheduledChangeBySubscriptionIn(Collection<Subscription> subscriptions);
 
