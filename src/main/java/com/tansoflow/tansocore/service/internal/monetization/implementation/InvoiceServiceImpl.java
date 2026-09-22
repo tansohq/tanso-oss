@@ -768,7 +768,7 @@ public class InvoiceServiceImpl implements InvoiceService {
     @Override
     @Transactional
     public void voidOutstandingInvoicesForSubscription(Subscription subscription) {
-        List<Invoice> outstanding = invoiceRepository.findOutstandingInvoicesBySubscription(subscription);
+        List<Invoice> outstanding = invoiceRepository.findVoidableInvoicesBySubscription(subscription, Instant.now());
         for (Invoice invoice : outstanding) {
             invoice.setStatus(InvoiceStatus.VOID.name());
             invoiceRepository.save(invoice);

@@ -96,6 +96,12 @@ public interface StripeSyncService {
      */
     void cancelUnpaidUpgrade(String stripeInvoiceId, UUID subscriptionId, UUID accountId) throws StripeException;
 
+    /**
+     * The second half of {@link #cancelUnpaidUpgrade} for an invoice that is already void: on a send_invoice
+     * subscription puts Stripe back on the Tanso plan's price without proration; on charge_automatically does nothing.
+     */
+    void restorePriceAfterDroppedUpgrade(UUID subscriptionId, UUID accountId) throws StripeException;
+
     void cancelStripeSubscription(UUID subscriptionId, UUID accountId, String cancelMode) throws StripeException;
 
     void createStripeMeter(UUID featureId, Plan plan, UUID accountId) throws StripeException;

@@ -1120,7 +1120,13 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         // On charge_automatically this also discards the pending_update, and the old price never left.
         stripeClient.v1().invoices().voidInvoice(stripeInvoiceId);
         log.info("Voided Stripe invoice {} behind an unpaid upgrade of subscription {}", stripeInvoiceId, subscriptionId);
+        restorePriceAfterDroppedUpgrade(subscriptionId, accountId);
+    }
 
+    @Override
+    @Transactional
+    public void restorePriceAfterDroppedUpgrade(UUID subscriptionId, UUID accountId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
         StripeSubscription stripeSub = subscription == null ? null
                 : stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);
