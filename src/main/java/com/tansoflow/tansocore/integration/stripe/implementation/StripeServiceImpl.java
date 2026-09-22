@@ -148,7 +148,7 @@ public class StripeServiceImpl implements StripeService {
         return appProperty.getStripeWebhookEndpoint();
     }
 
-    private EventDestinationCreateParams getEventDestinationParams(String accountId) {
+    EventDestinationCreateParams getEventDestinationParams(String accountId) {
         String endpointUrl = getTansoWebhookEndpoint() + "/" + accountId;
 
         return EventDestinationCreateParams.builder()
@@ -156,6 +156,12 @@ public class StripeServiceImpl implements StripeService {
                 .setDescription(TANSO_WEBHOOK_DESCRIPTION)
                 .addEnabledEvent(WebhookEndpointCreateParams
                         .EnabledEvent.CHECKOUT__SESSION__ASYNC_PAYMENT_SUCCEEDED.getValue())
+                .addEnabledEvent(WebhookEndpointCreateParams.EnabledEvent.CHECKOUT__SESSION__COMPLETED.getValue())
+                .addEnabledEvent(WebhookEndpointCreateParams.EnabledEvent.CHECKOUT__SESSION__EXPIRED.getValue())
+
+                // Card setup and off-session top-ups
+                .addEnabledEvent(WebhookEndpointCreateParams.EnabledEvent.SETUP_INTENT__SUCCEEDED.getValue())
+                .addEnabledEvent(WebhookEndpointCreateParams.EnabledEvent.PAYMENT_INTENT__SUCCEEDED.getValue())
 
                 // Customer <> Subscription events
                 .addEnabledEvent(WebhookEndpointCreateParams.EnabledEvent.CUSTOMER__SUBSCRIPTION__CREATED.getValue())

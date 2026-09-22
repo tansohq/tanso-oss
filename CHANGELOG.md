@@ -15,6 +15,18 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Fixed
+
+- **Stripe now delivers the checkout and card-setup events Tanso handles.**
+  The webhook endpoint Tanso registers left out `checkout.session.completed`,
+  `checkout.session.expired`, `setup_intent.succeeded` and
+  `payment_intent.succeeded`, so on a real deployment a spend mandate never
+  activated, a hosted top-up never granted its credits, and an unused Checkout
+  page stayed pending. `stripe listen` forwards every event, which is why
+  local testing passed. New Stripe connections register them. **Existing
+  connections:** add those four events to the "Tanso Webhook StripeController
+  Endpoint" destination in the Stripe dashboard.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;
