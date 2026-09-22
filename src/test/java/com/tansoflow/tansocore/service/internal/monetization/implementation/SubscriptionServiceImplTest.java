@@ -998,8 +998,6 @@ class SubscriptionServiceImplTest {
         com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
         setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_DRIVEN);
         when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
-        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
-                .thenReturn(new com.tansoflow.tansocore.entity.Invoice());
 
         // Stripe collects on a STRIPE_DRIVEN account, so no Tanso invoice should hold the change back.
         callingWithAnApiKey(() -> {
@@ -1010,5 +1008,11 @@ class SubscriptionServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
         verify(entitlementService).processEntitlementsForSubscription(existing);
+        // Stripe bills the proration, so Tanso raises no invoice of its own that nothing would pay.
+        verify(invoiceService, org.mockito.Mockito.never()).createAdjustmentInvoice(any(), any(), any(), any(), any());
+        // The key's budget is drawn down by what the change costs.
+        verify(keyBudgetService).recordSpend(eq(account.getId()), any(),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                org.mockito.ArgumentMatchers.argThat(a -> a.signum() > 0), any(), any());
     }
 }

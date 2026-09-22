@@ -23,7 +23,8 @@ tags; this file starts where the changelog does.
   a Tanso invoice. The agent got a 402 saying no payment processor was
   connected, and an unpayable invoice was left behind. Stripe-driven accounts
   now change plan straight away and Stripe charges the difference, as the
-  0.10.0 notes said they would.
+  0.10.0 notes said they would. Tanso no longer raises its own adjustment
+  invoice there, and the change counts against the calling key's budget.
 
 ### Removed
 

@@ -878,7 +878,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 subscriptionScheduledChangeRepository.save(scheduledChange);
             } else if (subscribedPlan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())) {
                 if (newPlan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())) {
-                    Invoice adjustedInvoice = invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
+                    // STRIPE_DRIVEN: Stripe bills the proration from the price change published below, so a Tanso
+                    // adjustment invoice would sit DUE with nothing to pay it.
+                    Invoice adjustedInvoice = isStripeDriven
+                            ? null
+                            : invoiceService.createAdjustmentInvoice(subscribedPlan, newPlan, currentSubscription, ratio, now);
 
                     currentSubscription.setPlan(newPlan);
                     subscriptionRepository.save(currentSubscription);
@@ -897,6 +901,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
+
+                    // The budget was checked above; draw it down now that the plan has moved. A no-op without a key.
+                    keyBudgetService.recordSpend(currentSubscription.getAccount().getId(), AuthContext.currentApiKeyId(),
+                            SpendKind.MONEY, prorationAmount, currentSubscription.getId().toString(),
+                            "plan_change:" + scheduledChange.getId());
                 } else {
                     // Mixed billing timing has no proration rule. This used to fall through silently and answer
                     // 200, telling the caller a plan had changed when nothing had.
