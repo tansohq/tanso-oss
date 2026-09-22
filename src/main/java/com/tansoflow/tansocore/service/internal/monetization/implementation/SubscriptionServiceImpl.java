@@ -512,7 +512,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 subscription.setCancelEffectiveAt(instantNow);
                 subscription.setIsActive(false);
 
-                // Void anything still payable: DUE, PENDING and PAST_DUE invoices
+                // Void what is still payable for the current period; a past period's PAST_DUE stays owed
                 invoiceService.voidOutstandingInvoicesForSubscription(subscription);
 
                 // For IN_ADVANCE billing, create a prorated credit since the customer already paid

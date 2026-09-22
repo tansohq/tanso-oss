@@ -99,10 +99,13 @@ tags; this file starts where the changelog does.
   and also voids the invoice, since Stripe still accepts payment on it. Tanso's
   copy of the invoice follows: VOID, or PAST_DUE when written off. Both events
   are registered on new connections and added to existing ones at startup.
-- **Past-due invoices are voided on cancel, downgrade and free-plan
-  retirement.** Only DUE and PENDING invoices were voided, so a PAST_DUE
-  invoice, and its Stripe copy, stayed payable after the subscription behind
-  it was gone.
+- **A past-due invoice for the current period is voided on cancel, downgrade
+  and free-plan retirement.** Only DUE and PENDING invoices were voided, so a
+  PAST_DUE invoice for a period still running, and its Stripe copy, stayed
+  payable after the subscription behind it was gone. The same goes for the
+  past-due proration of an upgrade still waiting on payment. A PAST_DUE
+  invoice for a period that has already ended stays payable: that is money
+  owed for service already used.
 - **A renewal invoice no longer completes an unpaid upgrade.** On
   STRIPE_INTEGRATION any paid invoice for the subscription fulfilled the
   waiting upgrade. A charge-first upgrade now completes only on the invoice
@@ -126,8 +129,6 @@ tags; this file starts where the changelog does.
   lets it through. It now answers `spend_cap_exceeded` / `raise_spend_cap`
   with `retry_after: null`. A charge that fits the budget but not what is left
   of this window still answers `wait`.
-
-### Fixed
 
 - **Stripe now delivers the checkout and card-setup events Tanso handles.**
   The webhook endpoint Tanso registers left out `checkout.session.completed`,

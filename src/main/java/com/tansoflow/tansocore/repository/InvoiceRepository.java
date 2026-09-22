@@ -99,7 +99,24 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
     @Query("SELECT invoice FROM Invoice invoice WHERE invoice.subscription = :subscription AND invoice.type IN ('REGULAR', 'IN_ADVANCE_INITIAL') AND invoice.status = 'DUE'")
     Invoice getCurrentlyDueInvoiceBySubscription(Subscription subscription);
 
-    // Every status a customer can still pay. ADJUSTMENT_OPEN is left out: nothing writes it.
-    @Query("SELECT i FROM Invoice i WHERE i.subscription = :subscription AND i.status IN ('DUE', 'PENDING', 'PAST_DUE')")
+    @Query("SELECT i FROM Invoice i WHERE i.subscription = :subscription AND i.status IN ('DUE', 'PENDING')")
     List<Invoice> findOutstandingInvoicesBySubscription(Subscription subscription);
+
+    // What a cancel or downgrade should stop being payable. A PAST_DUE invoice is included only for a period that
+    // has not ended yet, or as the proration of an upgrade still waiting on payment: a past period's PAST_DUE is
+    // money owed for service already used, and voiding it would forgive the debt. A PAST_DUE invoice with no period
+    // stays payable. ADJUSTMENT_OPEN is left out: nothing writes it.
+    @Query("""
+        SELECT i FROM Invoice i
+        WHERE i.subscription = :subscription
+          AND (i.status IN ('DUE', 'PENDING')
+            OR (i.status = 'PAST_DUE'
+              AND (i.invoicePeriodEnd > :now
+                OR EXISTS (
+                  SELECT 1 FROM SubscriptionScheduledChange ssc
+                  WHERE ssc.adjustmentInvoice = i
+                    AND ssc.status = 'PENDING'
+                    AND ssc.type = 'UPGRADE'))))
+    """)
+    List<Invoice> findVoidableInvoicesBySubscription(Subscription subscription, Instant now);
 }

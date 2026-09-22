@@ -23,14 +23,18 @@ import com.tansoflow.tansocore.entity.Invoice;
 import com.tansoflow.tansocore.entity.Plan;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.model.billing.type.InvoiceStatus;
+import com.tansoflow.tansocore.service.internal.monetization.InvoiceService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,10 +59,19 @@ class InvoiceRepositoryTest {
     @Autowired
     private SubscriptionRepository subscriptionRepository;
 
-    // Cancel, downgrade and free-plan retirement void what this returns. A PAST_DUE invoice left out stayed payable
-    // after the subscription behind it was gone.
-    @Test
-    void outstandingInvoicesIncludeEveryStatusACustomerCanStillPay() {
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    // Cancel IMMEDIATE and the scheduled downgrade both void through this.
+    @Autowired
+    private InvoiceService invoiceService;
+
+    private final Instant now = Instant.now();
+    private Plan plan;
+    private Subscription subscription;
+
+    @BeforeEach
+    void setUp() {
         Account account = new Account();
         account.setName("Invoice Repo Test " + System.nanoTime());
         account = accountRepository.save(account);
@@ -67,39 +80,86 @@ class InvoiceRepositoryTest {
         customer.setAccount(account);
         customer = customerRepository.save(customer);
 
-        Plan plan = new Plan();
+        plan = new Plan();
         plan.setAccount(account);
         plan.setKey("starter-" + System.nanoTime());
         plan.setName("Starter");
         plan.setStatus("ACTIVE");
         plan = planRepository.save(plan);
 
-        Subscription subscription = new Subscription();
+        subscription = new Subscription();
         subscription.setAccount(account);
         subscription.setCustomer(customer);
         subscription.setPlan(plan);
         subscription = subscriptionRepository.save(subscription);
-
-        Invoice due = invoiceWithStatus(subscription, InvoiceStatus.DUE);
-        Invoice pending = invoiceWithStatus(subscription, InvoiceStatus.PENDING);
-        Invoice pastDue = invoiceWithStatus(subscription, InvoiceStatus.PAST_DUE);
-        invoiceWithStatus(subscription, InvoiceStatus.PAID);
-        invoiceWithStatus(subscription, InvoiceStatus.VOID);
-
-        List<Invoice> outstanding = invoiceRepository.findOutstandingInvoicesBySubscription(subscription);
-
-        assertThat(outstanding).extracting(Invoice::getId)
-                .containsExactlyInAnyOrder(due.getId(), pending.getId(), pastDue.getId());
     }
 
-    private Invoice invoiceWithStatus(Subscription subscription, InvoiceStatus status) {
+    // A past period's PAST_DUE is owed for service already used; voiding it on cancel or downgrade forgave the debt.
+    // One for the period still running, or with the period ending exactly now, is decided by invoicePeriodEnd.
+    @Test
+    void voidableInvoicesTakePastDueOnlyForAPeriodThatHasNotEnded() {
+        Invoice due = invoice(InvoiceStatus.DUE, now.minus(40, ChronoUnit.DAYS));
+        Invoice pending = invoice(InvoiceStatus.PENDING, now.plus(30, ChronoUnit.DAYS));
+        Invoice pastDueCurrentPeriod = invoice(InvoiceStatus.PAST_DUE, now.plus(1, ChronoUnit.SECONDS));
+        invoice(InvoiceStatus.PAST_DUE, now);
+        invoice(InvoiceStatus.PAST_DUE, now.minus(30, ChronoUnit.DAYS));
+        invoice(InvoiceStatus.PAST_DUE, null);
+        invoice(InvoiceStatus.PAID, now.plus(30, ChronoUnit.DAYS));
+        invoice(InvoiceStatus.VOID, now.plus(30, ChronoUnit.DAYS));
+
+        List<Invoice> voidable = invoiceRepository.findVoidableInvoicesBySubscription(subscription, now);
+
+        assertThat(voidable).extracting(Invoice::getId)
+                .containsExactlyInAnyOrder(due.getId(), pending.getId(), pastDueCurrentPeriod.getId());
+    }
+
+    // The proration behind an upgrade still waiting on payment buys nothing once the subscription is cancelled or
+    // moved, so it is voided even when past due and even when its period has ended.
+    @Test
+    void voidableInvoicesTakeThePastDueProrationOfAWaitingUpgrade() {
+        Invoice proration = invoice(InvoiceStatus.PAST_DUE, now.minus(1, ChronoUnit.DAYS));
+        upgradeWaitingOn(proration, "PENDING");
+        Invoice fulfilledProration = invoice(InvoiceStatus.PAST_DUE, now.minus(1, ChronoUnit.DAYS));
+        upgradeWaitingOn(fulfilledProration, "COMPLETED");
+
+        List<Invoice> voidable = invoiceRepository.findVoidableInvoicesBySubscription(subscription, now);
+
+        assertThat(voidable).extracting(Invoice::getId).containsExactly(proration.getId());
+    }
+
+    @Test
+    void voidingOutstandingInvoicesLeavesAPastPeriodsDebtPayable() {
+        Invoice pastPeriod = invoice(InvoiceStatus.PAST_DUE, now.minus(30, ChronoUnit.DAYS));
+        Invoice currentPeriod = invoice(InvoiceStatus.PAST_DUE, now.plus(30, ChronoUnit.DAYS));
+
+        invoiceService.voidOutstandingInvoicesForSubscription(subscription);
+
+        assertThat(invoiceRepository.findById(pastPeriod.getId()).orElseThrow().getStatus())
+                .isEqualTo(InvoiceStatus.PAST_DUE.name());
+        assertThat(invoiceRepository.findById(currentPeriod.getId()).orElseThrow().getStatus())
+                .isEqualTo(InvoiceStatus.VOID.name());
+    }
+
+    private Invoice invoice(InvoiceStatus status, Instant periodEnd) {
         Invoice invoice = new Invoice();
         invoice.setAccount(subscription.getAccount());
         invoice.setSubscription(subscription);
         invoice.setAmount(new BigDecimal("49.00"));
         invoice.setCurrency("USD");
-        invoice.setDueDate(Instant.now());
+        invoice.setDueDate(now);
         invoice.setStatus(status.name());
+        invoice.setInvoicePeriodEnd(periodEnd);
         return invoiceRepository.save(invoice);
+    }
+
+    // Written with plain SQL naming only the columns the query reads: tests run without Liquibase, so a local
+    // database can lag newer columns on this table (stripe_invoice_id, payment_url) that an entity save would write.
+    private void upgradeWaitingOn(Invoice proration, String status) {
+        invoiceRepository.flush();
+        jdbcTemplate.update("""
+                INSERT INTO subscription_scheduled_changes
+                    (type, subscription_id, from_plan_id, to_plan_id, adjustment_invoice_id, status, effective_at)
+                VALUES ('UPGRADE', ?, ?, ?, ?, ?, now())
+                """, subscription.getId(), plan.getId(), plan.getId(), proration.getId(), status);
     }
 }
