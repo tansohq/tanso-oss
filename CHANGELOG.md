@@ -15,6 +15,17 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Fixed
+
+- **Concurrent agent signups no longer get past the signup caps.** The
+  per-account and per-IP counts ran before, and outside, the transaction that
+  inserts the customer, so a burst of simultaneous signups all read a count
+  under the cap and all got in. The counts and the insert now run in one
+  transaction under a Postgres advisory lock on the account, plus one on the
+  address when there is one. The README now says what the per-IP cap needs
+  from a proxy: it counts the leftmost `X-Forwarded-For`, so the proxy must
+  overwrite that header rather than append to it.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;
