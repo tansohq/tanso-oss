@@ -789,10 +789,14 @@ public class StripeWebhookImpl implements StripeWebhook {
             log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {} paid by Stripe invoice {}",
                     chargedFirst.getSubscription().getId(), chargedFirst.getToPlan().getId(), stripeInvoice.getId());
         } else if (paidSubscription != null) {
+            // Locked: the upgrade call may be recording a charge-first change at the same moment.
             subscriptionScheduledChangeRepository
-                    .findPendingUpgradeBySubscription(paidSubscription)
-                    .filter(ssc -> ssc.getStripeInvoiceId() == null)
+                    .findPendingUpgradeWithoutStripeInvoiceBySubscription(paidSubscription)
+                    .filter(ssc -> !ssc.isStripeChargeFirst() || isUpgradeInvoice(stripeInvoice))
                     .ifPresent(ssc -> {
+                        if (ssc.isStripeChargeFirst()) {
+                            ssc.setStripeInvoiceId(stripeInvoice.getId());
+                        }
                         subscriptionService.fulfilPaidUpgrade(ssc,
                                 amountPaidOf(stripeInvoice));
                         log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {}",
@@ -854,7 +858,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             if (subscription != null) {
                 subscriptionScheduledChangeRepository
                         .findPendingUpgradeBySubscription(subscription)
-                        .filter(ssc -> ssc.getStripeInvoiceId() == null)
+                        .filter(ssc -> ssc.getStripeInvoiceId() == null && !ssc.isStripeChargeFirst())
                         .ifPresent(ssc -> {
                             try {
                                 // Tanso subscription still has OLD plan — pricing against it reverts Stripe
@@ -1212,8 +1216,23 @@ public class StripeWebhookImpl implements StripeWebhook {
         // An agent upgrade Stripe could not charge at the time: paying its invoice is what applies the pending_update
         // in Stripe (an expired update voids the invoice, so a paid one was applied), so the plan moves now.
         // Only a PENDING change matches, so a redelivery or the paired invoice.payment_succeeded finds nothing.
-        subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId())
-                .ifPresent(pending -> subscriptionService.fulfilPaidUpgrade(pending, amountPaidOf(stripeInvoice)));
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange chargedFirst = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        // The upgrade call commits its change before Stripe charges and records the invoice afterwards. When this
+        // arrives first, or recording failed, the change has no invoice yet: the upgrade invoice for its
+        // subscription is the one that pays for it.
+        if (chargedFirst == null && isUpgradeInvoice(stripeInvoice)) {
+            chargedFirst = subscriptionScheduledChangeRepository
+                    .findPendingUpgradeWithoutStripeInvoiceBySubscription(bridge.getSubscription())
+                    .filter(com.tansoflow.tansocore.entity.SubscriptionScheduledChange::isStripeChargeFirst)
+                    .orElse(null);
+            if (chargedFirst != null) {
+                chargedFirst.setStripeInvoiceId(stripeInvoice.getId());
+            }
+        }
+        if (chargedFirst != null) {
+            subscriptionService.fulfilPaidUpgrade(chargedFirst, amountPaidOf(stripeInvoice));
+        }
 
         Subscription subscription = bridge.getSubscription();
         try {
@@ -1240,7 +1259,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             return;
         }
         subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(bridge.getSubscription())
-                .filter(pending -> pending.getStripeInvoiceId() != null)
+                .filter(pending -> pending.getStripeInvoiceId() != null || pending.isStripeChargeFirst())
                 .ifPresent(pending -> {
                     pending.setStatus(SubscriptionScheduledChangeStatus.CANCELLED.name());
                     pending.setPaymentUrl(null);
@@ -1248,6 +1267,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                     log.info("Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} expired unpaid",
                             bridge.getSubscription().getId(), pending.getToPlan().getKey(), pending.getStripeInvoiceId());
                 });
+    }
+
+    /** The invoice Stripe raises for a mid-period price change (always_invoice), as opposed to a renewal. */
+    private static boolean isUpgradeInvoice(Invoice stripeInvoice) {
+        return "subscription_update".equals(stripeInvoice.getBillingReason());
     }
 
     private static BigDecimal amountPaidOf(Invoice stripeInvoice) {

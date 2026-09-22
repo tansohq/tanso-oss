@@ -83,6 +83,13 @@ public class SubscriptionScheduledChange {
     @Column(name = "payment_url")
     private String paymentUrl;
 
+    /**
+     * Stripe is asked to charge for this upgrade before the plan moves. Recorded before the Stripe call, so a change
+     * with this set and no stripe_invoice_id is one whose Stripe answer is still in flight or was never written down.
+     */
+    @Column(name = "stripe_charge_first", nullable = false)
+    private boolean stripeChargeFirst;
+
     @Size(max = 32)
     @NotNull
     @Column(name = "status", nullable = false, length = 32)

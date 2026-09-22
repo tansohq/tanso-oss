@@ -1,0 +1,20 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260923-20"
+      author: tanso
+      comment: >
+        A charge-first upgrade is now committed PENDING before Stripe is called, so
+        the Stripe charge never runs inside a transaction that can roll back. Until
+        the Stripe answer is recorded, such a change has no stripe_invoice_id and
+        looks like an in-arrears upgrade waiting on the next paid invoice.
+        stripe_charge_first tells the two apart for the invoice webhooks.
+      changes:
+        - addColumn:
+            tableName: subscription_scheduled_changes
+            columns:
+              - column:
+                  name: stripe_charge_first
+                  type: BOOLEAN
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
