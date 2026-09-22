@@ -72,8 +72,9 @@ tags; this file starts where the changelog does.
   mandate now lives on the customer (`mandate_amount`, `mandate_period`,
   `mandate_started_at`) and every off-session charge, plus the upgrade
   proration check, must fit both the calling key's budget and the mandate,
-  where the mandate counts spend across all of the customer's keys. Hosted
-  checkout, where a human pays in person, is not checked against the mandate.
+  where the mandate counts off-session spend across all of the customer's keys.
+  Hosted checkout, where a human pays in person, is not checked against the
+  mandate.
   `/status` reports `spend_mandate` with `spent`, `remaining`, `period` and
   `resets_at` from the customer.
 - **Mandates activated before this release stay as the key budgets they were
@@ -91,6 +92,23 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **A hosted page a human pays is no longer refused by the key budget or the
+  mandate.** Buying credits without a card, subscribing to a paid plan without
+  a card, and a subscribe or upgrade on pass-through all hand the agent a
+  Stripe page a human pays in person. The key budget used to run first, so an
+  exhausted budget answered `budget_exceeded` or `spend_cap_exceeded` instead
+  of the page. Now only the operator's per-charge cap (`agentMaxTopupAmount`)
+  applies there. Off-session charges (a saved card charged by credit top-up,
+  subscribe, or an upgrade where Stripe runs the billing) still have to fit the
+  key budget and the mandate.
+- **Money paid on a hosted page no longer uses up the mandate.** Spend records
+  now say how the money moved: `OFF_SESSION` or `HOSTED` (new column
+  `api_key_spend_records.channel`, existing rows are `OFF_SESSION`). The
+  mandate, and `spend_mandate.spent` on `/status`, count only `OFF_SESSION`.
+  The key budget, and `spend.spent`, still count both, since the key caused the
+  spend either way. A Stripe invoice paid later for an upgrade counts as
+  `HOSTED` only when Stripe emails invoices for that subscription; otherwise
+  Stripe may have retried the saved card, so it counts as `OFF_SESSION`.
 - **A renewal invoice no longer completes an unpaid upgrade.** On
   STRIPE_INTEGRATION any paid invoice for the subscription fulfilled the
   waiting upgrade. A charge-first upgrade now completes only on the invoice

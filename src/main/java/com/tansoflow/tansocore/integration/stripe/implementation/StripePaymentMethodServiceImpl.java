@@ -35,6 +35,7 @@ import com.tansoflow.tansocore.integration.stripe.StripePaymentMethodService;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.repository.StripeCustomerRepository;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.service.internal.account.AccountService;
@@ -111,8 +112,10 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     public PaymentResult chargeOffSession(UUID accountId, UUID customerId, String paymentMethodId,
                                           BigDecimal amount, String currency, String description,
                                           Map<String, String> metadata) throws StripeException {
-        enforceSpendCap(accountId, amount);
-        // Off-session means no human sees this charge, so it is bounded by what the principal approved.
+        enforcePerChargeCap(accountId, amount);
+        // Off-session means no human sees this charge, so it is bounded by the key's budget and by what the
+        // principal approved.
+        keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, amount);
         keyBudgetService.assertWithinMandate(customerId, amount);
 
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
@@ -152,8 +155,9 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     public HostedCheckout createTopupCheckoutSession(UUID accountId, UUID customerId, BigDecimal amount,
                                                      String currency, String description,
                                                      Map<String, String> metadata) throws StripeException {
-        // No mandate check here: a human pays this page in person, which is its own approval.
-        enforceSpendCap(accountId, amount);
+        // Neither the key budget nor the mandate applies here: a human pays this page in person, which is its own
+        // approval. The operator's per-charge cap still does.
+        enforcePerChargeCap(accountId, amount);
 
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
@@ -238,11 +242,10 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     }
 
     /**
-     * Fail closed before money moves. Two guards: the account cap bounds any
-     * single agent-initiated charge, and the calling key's own budget bounds
-     * what that one agent may spend cumulatively over its window.
+     * Fail closed before money moves: the account cap bounds any single agent-initiated charge, hosted or
+     * off-session.
      */
-    private void enforceSpendCap(UUID accountId, BigDecimal amount) {
+    private void enforcePerChargeCap(UUID accountId, BigDecimal amount) {
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
         BigDecimal cap = settings != null ? settings.getAgentMaxTopupAmount() : null;
         if (cap != null && amount.compareTo(cap) > 0) {
@@ -251,13 +254,13 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
             // gives an agent a second branch to get wrong.
             throw BudgetExceededException.perTransaction(cap, amount);
         }
-        keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, amount);
     }
 
     /** Called once the charge has actually succeeded, so declines don't burn budget. */
     private void recordKeySpend(UUID accountId, BigDecimal amount, String paymentIntentId) {
         keyBudgetService.recordSpend(accountId, AuthContext.currentApiKeyId(), SpendKind.MONEY,
-                amount, paymentIntentId, paymentIntentId != null ? "pi:" + paymentIntentId : null);
+                SpendChannel.OFF_SESSION, amount, paymentIntentId,
+                paymentIntentId != null ? "pi:" + paymentIntentId : null);
     }
 
     private StripeCustomer ensureStripeCustomer(UUID accountId, UUID customerId) throws StripeException {

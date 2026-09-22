@@ -76,9 +76,11 @@ public interface SubscriptionService {
     /**
      * Completes an upgrade that was waiting on payment, now that the money is in: swaps the plan, grants the new
      * plan's entitlements and credit delta, and draws down the budget of the key that asked for it.
-     * The caller must pass a PENDING change; a Stripe webhook is the usual caller.
+     * The caller must pass a PENDING change; a Stripe webhook is the usual caller. {@code channel} is HOSTED when a
+     * human paid the invoice in person, so the spend stays out of the customer's mandate.
      */
-    void fulfilPaidUpgrade(com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending, java.math.BigDecimal amountPaid);
+    void fulfilPaidUpgrade(com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending, java.math.BigDecimal amountPaid,
+                           com.tansoflow.tansocore.model.apikey.type.SpendChannel channel);
 
     void scheduleDowngradeSubscription(String currentSubscriptionId, String accountId, String newPlanId);
 

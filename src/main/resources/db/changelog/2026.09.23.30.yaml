@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260923-30"
+      author: tanso
+      comment: >
+        The spend mandate is consent for charges made with no human present, so it
+        must not count money a human paid in person on a Stripe-hosted page. channel
+        records which it was. Existing rows become OFF_SESSION, so they keep counting
+        against the mandate as before.
+      changes:
+        - addColumn:
+            tableName: api_key_spend_records
+            columns:
+              - column:
+                  name: channel
+                  type: VARCHAR(16)
+                  defaultValue: OFF_SESSION
+                  constraints:
+                    nullable: false

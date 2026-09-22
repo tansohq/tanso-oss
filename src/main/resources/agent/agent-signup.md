@@ -107,7 +107,7 @@ the plan has at least one feature. Null fields are written out (`"spend_mandate"
 `limits.features` is keyed by feature key. `included` is null when the plan does not meter that
 feature; `unlimited: true` means no cap; `period` comes from the plan interval: `"month"` or
 `"N months"`. `limits.spend_cap` is the largest single charge the operator lets an agent start
-(`agentMaxTopupAmount`); null means no per-charge limit. It is distinct from the calling key's
+(`agentMaxTopupAmount`), off-session or on a hosted page; null means no per-charge limit. It is distinct from the calling key's
 budget, which the status endpoint reports as `spend.cap`.
 
 `spend_mandate` is:
@@ -124,10 +124,18 @@ budget, which the status endpoint reports as `spend.cap`.
 The mandate covers the whole customer, not one key. Every charge made off-session with the saved
 card (buying credits, subscribing to a paid plan, the prorated part of an upgrade) must fit two
 limits: the calling key's own budget, if the operator set one, and the mandate. The mandate counts
-what all of the customer's keys spent in the current window together. Hosted checkout pages are not
-checked against the mandate, because a human pays those in person, but money paid on them still
-counts toward the total. Windows start when the mandate starts and repeat every day, 7 days or 30
-days.
+what all of the customer's keys spent off-session in the current window together. Windows start when
+the mandate starts and repeat every day, 7 days or 30 days.
+
+A hosted page never hits the mandate or the key budget. When a call hands you a Stripe Checkout page
+or a Stripe hosted invoice (a 402 with `action: complete_checkout`), a human pays it in person, and
+that is their approval. Neither limit refuses the page, and money paid on it does not count toward
+the mandate. It does count toward the calling key's budget, so `spend.spent` on the status endpoint
+includes it. The operator's per-charge cap (`limits.spend_cap`) still applies to a hosted page. One
+exception: an upgrade where Stripe runs the billing tries the saved card in the same call, so both
+limits are checked before it, even if it ends in a hosted invoice. When that invoice is paid later,
+it stays out of the mandate only if Stripe emails invoices for the subscription; otherwise Stripe
+may have retried the saved card, so it counts as off-session.
 
 ## 4. Store the key once
 
@@ -181,7 +189,8 @@ vocabulary as signup (`"month"` or `"N months"`).
 
 `spend_mandate.status` is `none`, `pending`, `active` or `expired`. All fields are always present.
 `spent`, `remaining`, `period` and `resets_at` are filled while a mandate is `active`; they count
-off-session spend across all of the customer's keys. `setup_url` is set while a setup page waits for
+off-session spend across all of the customer's keys. What a human paid on a hosted page is not in
+`spend_mandate.spent`; it is in `spend.spent`, the calling key's budget. `setup_url` is set while a setup page waits for
 your principal, including a raise you asked for while an older mandate is still `active` (the older
 one keeps applying until the new page is completed). `expired` means the Stripe setup page expired
 unused (24 hours); ask for a new mandate (step 5a).
@@ -285,8 +294,8 @@ What to do per row:
 | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
 | 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. A Stripe invoice for a declined card, left unpaid for about 23 hours, expires and the change is dropped; ask again after that. |
 | 402 | `payment_required` | `payment` | `nominate_owner` | Only on accounts where Tanso sends Stripe invoices by email, when no card is saved. `PUT {"email": ...}` to `url`, then retry. A completed spend mandate or a signup email avoids this. |
-| 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window, or the mandate's window, is used up, but the charge fits once it resets. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
-| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap (`limits.spend_cap`) or larger than the key's whole budget. `retry_after` is null; waiting will not help. Ask the operator to raise the cap, or make a smaller purchase. |
+| 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window, or the mandate's window, is used up, but the charge fits once it resets. Only an off-session charge gets this; a hosted page never does. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap (`limits.spend_cap`), hosted or not, or an off-session charge is larger than the key's whole budget. `retry_after` is null; waiting will not help. Ask the operator to raise the cap, or make a smaller purchase. |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | One off-session charge is larger than the whole mandate your principal approved. `retry_after` is null; waiting will not help. `url` is the spend-mandate endpoint: `POST` a higher `max_amount` to it (step 5a) and hand the new `setup_url` to your principal, or buy less. |
 | 403 | `forbidden` | `scope` | `use_own_reference` | The key belongs to another customer. Message: "This API key belongs to another customer; use your own customerReferenceId or omit it." |
 | 403 | `scope_denied` | `scope` | `request_scope` | The key lacks the `purchase` scope. Ask the operator for a key with it. |

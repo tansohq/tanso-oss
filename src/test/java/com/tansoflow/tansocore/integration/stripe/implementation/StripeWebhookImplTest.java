@@ -162,8 +162,10 @@ class StripeWebhookImplTest {
 
         stripeWebhook.handleSessionsComplete(session);
 
+        // A human paid the page in person: it counts against the key's budget but not the mandate.
         verify(keyBudgetService).recordSpend(eq(acct), eq(keyId),
                 eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED),
                 eq(new BigDecimal("9.00")), eq("cs_sub_1"), eq("checkout_cs_sub_1"));
         assertEquals(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED, record.getStatus());
     }
@@ -189,6 +191,7 @@ class StripeWebhookImplTest {
 
         verify(keyBudgetService).recordSpend(eq(acct), eq(keyId),
                 eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED),
                 eq(new BigDecimal("1.00")), eq("cs_top_1"), eq("checkout_cs_top_1"));
     }
 
@@ -213,6 +216,7 @@ class StripeWebhookImplTest {
 
         verify(keyBudgetService).recordSpend(eq(acct), eq(null),
                 eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED),
                 eq(null), eq("cs_sub_2"), eq("checkout_cs_sub_2"));
         assertEquals(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED, record.getStatus());
     }
@@ -785,7 +789,42 @@ class StripeWebhookImplTest {
         stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
         stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
 
-        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"));
+        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"),
+                com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION);
+    }
+
+    // A send_invoice invoice is only ever paid by a human on its hosted page, so the upgrade it pays for must stay
+    // out of the mandate. A charge_automatically one (above) may have been paid by Stripe retrying the saved card.
+    @Test
+    void handleStripeDrivenInvoicePaid_AnEmailedInvoiceAHumanPaidIsRecordedAsHosted() {
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = new com.tansoflow.tansocore.entity.Invoice();
+        tansoInvoice.setId(UUID.randomUUID());
+        StripeInvoice stripeInvoiceEntity = new StripeInvoice();
+        stripeInvoiceEntity.setInvoice(tansoInvoice);
+
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("in_proration", "sub_sd_030");
+        stripeInvoice.setAmountPaid(7450L);
+        stripeInvoice.setStatus("paid");
+        stripeInvoice.setCollectionMethod("send_invoice");
+
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setStripeInvoiceId("in_proration");
+
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked("in_proration")).thenReturn(true);
+        when(stripeSyncService.retrieveStripeInvoiceLinkedData("in_proration")).thenReturn(stripeInvoiceEntity);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_proration"))
+                .thenReturn(Optional.of(pending));
+
+        stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
+
+        verify(subscriptionService).fulfilPaidUpgrade(pending, new BigDecimal("74.50"),
+                com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED);
     }
 
     @Test
@@ -795,7 +834,7 @@ class StripeWebhookImplTest {
 
         stripeWebhook.handleStripeDrivenInvoicePaymentFailed(stripeInvoice);
 
-        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any(), any());
         verifyNoInteractions(subscriptionScheduledChangeRepository);
     }
 
@@ -824,7 +863,7 @@ class StripeWebhookImplTest {
 
         assertEquals("CANCELLED", pending.getStatus());
         verify(subscriptionScheduledChangeRepository).save(pending);
-        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any(), any());
     }
 
     // ── STRIPE_INTEGRATION charge-first upgrades ──────────────────────────────
@@ -861,7 +900,7 @@ class StripeWebhookImplTest {
 
         stripeWebhook.handleFullSyncInvoicePaid(renewal, accountId);
 
-        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any(), any());
 
         Invoice proration = createStripeInvoiceWithSubscription("in_proration", "sub_si_1");
         proration.setAmountPaid(7450L);
@@ -873,7 +912,8 @@ class StripeWebhookImplTest {
         stripeWebhook.handleFullSyncInvoicePaid(proration, accountId);
         stripeWebhook.handleFullSyncInvoicePaid(proration, accountId);
 
-        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"));
+        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"),
+                com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION);
     }
 
     // The first charge attempt failing is how a charge-first upgrade starts waiting on a human. Reverting the price

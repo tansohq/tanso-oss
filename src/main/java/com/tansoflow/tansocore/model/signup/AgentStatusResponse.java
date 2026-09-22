@@ -58,7 +58,8 @@ public class AgentStatusResponse {
         private String setupUrl;
         @JsonProperty("max_amount")
         private BigDecimal maxAmount;
-        @Schema(description = "Off-session spend across all of the customer's keys in the current window")
+        @Schema(description = "Off-session spend across all of the customer's keys in the current window. Hosted "
+                + "pages a human paid in person are not counted.")
         private BigDecimal spent;
         private BigDecimal remaining;
         @Schema(description = "day | week | month")
@@ -73,6 +74,7 @@ public class AgentStatusResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Spend {
         private BigDecimal cap;
+        @Schema(description = "What the calling key spent in the current window, off-session and on hosted pages")
         private BigDecimal spent;
         private BigDecimal remaining;
         private String currency;

@@ -367,9 +367,11 @@ public class StripeWebhookImpl implements StripeWebhook {
                 }
             }
             // Money moved through a browser, so charge it to the key that opened
-            // the checkout — it was stamped on the row at creation time.
+            // the checkout — it was stamped on the row at creation time. A human
+            // paid it in person, so it stays out of the customer's mandate.
             keyBudgetService.recordSpend(record.getAccountId(), record.getApiKeyId(),
-                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, record.getAmount(),
+                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                    com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED, record.getAmount(),
                     session.getId(), "checkout_" + session.getId());
             checkoutSessionRepository.save(record);
             agentLifecycleService.claimOnPayment(record.getCustomerId(), record.getAccountId());
@@ -440,9 +442,11 @@ public class StripeWebhookImpl implements StripeWebhook {
             }
 
             // The webhook has no security context, so the key that opened the
-            // checkout was stamped on the session at creation time.
+            // checkout was stamped on the session at creation time. A human paid
+            // this page in person, so it stays out of the customer's mandate.
             keyBudgetService.recordSpend(record.getAccountId(), record.getApiKeyId(),
-                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, record.getAmount(),
+                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                    com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED, record.getAmount(),
                     session.getId(), "checkout_" + session.getId());
 
             record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
@@ -785,7 +789,7 @@ public class StripeWebhookImpl implements StripeWebhook {
         // An upgrade with nothing charged up front (in arrears) waits on the next paid invoice for the subscription.
         Subscription paidSubscription = stripeInvoiceEntity.getInvoice().getSubscription();
         if (chargedFirst != null) {
-            subscriptionService.fulfilPaidUpgrade(chargedFirst, amountPaidOf(stripeInvoice));
+            subscriptionService.fulfilPaidUpgrade(chargedFirst, amountPaidOf(stripeInvoice), spendChannelOf(stripeInvoice));
             log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {} paid by Stripe invoice {}",
                     chargedFirst.getSubscription().getId(), chargedFirst.getToPlan().getId(), stripeInvoice.getId());
         } else if (paidSubscription != null) {
@@ -794,7 +798,7 @@ public class StripeWebhookImpl implements StripeWebhook {
                     .filter(ssc -> ssc.getStripeInvoiceId() == null)
                     .ifPresent(ssc -> {
                         subscriptionService.fulfilPaidUpgrade(ssc,
-                                amountPaidOf(stripeInvoice));
+                                amountPaidOf(stripeInvoice), spendChannelOf(stripeInvoice));
                         log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {}",
                                 paidSubscription.getId(), ssc.getToPlan().getId());
                     });
@@ -1213,7 +1217,8 @@ public class StripeWebhookImpl implements StripeWebhook {
         // in Stripe (an expired update voids the invoice, so a paid one was applied), so the plan moves now.
         // Only a PENDING change matches, so a redelivery or the paired invoice.payment_succeeded finds nothing.
         subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId())
-                .ifPresent(pending -> subscriptionService.fulfilPaidUpgrade(pending, amountPaidOf(stripeInvoice)));
+                .ifPresent(pending -> subscriptionService.fulfilPaidUpgrade(pending, amountPaidOf(stripeInvoice),
+                        spendChannelOf(stripeInvoice)));
 
         Subscription subscription = bridge.getSubscription();
         try {
@@ -1254,6 +1259,17 @@ public class StripeWebhookImpl implements StripeWebhook {
         return stripeInvoice.getAmountPaid() != null
                 ? BigDecimal.valueOf(stripeInvoice.getAmountPaid()).movePointLeft(2)
                 : BigDecimal.ZERO;
+    }
+
+    /**
+     * Whether a paid Stripe invoice counts against the spend mandate. A send_invoice invoice is only ever paid by a
+     * human on its hosted page. A charge_automatically one may have been paid there too, but Stripe can also retry
+     * the saved card with nobody present, and the webhook cannot tell which, so it counts as off-session.
+     */
+    private static com.tansoflow.tansocore.model.apikey.type.SpendChannel spendChannelOf(Invoice stripeInvoice) {
+        return "send_invoice".equals(stripeInvoice.getCollectionMethod())
+                ? com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED
+                : com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION;
     }
 
     /**
