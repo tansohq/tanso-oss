@@ -781,8 +781,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Transactional
     @Override
     public UUID upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow) {
+        // Locked until this transaction ends. An agent retrying after a timeout sends the same plan change twice;
+        // without the lock both calls see no pending upgrade and each raises its own payable invoice.
         Subscription currentSubscription = subscriptionRepository
-                .findSubscriptionByUuidAndAccountId(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
+                .findSubscriptionByUuidAndAccountIdForUpdate(UUID.fromString(currentSubscriptionId), UUID.fromString(accountId));
         Plan subscribedPlan = currentSubscription.getPlan();
         Plan newPlan = planService.retrievePlan(currentSubscription.getAccount(), UUID.fromString(newPlanId));
         if (!PlanStatus.ACTIVE.name().equals(newPlan.getStatus())) {
@@ -880,7 +882,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -892,6 +893,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
                 } else {
                     // Mixed billing timing has no proration rule. This used to fall through silently and answer
@@ -905,7 +908,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscriptionRepository.save(currentSubscription);
 
                     entitlementService.processEntitlementsForSubscription(currentSubscription);
-                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription);
 
                     scheduledChange.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
                     scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -916,6 +918,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     scheduledChange.setFulfilledAt(now);
 
                     subscriptionScheduledChangeRepository.save(scheduledChange);
+                    // Saved first: the change's id is the credit grant's idempotency key.
+                    grantCreditDeltaForUpgrade(subscribedPlan, newPlan, currentSubscription, scheduledChange.getId());
                     cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
             }
         }
@@ -941,8 +945,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
      * for any denomination where the new plan provides more credits.
      * Existing unused credits are kept — only the difference is topped up.
      */
-    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription) {
-        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan);
+    private void grantCreditDeltaForUpgrade(Plan oldPlan, Plan newPlan, Subscription subscription, UUID scheduledChangeId) {
+        creditService.grantUpgradeDelta(subscription, oldPlan, newPlan, scheduledChangeId);
     }
 
     @Override

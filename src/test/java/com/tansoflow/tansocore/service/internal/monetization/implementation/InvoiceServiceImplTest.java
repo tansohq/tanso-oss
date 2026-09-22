@@ -1196,11 +1196,68 @@ class InvoiceServiceImplTest {
                 pending.getStatus());
         verify(entitlementService).processEntitlementsForSubscription(subscription);
         // The upgrade's own credits: the period's grant was already made on the free plan.
-        verify(creditService).grantUpgradeDelta(subscription, free, starter);
+        verify(creditService).grantUpgradeDelta(subscription, free, starter, pending.getId());
         // And the key that committed the money has its budget drawn down now that the money moved.
         verify(keyBudgetService).recordSpend(eq(account.getId()), eq(keyId),
                 eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new BigDecimal("74.50")),
                 any(), any());
+    }
+
+    // Stripe reports one payment as invoice.paid and invoice.payment_succeeded, with different event ids, so both
+    // reach markInvoiceAsPaid. The second must find the invoice PAID and do nothing; it used to fulfil the pending
+    // upgrade and grant its credit delta a second time.
+    @Test
+    void theSecondPaymentReportForAnAdjustmentInvoiceGrantsNothing() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+
+        Plan free = new Plan();
+        free.setId(UUID.randomUUID());
+        free.setKey("developer_demo");
+        free.setPriceAmount(BigDecimal.ZERO);
+        Plan starter = new Plan();
+        starter.setId(UUID.randomUUID());
+        starter.setKey("starter");
+        starter.setPriceAmount(new BigDecimal("149.00"));
+
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setAccount(account);
+        subscription.setPlan(free);
+        subscription.setIsActive(true);
+
+        Invoice adjustment = new Invoice();
+        adjustment.setId(UUID.randomUUID());
+        adjustment.setSubscription(subscription);
+        adjustment.setAmount(new BigDecimal("74.50"));
+        adjustment.setType(InvoiceType.ADJUSTMENT.name());
+        adjustment.setStatus(InvoiceStatus.DUE.name());
+
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setId(UUID.randomUUID());
+        pending.setSubscription(subscription);
+        pending.setFromPlan(free);
+        pending.setToPlan(starter);
+        pending.setAdjustmentInvoice(adjustment);
+        pending.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.PENDING.name());
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByAdjustmentInvoice(adjustment))
+                .thenReturn(java.util.Optional.of(pending));
+        when(invoiceRepository.findByIdForUpdate(adjustment.getId())).thenReturn(java.util.Optional.of(adjustment));
+
+        invoiceService.markInvoiceAsPaid(adjustment.getId().toString());
+        invoiceService.markInvoiceAsPaid(adjustment.getId().toString());
+
+        assertEquals(InvoiceStatus.PAID.name(), adjustment.getStatus());
+        verify(invoiceRepository, times(2)).findByIdForUpdate(adjustment.getId());
+        verify(invoiceRepository, never()).findById(any());
+        verify(invoiceRepository, times(1)).save(adjustment);
+        verify(creditService, times(1)).grantUpgradeDelta(subscription, free, starter, pending.getId());
+        verify(keyBudgetService, times(1)).recordSpend(any(), any(), any(), any(), any(), any());
     }
 
     // Paying a voided invoice must grant nothing: the change it belonged to is gone, and flipping it to PAID

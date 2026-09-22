@@ -19,17 +19,20 @@ package com.tansoflow.tansocore.repository;
 
 import com.tansoflow.tansocore.entity.Invoice;
 import com.tansoflow.tansocore.entity.Subscription;
+import jakarta.persistence.LockModeType;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -73,6 +76,12 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     @Query(value = "SELECT * FROM invoices WHERE invoice_id = :invoiceId AND account_id = :accountId AND deleted_at IS NULL", nativeQuery = true)
     Invoice findByIdAndAccount(UUID invoiceId, UUID accountId);
+
+    // Row lock for marking an invoice paid: Stripe reports one payment as both invoice.paid and
+    // invoice.payment_succeeded, and the second delivery must wait and then see PAID.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT invoice FROM Invoice invoice WHERE invoice.id = :invoiceId")
+    Optional<Invoice> findByIdForUpdate(UUID invoiceId);
 
     @Query("SELECT invoice FROM Invoice invoice WHERE invoice.subscription.id = :subscriptionId " +
             "AND invoice.status = :status ORDER BY invoice.dueDate")
