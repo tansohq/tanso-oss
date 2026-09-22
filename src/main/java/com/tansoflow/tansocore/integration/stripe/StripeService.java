@@ -21,6 +21,8 @@ import com.stripe.exception.StripeException;
 import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.model.data.stripe.response.StripeApiKeysResponse;
 
+import java.util.UUID;
+
 public interface StripeService {
     void registerStripeApiKey(String clientStripeApiKey, Account account);
 
@@ -29,4 +31,6 @@ public interface StripeService {
     void deleteStripeKeys(Account account);
 
     void createNewWebhookEndpoint(Account account) throws StripeException;
+
+    void syncWebhookEventDestination(UUID accountId) throws StripeException;
 }

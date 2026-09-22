@@ -66,6 +66,10 @@ public class AccountSetting {
     @Column(name = "stripe_checkout_cancel_url", length = Integer.MAX_VALUE)
     private String stripeCheckoutCancelUrl;
 
+    // Tanso's webhook event destination in the account's Stripe; null for accounts connected before it was stored
+    @Column(name = "stripe_event_destination_id")
+    private String stripeEventDestinationId;
+
     @NotNull
     @ColumnDefault("'USD'")
     @Column(name = "currency", nullable = false, length = 3)

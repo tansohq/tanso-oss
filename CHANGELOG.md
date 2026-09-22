@@ -17,6 +17,19 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **Stripe now delivers the checkout and card-setup events Tanso handles.**
+  The webhook endpoint Tanso registers left out `checkout.session.completed`,
+  `checkout.session.expired`, `setup_intent.succeeded` and
+  `payment_intent.succeeded`, so on a real deployment a spend mandate never
+  activated, a hosted top-up never granted its credits, and an unused Checkout
+  page stayed pending. `stripe listen` forwards every event, which is why
+  local testing passed. New Stripe connections register them, and on startup
+  Tanso adds any missing ones to each existing connection's event destination
+  (events added by hand are kept). Tanso now stores the destination's id
+  (`account_settings.stripe_event_destination_id`); for connections made
+  before that, it finds the destination by its Tanso name and the webhook URL
+  ending in the account id. If none is found, or Stripe refuses the update, the
+  log says so for that account and the others still update.
 - **An agent can change plans on a Stripe-driven account again.** 0.10.0 held
   a paid plan change made with a customer key until Tanso's adjustment invoice
   was paid, and that applied to Stripe-driven accounts too, where nothing pays
@@ -37,9 +50,6 @@ tags; this file starts where the changelog does.
   Before, the new price was billed at the next renewal, so the agent had the
   paid plan for up to a period before anyone paid, and a failed renewal
   never took it back. Operator changes (no API key) still switch at once.
-  Existing Stripe webhook endpoints need
-  `customer.subscription.pending_update_expired` added to receive expiries;
-  endpoints created from now on include it.
 - **Upgrades on `STRIPE_INTEGRATION` accounts now reach Stripe.** The upgrade
   waits on payment before Tanso swaps the plan, but the Stripe price update
   read the plan off the not-yet-swapped subscription, so Stripe was sent the
