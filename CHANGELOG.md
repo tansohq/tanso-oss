@@ -15,6 +15,14 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Fixed
+
+- **`GET /usage` reports a plan as ended only once it has ended.** A paid plan
+  waiting on its first payment was listed as `ended`, with an end date in the
+  future. A plan cancelled at the end of its period showed the time the cancel
+  was asked for as its end, and left out usage recorded between then and the
+  real end.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;
