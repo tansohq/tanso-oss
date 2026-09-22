@@ -44,6 +44,7 @@ import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.monetization.FeatureService;
 import com.tansoflow.tansocore.service.internal.monetization.SubscriptionService;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -75,6 +76,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
     private final StripePaymentMethodService stripePaymentMethodService;
     private final CheckoutSessionRepository checkoutSessionRepository;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final EntityManager entityManager;
 
     // Not @Transactional on purpose: the Stripe setup session looks the customer up in its own
     // transaction, so the customer, subscription and key must be committed before the mandate step.
@@ -87,17 +89,6 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 || settings.getAgentSignupDefaultPlanId() == null) {
             // Same 404 as an unknown slug — do not confirm the account exists
             throw new ResourceNotFoundException("No signup at this address");
-        }
-
-        Instant hourAgo = Instant.now().minus(Duration.ofHours(1));
-        if (customerRepository.countAgentSignupsSince(account.getId(), hourAgo) >= settings.getAgentSignupHourlyCap()) {
-            throw new RateLimitExceededException(
-                    "Signup rate limit reached for this catalog; retry after Retry-After seconds", 3600);
-        }
-        if (clientIp != null
-                && customerRepository.countAgentSignupsFromIpSince(clientIp, hourAgo) >= settings.getAgentSignupPerIpCap()) {
-            throw new RateLimitExceededException(
-                    "Signup rate limit reached for this address; retry after Retry-After seconds", 3600);
         }
 
         Plan plan = planRepository.findById(settings.getAgentSignupDefaultPlanId())
@@ -119,6 +110,24 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         // agent can never reach. Only the optional mandate step runs after the commit.
         record Created(Customer customer, CustomerApiKeyDto key, AgentSignupResponse.AgentLimits limits) {}
         Created created = transactionTemplate.execute(status -> {
+            // The caps are counted and the customer inserted under one lock, in one transaction: counted
+            // outside it, concurrent signups all read the same count and all get in. The per-IP count spans
+            // accounts, so the address takes its own lock; always account first, then address.
+            lockForSignup("agent-signup:" + account.getId());
+            if (clientIp != null) {
+                lockForSignup("agent-signup-ip:" + clientIp);
+            }
+            Instant hourAgo = Instant.now().minus(Duration.ofHours(1));
+            if (customerRepository.countAgentSignupsSince(account.getId(), hourAgo) >= settings.getAgentSignupHourlyCap()) {
+                throw new RateLimitExceededException(
+                        "Signup rate limit reached for this catalog; retry after Retry-After seconds", 3600);
+            }
+            if (clientIp != null
+                    && customerRepository.countAgentSignupsFromIpSince(clientIp, hourAgo) >= settings.getAgentSignupPerIpCap()) {
+                throw new RateLimitExceededException(
+                        "Signup rate limit reached for this address; retry after Retry-After seconds", 3600);
+            }
+
             Customer c = createProvisionalCustomer(account, settings, request, ownerEmail, clientIp);
             subscriptionService.subscribe(c, plan, account.getId().toString());
             CustomerApiKeyDto k = customerApiKeyService.createKey(
@@ -153,6 +162,13 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 .ownerUrl(customerBase + "/owner")
                 .nextSteps(nextSteps(baseUrl, slug, referenceId, exampleFeatureKey))
                 .build();
+    }
+
+    // Held until the surrounding transaction commits or rolls back
+    private void lockForSignup(String key) {
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:k))")
+                .setParameter("k", key)
+                .getSingleResult();
     }
 
     private Customer createProvisionalCustomer(Account account, AccountSetting settings, AgentSignupRequest request,

@@ -66,11 +66,19 @@ public interface SubscriptionService {
     /**
      * Moves a subscription to a more expensive plan.
      *
-     * @return the id of an adjustment invoice the upgrade is waiting on, when the caller holds an API key and
-     *         Tanso collects the money itself; null when the plan was swapped immediately or Stripe drives it.
+     * @return what the upgrade is waiting on when the caller holds an API key and the change costs money: a Tanso
+     *         adjustment invoice when Tanso collects, or a Stripe hosted invoice when STRIPE_DRIVEN could not charge
+     *         the saved card. Not waiting when the plan was swapped, or Stripe charged and the swap is done.
      */
     @Transactional
-    UUID upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow);
+    com.tansoflow.tansocore.model.subscription.UpgradeResult upgradeSubscription(String currentSubscriptionId, String accountId, String newPlanId, boolean grantNow);
+
+    /**
+     * Completes an upgrade that was waiting on payment, now that the money is in: swaps the plan, grants the new
+     * plan's entitlements and credit delta, and draws down the budget of the key that asked for it.
+     * The caller must pass a PENDING change; a Stripe webhook is the usual caller.
+     */
+    void fulfilPaidUpgrade(com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending, java.math.BigDecimal amountPaid);
 
     void scheduleDowngradeSubscription(String currentSubscriptionId, String accountId, String newPlanId);
 

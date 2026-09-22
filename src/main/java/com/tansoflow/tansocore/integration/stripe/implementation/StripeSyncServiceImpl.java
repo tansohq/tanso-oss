@@ -57,6 +57,7 @@ import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto;
+import com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge;
 import com.tansoflow.tansocore.model.monetization.pricing.GraduatedPricingModel;
 import com.tansoflow.tansocore.model.monetization.pricing.PricingModel;
 import com.tansoflow.tansocore.model.monetization.pricing.SimpleUsageModel;
@@ -997,7 +998,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateStripeSubscriptionPrice(UUID subscriptionId, UUID accountId, boolean prorate) throws StripeException {
+    public void updateStripeSubscriptionPrice(UUID subscriptionId, UUID accountId, UUID planId, boolean prorate) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
 
         Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
@@ -1012,19 +1013,10 @@ public class StripeSyncServiceImpl implements StripeSyncService {
             return;
         }
 
-        // Get the latest Stripe Price for the new plan
-        StripePrice stripePrice = stripePriceRepository
-                .findFirstByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount())
-                .orElse(null);
-        if (stripePrice == null) {
-            // Lazily create product+price if the new plan hasn't been synced yet
-            log.info("No StripePrice for plan {}, creating lazily", subscription.getPlan().getId());
-            createStripeProductWithPrices(subscription.getPlan().getId(), accountId);
-            stripePrice = stripePriceRepository
-                    .findFirstByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Failed to create StripePrice for plan " + subscription.getPlan().getId()));
-        }
+        // The plan to price against comes from the caller, not subscription.getPlan(): a STRIPE_INTEGRATION upgrade
+        // leaves the Tanso subscription on its old plan until payment, and reading it here re-sent the old price.
+        Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
+        StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
 
         // Retrieve the current Stripe subscription to get the existing item ID
         com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
@@ -1045,7 +1037,89 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         log.info("Updated Stripe subscription {} to new price {} for plan {} (prorate={})",
                 stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(),
-                subscription.getPlan().getId(), prorate);
+                plan.getId(), prorate);
+    }
+
+    @Override
+    @Transactional
+    public StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+
+        Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
+        if (subscription == null) {
+            throw new IllegalArgumentException("Subscription not found for plan change: " + subscriptionId);
+        }
+        // Without a Stripe subscription there is nothing for Stripe to charge, and swapping the plan anyway would
+        // hand an agent a paid tier nobody paid for.
+        StripeSubscription stripeSub = stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);
+        if (stripeSub == null) {
+            throw new IllegalStateException("Subscription " + subscriptionId
+                    + " has no linked Stripe subscription; the upgrade cannot be charged");
+        }
+
+        Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
+        StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
+
+        com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
+                .retrieve(stripeSub.getStripeSubscriptionExternalId());
+        String existingItemId = currentStripeSub.getItems().getData().getFirst().getId();
+
+        // always_invoice raises and charges the proration now instead of adding it to the next renewal.
+        // pending_if_incomplete makes Stripe apply the new price only if that charge succeeds; otherwise the
+        // subscription keeps its old price and carries a pending_update until the invoice is paid or expires.
+        SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
+                .addItem(SubscriptionUpdateParams.Item.builder()
+                        .setId(existingItemId)
+                        .setPrice(stripePrice.getStripePriceExternalId())
+                        .build())
+                .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
+                .setPaymentBehavior(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE)
+                .addExpand("latest_invoice")
+                .build();
+
+        com.stripe.model.Subscription updated = stripeClient.v1().subscriptions()
+                .update(stripeSub.getStripeSubscriptionExternalId(), params);
+
+        com.stripe.model.Invoice invoice = updated.getLatestInvoiceObject();
+        if (invoice == null) {
+            throw new IllegalStateException("Stripe returned no invoice for the upgrade of subscription "
+                    + stripeSub.getStripeSubscriptionExternalId());
+        }
+        boolean applied = updated.getPendingUpdate() == null;
+        if (!applied && invoice.getHostedInvoiceUrl() == null) {
+            throw new IllegalStateException("Stripe could not charge the upgrade of subscription "
+                    + stripeSub.getStripeSubscriptionExternalId() + " and returned no hosted invoice " + invoice.getId());
+        }
+        BigDecimal amountPaid = invoice.getAmountPaid() != null
+                ? BigDecimal.valueOf(invoice.getAmountPaid()).movePointLeft(2)
+                : BigDecimal.ZERO;
+
+        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {}: invoice {} applied={}",
+                stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(), plan.getId(),
+                invoice.getId(), applied);
+        return new StripeUpgradeCharge(invoice.getId(), invoice.getHostedInvoiceUrl(), amountPaid, applied);
+    }
+
+    @Override
+    public void voidStripeInvoice(String stripeInvoiceId, UUID accountId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
+        stripeClient.v1().invoices().voidInvoice(stripeInvoiceId);
+        log.info("Voided Stripe invoice {} for account {}", stripeInvoiceId, accountId);
+    }
+
+    /** The newest Stripe price for a plan, creating the product and prices first if the plan was never synced. */
+    private StripePrice latestStripePriceFor(Plan plan, Account account, UUID accountId) throws StripeException {
+        StripePrice stripePrice = stripePriceRepository
+                .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, account)
+                .orElse(null);
+        if (stripePrice != null) {
+            return stripePrice;
+        }
+        log.info("No StripePrice for plan {}, creating lazily", plan.getId());
+        createStripeProductWithPrices(plan.getId(), accountId);
+        return stripePriceRepository
+                .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, account)
+                .orElseThrow(() -> new IllegalStateException("Failed to create StripePrice for plan " + plan.getId()));
     }
 
     @Override

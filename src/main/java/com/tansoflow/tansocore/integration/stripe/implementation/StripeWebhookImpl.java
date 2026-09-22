@@ -209,6 +209,14 @@ public class StripeWebhookImpl implements StripeWebhook {
                         handleStripeDrivenSubscriptionUpdated(stripeSub);
                     }
                 }
+                case "customer.subscription.pending_update_expired" -> {
+                    com.stripe.model.Subscription stripeSub = deserializeEvent(event, com.stripe.model.Subscription.class);
+                    log.info("Subscription pending update expired. Subscription Id: {}", stripeSub.getId());
+
+                    if (stripeMode == StripeMode.STRIPE_DRIVEN) {
+                        handleStripeDrivenPendingUpdateExpired(stripeSub);
+                    }
+                }
                 case "customer.created" -> {
                     com.stripe.model.Customer stripeCustomer = deserializeEvent(event, com.stripe.model.Customer.class);
                     log.info("Customer created. Customer Id: {}", stripeCustomer.getId());
@@ -755,13 +763,8 @@ public class StripeWebhookImpl implements StripeWebhook {
             subscriptionScheduledChangeRepository
                     .findPendingUpgradeBySubscription(paidSubscription)
                     .ifPresent(ssc -> {
-                        paidSubscription.setPlan(ssc.getToPlan());
-                        subscriptionRepository.save(paidSubscription);
-                        entitlementService.processEntitlementsForSubscription(paidSubscription);
-                        creditService.processCreditGrantsForSubscription(paidSubscription);
-                        ssc.setStatus(SubscriptionScheduledChangeStatus.COMPLETED.name());
-                        ssc.setFulfilledAt(Instant.now());
-                        subscriptionScheduledChangeRepository.save(ssc);
+                        subscriptionService.fulfilPaidUpgrade(ssc,
+                                amountPaidOf(stripeInvoice));
                         log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {}",
                                 paidSubscription.getId(), ssc.getToPlan().getId());
                     });
@@ -820,9 +823,10 @@ public class StripeWebhookImpl implements StripeWebhook {
                         .findPendingUpgradeBySubscription(subscription)
                         .ifPresent(ssc -> {
                             try {
-                                // Tanso subscription still has OLD plan — syncing price reverts Stripe
+                                // Tanso subscription still has OLD plan — pricing against it reverts Stripe
                                 stripeSyncService.updateStripeSubscriptionPrice(
-                                        subscription.getId(), subscription.getAccount().getId(), false);
+                                        subscription.getId(), subscription.getAccount().getId(),
+                                        subscription.getPlan().getId(), false);
                                 ssc.setStatus("FAILED");
                                 subscriptionScheduledChangeRepository.save(ssc);
                                 log.info("STRIPE_INTEGRATION: Reverted upgrade for subscription {}, payment failed",
@@ -1171,6 +1175,12 @@ public class StripeWebhookImpl implements StripeWebhook {
             eventPublisher.publishEvent(new InvoicePaidEvent(UUID.fromString(accountId), UUID.fromString(invoiceId)));
         }
 
+        // An agent upgrade Stripe could not charge at the time: paying its invoice is what applies the pending_update
+        // in Stripe (an expired update voids the invoice, so a paid one was applied), so the plan moves now.
+        // Only a PENDING change matches, so a redelivery or the paired invoice.payment_succeeded finds nothing.
+        subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId())
+                .ifPresent(pending -> subscriptionService.fulfilPaidUpgrade(pending, amountPaidOf(stripeInvoice)));
+
         Subscription subscription = bridge.getSubscription();
         try {
             creditService.processCreditGrantsForSubscription(subscription);
@@ -1180,6 +1190,35 @@ public class StripeWebhookImpl implements StripeWebhook {
         }
 
         log.info("STRIPE_DRIVEN: Processed invoice.paid for subscription {} from Stripe invoice {}", subscription.getId(), stripeInvoice.getId());
+    }
+
+    /**
+     * STRIPE_DRIVEN: nobody paid the invoice behind an agent's upgrade in time. Stripe has voided it and dropped
+     * the pending_update, so the Tanso change waiting on it can never complete.
+     */
+    @Transactional
+    protected void handleStripeDrivenPendingUpdateExpired(com.stripe.model.Subscription stripeSub) {
+        StripeSubscription bridge = stripeSubscriptionRepository
+                .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
+        if (bridge == null) {
+            log.debug("STRIPE_DRIVEN: No mapped subscription for expired pending update on Stripe sub {}", stripeSub.getId());
+            return;
+        }
+        subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(bridge.getSubscription())
+                .filter(pending -> pending.getStripeInvoiceId() != null)
+                .ifPresent(pending -> {
+                    pending.setStatus(SubscriptionScheduledChangeStatus.CANCELLED.name());
+                    pending.setPaymentUrl(null);
+                    subscriptionScheduledChangeRepository.save(pending);
+                    log.info("STRIPE_DRIVEN: Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} expired unpaid",
+                            bridge.getSubscription().getId(), pending.getToPlan().getKey(), pending.getStripeInvoiceId());
+                });
+    }
+
+    private static BigDecimal amountPaidOf(Invoice stripeInvoice) {
+        return stripeInvoice.getAmountPaid() != null
+                ? BigDecimal.valueOf(stripeInvoice.getAmountPaid()).movePointLeft(2)
+                : BigDecimal.ZERO;
     }
 
     /**

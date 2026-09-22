@@ -3432,7 +3432,7 @@
                         }
                     },
                     "402": {
-                        "description": "The upgrade costs money and the caller holds an API key: the plan change waits on payment. error.code=payment_required, gate=payment, action=complete_checkout with the hosted invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the invoice is paid. Customer-scoped (ck_) keys only.",
+                        "description": "The upgrade costs money and the caller holds an API key: the plan change waits on payment. error.code=payment_required, gate=payment, action=complete_checkout with the hosted invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the invoice is paid. On STRIPE_DRIVEN accounts Stripe first tries the saved card; this is returned only when that charge did not go through, and url is Stripe's hosted invoice. Customer-scoped (ck_) keys only.",
                         "content": {
                             "*/*": {
                                 "schema": {

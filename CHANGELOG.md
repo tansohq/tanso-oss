@@ -69,6 +69,92 @@ tags; this file starts where the changelog does.
   with `retry_after: null`. A charge that fits the budget but not what is left
   of this window still answers `wait`.
 
+### Fixed
+
+- **Stripe now delivers the checkout and card-setup events Tanso handles.**
+  The webhook endpoint Tanso registers left out `checkout.session.completed`,
+  `checkout.session.expired`, `setup_intent.succeeded` and
+  `payment_intent.succeeded`, so on a real deployment a spend mandate never
+  activated, a hosted top-up never granted its credits, and an unused Checkout
+  page stayed pending. `stripe listen` forwards every event, which is why
+  local testing passed. New Stripe connections register them, and on startup
+  Tanso adds any missing ones to each existing connection's event destination
+  (events added by hand are kept). Tanso now stores the destination's id
+  (`account_settings.stripe_event_destination_id`); for connections made
+  before that, it finds the destination by its Tanso name and the webhook URL
+  ending in the account id. If none is found, or Stripe refuses the update, the
+  log says so for that account and the others still update.
+- **An agent can change plans on a Stripe-driven account again.** 0.10.0 held
+  a paid plan change made with a customer key until Tanso's adjustment invoice
+  was paid, and that applied to Stripe-driven accounts too, where nothing pays
+  a Tanso invoice. The agent got a 402 saying no payment processor was
+  connected, and an unpayable invoice was left behind. Tanso no longer raises
+  its own adjustment invoice on Stripe-driven accounts; Stripe charges the
+  difference, and the change counts against the calling key's budget.
+- **On a Stripe-driven account, an agent's upgrade is paid for before the plan
+  moves.** A plan change made with an API key now asks Stripe to invoice the
+  prorated difference and charge the saved card at once
+  (`proration_behavior=always_invoice`, `payment_behavior=pending_if_incomplete`).
+  If the charge goes through, the plan changes in the same call. If there is
+  no card or the charge fails, Stripe keeps the old price, the call answers
+  402 with Stripe's hosted invoice as `url` and the customer status URL as
+  `poll`, and the plan changes when that invoice is paid (`invoice.paid`).
+  If nobody pays before Stripe expires the change (about 23 hours), the
+  pending change is cancelled (`customer.subscription.pending_update_expired`).
+  Before, the new price was billed at the next renewal, so the agent had the
+  paid plan for up to a period before anyone paid, and a failed renewal
+  never took it back. Operator changes (no API key) still switch at once.
+- **Upgrades on `STRIPE_INTEGRATION` accounts now reach Stripe.** The upgrade
+  waits on payment before Tanso swaps the plan, but the Stripe price update
+  read the plan off the not-yet-swapped subscription, so Stripe was sent the
+  price it already had. No proration was billed, and the pending upgrade only
+  completed when some later invoice was paid, at the old price. The price
+  update now names the target plan explicitly. When the upgrade completes,
+  the customer also gets the new plan's credit difference, which the
+  previous fulfilment path did not grant.
+- **Concurrent agent signups no longer get past the signup caps.** The
+  per-account and per-IP counts ran before, and outside, the transaction that
+  inserts the customer, so a burst of simultaneous signups all read a count
+  under the cap and all got in. The counts and the insert now run in one
+  transaction under a Postgres advisory lock on the account, plus one on the
+  address when there is one. The README now says what the per-IP cap needs
+  from a proxy: it counts the leftmost `X-Forwarded-For`, so the proxy must
+  overwrite that header rather than append to it.
+- **Two concurrent plan changes no longer raise two payable invoices.** An
+  agent that retried an upgrade after a timeout could send the same request
+  twice; both calls found no pending upgrade and each created its own
+  adjustment invoice. `upgradeSubscription` now takes a row lock on the
+  subscription first, so the second call waits and then returns the first
+  call's invoice.
+- **One payment reported twice no longer grants upgrade credits twice.**
+  Stripe sends both `invoice.paid` and `invoice.payment_succeeded` for one
+  payment, with different event ids, so the webhook event-id check let both
+  through. Marking an invoice paid now locks the invoice row and does nothing
+  if it is already `PAID`, the pending upgrade row is locked while it is
+  fulfilled, and the upgrade credit delta's idempotency key is the scheduled
+  change id instead of the current time.
+- **Marking an upgrade's adjustment invoice paid granted the new plan's full
+  credits again.** Mark-paid moved the subscription's billing period to the
+  upgrade moment, which changed the key the period credit grant is idempotent
+  on, so the whole new-plan allocation landed on top of the upgrade delta and
+  the billing cycle shifted. Paying an adjustment invoice now leaves the period
+  alone and skips the period grant; the upgrade's credits still come from the
+  delta. This also covered operator upgrades made from the console.
+- **A free plan retired by a paid plan kept its pending upgrade invoice
+  payable.** Paying that leftover invoice later swapped the plan on the retired
+  subscription and granted its entitlements again. Retiring now voids the
+  subscription's outstanding invoices, including a past-due upgrade invoice, and
+  cancels its scheduled changes.
+- **Cancelling a subscription left its Stripe invoices payable.** Voiding a
+  subscription's outstanding invoices on cancel or downgrade only changed
+  Tanso's copy. It now also voids the hosted Stripe invoice, the same way a
+  replaced upgrade's invoice already was.
+- **`GET /usage` reports a plan as ended only once it has ended.** A paid plan
+  waiting on its first payment was listed as `ended`, with an end date in the
+  future. A plan cancelled at the end of its period showed the time the cancel
+  was asked for as its end, and left out usage recorded between then and the
+  real end.
+
 ### Removed
 
 - **Instance telemetry.** The daily anonymous ping and its receiver are gone;

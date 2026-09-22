@@ -1,0 +1,180 @@
+/*
+ * Tanso Core - open-source B2B SaaS monetization engine
+ * Copyright (C) 2026  Douglas Baek
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+package com.tansoflow.tansocore.integration.stripe.implementation;
+
+import com.stripe.StripeClient;
+import com.stripe.model.SubscriptionItem;
+import com.stripe.model.SubscriptionItemCollection;
+import com.stripe.param.SubscriptionUpdateParams;
+import com.tansoflow.tansocore.entity.Account;
+import com.tansoflow.tansocore.entity.Plan;
+import com.tansoflow.tansocore.entity.StripePrice;
+import com.tansoflow.tansocore.entity.StripeSubscription;
+import com.tansoflow.tansocore.entity.Subscription;
+import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
+import com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge;
+import com.tansoflow.tansocore.repository.StripePriceRepository;
+import com.tansoflow.tansocore.repository.StripeSubscriptionRepository;
+import com.tansoflow.tansocore.repository.SubscriptionRepository;
+import com.tansoflow.tansocore.service.internal.monetization.PlanService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Answers;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/** What Tanso sends Stripe when a subscription changes plan. */
+@ExtendWith(MockitoExtension.class)
+class StripeSyncServiceImplPlanChangeTest {
+
+    @InjectMocks
+    private StripeSyncServiceImpl stripeSyncService;
+
+    @Mock
+    private StripeClientFactory stripeClientFactory;
+    @Mock(answer = Answers.RETURNS_DEEP_STUBS)
+    private StripeClient stripeClient;
+    @Mock
+    private SubscriptionRepository subscriptionRepository;
+    @Mock
+    private StripeSubscriptionRepository stripeSubscriptionRepository;
+    @Mock
+    private StripePriceRepository stripePriceRepository;
+    @Mock
+    private PlanService planService;
+
+    private final UUID accountId = UUID.randomUUID();
+    private Account account;
+    private Plan oldPlan;
+    private Plan newPlan;
+    private Subscription subscription;
+
+    @BeforeEach
+    void setUp() throws Exception {
+        account = new Account();
+        account.setId(accountId);
+        oldPlan = new Plan();
+        oldPlan.setId(UUID.randomUUID());
+        newPlan = new Plan();
+        newPlan.setId(UUID.randomUUID());
+
+        subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setAccount(account);
+        // Not swapped yet: the Tanso subscription still sits on the old plan while the upgrade waits on payment.
+        subscription.setPlan(oldPlan);
+
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setStripeSubscriptionExternalId("sub_123");
+
+        StripePrice oldPrice = new StripePrice();
+        oldPrice.setStripePriceExternalId("price_old");
+        StripePrice newPrice = new StripePrice();
+        newPrice.setStripePriceExternalId("price_new");
+
+        when(stripeClientFactory.forAccount(accountId)).thenReturn(stripeClient);
+        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), accountId)).thenReturn(subscription);
+        when(stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription)).thenReturn(bridge);
+        when(planService.retrievePlan(account, newPlan.getId())).thenReturn(newPlan);
+        org.mockito.Mockito.lenient().when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(oldPlan, account))
+                .thenReturn(Optional.of(oldPrice));
+        when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
+                .thenReturn(Optional.of(newPrice));
+
+        SubscriptionItem item = new SubscriptionItem();
+        item.setId("si_123");
+        SubscriptionItemCollection items = new SubscriptionItemCollection();
+        items.setData(List.of(item));
+        com.stripe.model.Subscription current = new com.stripe.model.Subscription();
+        current.setItems(items);
+        when(stripeClient.v1().subscriptions().retrieve("sub_123")).thenReturn(current);
+    }
+
+    private com.stripe.model.Subscription stripeReply(boolean pendingUpdate, String invoiceStatus, long amountPaid) {
+        com.stripe.model.Invoice invoice = new com.stripe.model.Invoice();
+        invoice.setId("in_proration");
+        invoice.setStatus(invoiceStatus);
+        invoice.setAmountPaid(amountPaid);
+        invoice.setHostedInvoiceUrl("https://invoice.stripe.com/i/acct_test/in_proration");
+        com.stripe.model.Subscription updated = new com.stripe.model.Subscription();
+        updated.setLatestInvoiceObject(invoice);
+        if (pendingUpdate) {
+            updated.setPendingUpdate(new com.stripe.model.Subscription.PendingUpdate());
+        }
+        return updated;
+    }
+
+    @Test
+    void anAgentUpgradeIsChargedNowAndAppliedOnlyIfPaid() throws Exception {
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(stripeReply(false, "paid", 7450L));
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE);
+        assertThat(params.getValue().getPaymentBehavior()).isEqualTo(SubscriptionUpdateParams.PaymentBehavior.PENDING_IF_INCOMPLETE);
+        assertThat(params.getValue().getItems()).hasSize(1);
+        assertThat(params.getValue().getItems().getFirst().getId()).isEqualTo("si_123");
+        assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_new");
+
+        assertThat(charge.applied()).isTrue();
+        assertThat(charge.stripeInvoiceId()).isEqualTo("in_proration");
+        assertThat(charge.amountPaid()).isEqualByComparingTo(new BigDecimal("74.50"));
+    }
+
+    @Test
+    void aChargeStripeCouldNotTakeComesBackPendingWithTheHostedInvoice() throws Exception {
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class)))
+                .thenReturn(stripeReply(true, "open", 0L));
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId());
+
+        assertThat(charge.applied()).isFalse();
+        assertThat(charge.hostedInvoiceUrl()).isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
+        assertThat(charge.amountPaid()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    // The listener used to read subscription.getPlan(), which on STRIPE_INTEGRATION is still the old plan while the
+    // upgrade waits on payment, so Stripe was sent the price it already had.
+    @Test
+    void aPlanChangePricesStripeOnTheNamedPlanNotTheSubscriptionsCurrentOne() throws Exception {
+        stripeSyncService.updateStripeSubscriptionPrice(subscription.getId(), accountId, newPlan.getId(), true);
+
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_new");
+        assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS);
+        assertThat(params.getValue().getPaymentBehavior()).isNull();
+    }
+}

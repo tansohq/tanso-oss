@@ -716,7 +716,7 @@ appended.
 | `agentSignupEnabled` | `false` | serve the signup endpoint |
 | `agentSignupDefaultPlanId` | none | free ACTIVE plan new customers land on; required before enabling |
 | `agentSignupHourlyCap` | `10` | signups per account per hour; 429 + `Retry-After` above it |
-| `agentSignupPerIpCap` | `5` | signups per IP per hour; 429 + `Retry-After` above it. The IP is the connection's remote address; behind a proxy set `server.forward-headers-strategy` (the prod, staging and sandbox profiles already do) |
+| `agentSignupPerIpCap` | `5` | signups per IP per hour; 429 + `Retry-After` above it. The IP is the connection's remote address, or behind a proxy the leftmost `X-Forwarded-For`; see [Deployment](#deployment) for what the proxy must do |
 | `agentProvisionalDays` | `14` | days before an unpaid provisional customer expires |
 | `agentSpendMandateEnabled` | `false` | honor `spend_mandate` on signup and the spend-mandate endpoint; refused with 400 while `agentMaxMandateAmount` is not set |
 | `agentMaxMandateAmount` | none | largest `max_amount` per period an agent may ask its principal to approve; a larger ask is a 400. `0` clears it, which is refused while mandates are on |
@@ -976,6 +976,17 @@ an ECR registry and ECS services. Override the placeholders at the top of the
 `Makefile` (AWS account ID, cluster/service names) or set them via environment
 variables. Infrastructure provisioning (ECS, ALB, RDS, etc.) is **not** included
 in this repository.
+
+**Behind a proxy, the per-IP signup cap is only as good as the proxy.** The
+prod, staging and sandbox profiles set `server.forward-headers-strategy:
+framework`, so the address the per-IP cap counts is the leftmost
+`X-Forwarded-For` value. The proxy in front of Tanso must overwrite that
+header with the address it received the connection from. A proxy that
+appends to a client-supplied header (AWS ALB does by default) leaves the
+client's own value leftmost, so a caller can send a different fake address
+on every request and never hit the cap. The per-account hourly cap still
+applies. With no proxy, remove `forward-headers-strategy` so a client-sent
+header is ignored.
 
 ---
 

@@ -15,11 +15,18 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package com.tansoflow.tansocore.model.event.service;
+package com.tansoflow.tansocore.model.data.stripe;
 
-import java.util.UUID;
+import java.math.BigDecimal;
 
-// planId is the plan Stripe should price against. An upgrade can leave the Tanso subscription on its old plan
-// until payment, so the listener must not read the plan off the subscription.
-public record SubscriptionPlanChangedEvent(UUID accountId, UUID subscriptionId, UUID planId, boolean prorate) implements DomainEvent {
+/**
+ * What Stripe did with a charge-first price change.
+ *
+ * @param stripeInvoiceId  the proration invoice Stripe raised for the change
+ * @param hostedInvoiceUrl where a human pays that invoice when the saved card could not be charged
+ * @param amountPaid       what the invoice collected, in major units; zero while unpaid
+ * @param applied          true when Stripe took the money and moved the subscription to the new price;
+ *                         false when it left a pending_update waiting on the invoice
+ */
+public record StripeUpgradeCharge(String stripeInvoiceId, String hostedInvoiceUrl, BigDecimal amountPaid, boolean applied) {
 }

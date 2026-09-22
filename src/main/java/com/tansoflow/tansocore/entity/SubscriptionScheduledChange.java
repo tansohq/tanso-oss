@@ -75,6 +75,14 @@ public class SubscriptionScheduledChange {
     @Column(name = "api_key_id")
     private java.util.UUID apiKeyId;
 
+    /** STRIPE_DRIVEN agent upgrade: the Stripe invoice that must be paid before the plan moves. */
+    @Column(name = "stripe_invoice_id")
+    private String stripeInvoiceId;
+
+    /** STRIPE_DRIVEN agent upgrade: the hosted invoice a human pays when the saved card could not be charged. */
+    @Column(name = "payment_url")
+    private String paymentUrl;
+
     @Size(max = 32)
     @NotNull
     @Column(name = "status", nullable = false, length = 32)

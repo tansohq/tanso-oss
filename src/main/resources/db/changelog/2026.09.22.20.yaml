@@ -1,0 +1,19 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260922-20"
+      author: tanso
+      comment: >
+        On STRIPE_DRIVEN an agent's upgrade is charged by Stripe before the plan
+        moves. The change waits on that Stripe invoice: stripe_invoice_id lets the
+        invoice.paid webhook find it, and payment_url is the hosted invoice an agent
+        is handed again if it retries while payment is still outstanding.
+      changes:
+        - addColumn:
+            tableName: subscription_scheduled_changes
+            columns:
+              - column:
+                  name: stripe_invoice_id
+                  type: VARCHAR(255)
+              - column:
+                  name: payment_url
+                  type: TEXT
