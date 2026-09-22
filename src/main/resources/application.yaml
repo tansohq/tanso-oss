@@ -25,9 +25,6 @@ app:
       # (cloud metadata) are always refused; private ranges are allowed for self-hosted proxies.
       allow-private: ${APP_SPEND_OUTBOUND_ALLOW_PRIVATE:true}
       allow-loopback: ${APP_SPEND_OUTBOUND_ALLOW_LOOPBACK:false}
-  telemetry:
-    enabled: ${TANSO_TELEMETRY_ENABLED:true}
-    endpoint: https://jozfgvokhefrdlojzefq.supabase.co/functions/v1/ping
   mcp:
     enabled: false
     admin-tools:

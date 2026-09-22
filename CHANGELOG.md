@@ -15,6 +15,13 @@ tags; this file starts where the changelog does.
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
 
+### Removed
+
+- **Instance telemetry.** The daily anonymous ping and its receiver are gone;
+  a self-hosted instance no longer calls out to Tanso. The
+  `instance_telemetry` table is dropped on upgrade, and
+  `TANSO_TELEMETRY_ENABLED` is ignored.
+
 ## 0.10.0 — 2026-09-20
 
 The release where an agent gets all the way through on its own. Everything here
