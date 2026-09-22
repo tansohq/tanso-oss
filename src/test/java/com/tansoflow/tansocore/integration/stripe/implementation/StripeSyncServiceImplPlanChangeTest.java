@@ -281,6 +281,19 @@ class StripeSyncServiceImplPlanChangeTest {
         assertThat(params.getValue().getProrationBehavior()).isEqualTo(SubscriptionUpdateParams.ProrationBehavior.NONE);
     }
 
+    // Someone already voided the invoice in Stripe; voiding it again would fail, and the price still has to go back.
+    @Test
+    void restoringAfterAnAlreadyVoidedSendInvoiceUpgradeOnlyRestoresTheOldPrice() throws Exception {
+        current.setCollectionMethod("send_invoice");
+
+        stripeSyncService.restorePriceAfterDroppedUpgrade(subscription.getId(), accountId);
+
+        verify(stripeClient.v1().invoices(), org.mockito.Mockito.never()).voidInvoice(any(String.class));
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        assertThat(params.getValue().getItems().getFirst().getPrice()).isEqualTo("price_old");
+    }
+
     @Test
     void droppingAnUnpaidChargeAutomaticallyUpgradeOnlyVoidsTheInvoice() throws Exception {
         stripeSyncService.cancelUnpaidUpgrade("in_proration", subscription.getId(), accountId);

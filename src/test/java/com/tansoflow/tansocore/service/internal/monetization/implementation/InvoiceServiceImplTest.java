@@ -1201,9 +1201,11 @@ class InvoiceServiceImplTest {
         verify(entitlementService).processEntitlementsForSubscription(subscription);
         // The upgrade's own credits: the period's grant was already made on the free plan.
         verify(creditService).grantUpgradeDelta(subscription, free, starter, pending.getId());
-        // And the key that committed the money has its budget drawn down now that the money moved.
+        // And the key that committed the money has its budget drawn down now that the money moved. A human paid the
+        // invoice, so it is recorded as hosted and stays out of the mandate.
         verify(keyBudgetService).recordSpend(eq(account.getId()), eq(keyId),
-                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new BigDecimal("74.50")),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.HOSTED), eq(new BigDecimal("74.50")),
                 any(), any());
     }
 
@@ -1261,7 +1263,7 @@ class InvoiceServiceImplTest {
         verify(invoiceRepository, never()).findById(any());
         verify(invoiceRepository, times(1)).save(adjustment);
         verify(creditService, times(1)).grantUpgradeDelta(subscription, free, starter, pending.getId());
-        verify(keyBudgetService, times(1)).recordSpend(any(), any(), any(), any(), any(), any());
+        verify(keyBudgetService, times(1)).recordSpend(any(), any(), any(), any(), any(), any(), any());
     }
 
     // Paying a voided invoice must grant nothing: the change it belonged to is gone, and flipping it to PAID
@@ -1378,9 +1380,9 @@ class InvoiceServiceImplTest {
         leftoverUpgrade.setAmount(new BigDecimal("74.50"));
         leftoverUpgrade.setType(InvoiceType.ADJUSTMENT.name());
         leftoverUpgrade.setStatus(InvoiceStatus.DUE.name());
-        when(invoiceRepository.findOutstandingInvoicesBySubscription(free)).thenReturn(List.of(leftoverUpgrade));
+        when(invoiceRepository.findVoidableInvoicesBySubscription(eq(free), any())).thenReturn(List.of(leftoverUpgrade));
 
-        // An adjustment invoice that has gone past due is not "outstanding" to that query but is still payable.
+        // An adjustment invoice that has gone past due is still payable, whichever query surfaces it.
         Invoice pastDueUpgrade = new Invoice();
         pastDueUpgrade.setId(UUID.randomUUID());
         pastDueUpgrade.setSubscription(free);
@@ -1421,7 +1423,7 @@ class InvoiceServiceImplTest {
         due.setId(UUID.randomUUID());
         due.setSubscription(subscription);
         due.setStatus(InvoiceStatus.DUE.name());
-        when(invoiceRepository.findOutstandingInvoicesBySubscription(subscription)).thenReturn(List.of(due));
+        when(invoiceRepository.findVoidableInvoicesBySubscription(eq(subscription), any())).thenReturn(List.of(due));
 
         invoiceService.voidOutstandingInvoicesForSubscription(subscription);
 

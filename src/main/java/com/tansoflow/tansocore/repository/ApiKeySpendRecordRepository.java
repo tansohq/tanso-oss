@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.repository;
 
 import com.tansoflow.tansocore.entity.ApiKeySpendRecord;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -43,18 +44,21 @@ public interface ApiKeySpendRecordRepository extends JpaRepository<ApiKeySpendRe
                         @Param("windowStart") Instant windowStart);
 
     /**
-     * Spend across every key the customer holds, revoked ones included, so rotating a key does not
-     * hand the customer a fresh allowance. Used by the spend mandate, which is per customer.
+     * Spend on one channel across every key the customer holds, revoked ones included, so rotating a key
+     * does not hand the customer a fresh allowance. Used by the spend mandate, which is per customer and
+     * counts only OFF_SESSION spend.
      */
     @Query("""
             SELECT COALESCE(SUM(r.amount), 0)
             FROM ApiKeySpendRecord r
             WHERE r.apiKeyId IN (SELECT k.id FROM AccountApiKey k WHERE k.customer.id = :customerId)
               AND r.kind = :kind
+              AND r.channel = :channel
               AND r.occurredAt >= :windowStart
             """)
     BigDecimal sumForCustomerSince(@Param("customerId") UUID customerId,
                                    @Param("kind") SpendKind kind,
+                                   @Param("channel") SpendChannel channel,
                                    @Param("windowStart") Instant windowStart);
 
     boolean existsByAccountIdAndIdempotencyKey(UUID accountId, String idempotencyKey);

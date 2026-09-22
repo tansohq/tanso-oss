@@ -54,6 +54,7 @@ import com.tansoflow.tansocore.entity.StripePrice;
 import com.tansoflow.tansocore.entity.StripeProduct;
 import com.tansoflow.tansocore.entity.StripeSubscription;
 import com.tansoflow.tansocore.entity.Subscription;
+import com.tansoflow.tansocore.integration.stripe.CheckoutReturnUrls;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.model.data.stripe.StripePaymentLinkDto;
@@ -392,10 +393,8 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId);
 
 
-        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
-                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
-                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = CheckoutReturnUrls.successUrl(accountSetting, CheckoutReturnUrls.KIND_PAYMENT);
+        String cancelUrl = CheckoutReturnUrls.cancelUrl(accountSetting);
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";
@@ -515,10 +514,8 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId);
 
-        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
-                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
-                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = CheckoutReturnUrls.successUrl(accountSetting, CheckoutReturnUrls.KIND_SETUP);
+        String cancelUrl = CheckoutReturnUrls.cancelUrl(accountSetting);
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";
@@ -601,10 +598,8 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         AccountSetting accountSetting = accountService.retrieveAccountSettings(accountId.toString());
 
-        String successUrl = accountSetting != null && accountSetting.getStripeCheckoutSuccessUrl() != null
-                ? accountSetting.getStripeCheckoutSuccessUrl() : "https://example.com/success";
-        String cancelUrl = accountSetting != null && accountSetting.getStripeCheckoutCancelUrl() != null
-                ? accountSetting.getStripeCheckoutCancelUrl() : "https://example.com/cancel";
+        String successUrl = CheckoutReturnUrls.successUrl(accountSetting, CheckoutReturnUrls.KIND_PAYMENT);
+        String cancelUrl = CheckoutReturnUrls.cancelUrl(accountSetting);
 
         if (!successUrl.contains("{CHECKOUT_SESSION_ID}")) {
             successUrl = successUrl + (successUrl.contains("?") ? "&" : "?") + "session_id={CHECKOUT_SESSION_ID}";
@@ -1151,7 +1146,13 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         // On charge_automatically this also discards the pending_update, and the old price never left.
         stripeClient.v1().invoices().voidInvoice(stripeInvoiceId);
         log.info("Voided Stripe invoice {} behind an unpaid upgrade of subscription {}", stripeInvoiceId, subscriptionId);
+        restorePriceAfterDroppedUpgrade(subscriptionId, accountId);
+    }
 
+    @Override
+    @Transactional
+    public void restorePriceAfterDroppedUpgrade(UUID subscriptionId, UUID accountId) throws StripeException {
+        StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         Subscription subscription = subscriptionRepository.findSubscriptionByUuidAndAccountId(subscriptionId, accountId);
         StripeSubscription stripeSub = subscription == null ? null
                 : stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription);

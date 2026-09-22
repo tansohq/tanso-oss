@@ -269,6 +269,79 @@ class SubscriptionServiceImplTest {
         verifyNoInteractions(stripeSyncService);
     }
 
+    private void keyBudgetAndMandateAreExhausted(String amount) {
+        org.mockito.Mockito.lenient().doThrow(new com.tansoflow.tansocore.model.exception.BudgetExceededException(
+                        com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                        new java.math.BigDecimal("5.00"), new java.math.BigDecimal("5.00"),
+                        new java.math.BigDecimal(amount), java.time.Instant.now()))
+                .when(keyBudgetService).assertWithinBudget(any(), any(), any());
+        org.mockito.Mockito.lenient().doThrow(new com.tansoflow.tansocore.model.exception.SpendMandateExceededException(
+                        "ref", new java.math.BigDecimal("5.00"), new java.math.BigDecimal("5.00"),
+                        new java.math.BigDecimal(amount), "month", java.time.Instant.now().plusSeconds(60)))
+                .when(keyBudgetService).assertWithinMandate(any(), any());
+    }
+
+    // A human pays the Stripe Checkout page in person, which is its own approval. An exhausted key budget used to
+    // answer budget_exceeded instead of handing over the page.
+    @org.junit.jupiter.api.Test
+    void aPaidSubscribeWithNoCardReachesHostedCheckoutPastAnExhaustedKeyBudget() throws Exception {
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        plan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
+        when(accountService.retrieveAccountSettings(account.getId().toString())).thenReturn(setting);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(java.util.List.of());
+        keyBudgetAndMandateAreExhausted("29.99");
+        // Stop at Stripe: reaching it proves neither limit refused the page.
+        when(stripeSyncService.createSubscriptionCheckoutSession(account.getId(), customer.getId(), plan.getId()))
+                .thenThrow(new IllegalStateException("reached stripe"));
+
+        callingWithAnApiKey(() -> org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.subscribe(customer, plan, account.getId().toString(), null))
+                .hasRootCauseMessage("reached stripe"));
+
+        verify(keyBudgetService, never()).assertWithinBudget(any(), any(), any());
+        verify(keyBudgetService, never()).assertWithinMandate(any(), any());
+    }
+
+    // Pass-through hands the agent Stripe's hosted invoice, which a human pays in person.
+    @org.junit.jupiter.api.Test
+    void aPaidSubscribeOnPassThroughIsNotRefusedByAnExhaustedKeyBudget() {
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        plan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(account.getId().toString())).thenReturn(setting);
+        keyBudgetAndMandateAreExhausted("29.99");
+        // Creating the subscription is the first step past the guards.
+        when(customerService.validateAndRetrieveCustomer(customer.getId().toString(), account.getId().toString()))
+                .thenThrow(new IllegalStateException("past the guards"));
+
+        callingWithAnApiKey(() -> org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.subscribe(customer, plan, account.getId().toString(), null))
+                .hasMessage("past the guards"));
+
+        verify(keyBudgetService, never()).assertWithinBudget(any(), any(), any());
+    }
+
+    // The operator's per-charge cap is kept on hosted pages: it bounds what an agent may start, whoever pays.
+    @org.junit.jupiter.api.Test
+    void aPaidSubscribeWithNoCardIsStillHeldToTheOperatorsPerChargeCap() {
+        plan.setStatus(com.tansoflow.tansocore.model.plan.PlanStatus.ACTIVE.name());
+        plan.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ADVANCE.name());
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
+        setting.setAgentMaxTopupAmount(new java.math.BigDecimal("10.00"));
+        when(accountService.retrieveAccountSettings(account.getId().toString())).thenReturn(setting);
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(java.util.List.of());
+
+        callingWithAnApiKey(() -> org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.subscribe(customer, plan, account.getId().toString(), null))
+                .isInstanceOf(com.tansoflow.tansocore.model.exception.BudgetExceededException.class));
+
+        verifyNoInteractions(stripeSyncService);
+    }
+
     private UUID subscriptionId;
     private Subscription subscription;
     private Plan plan;
@@ -817,6 +890,63 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(saved.getValue().getToPlan()).isEqualTo(starter);
     }
 
+    // Pass-through hands the agent Stripe's hosted invoice for the adjustment; a human pays it in person, so neither
+    // the key budget nor the mandate refuses the upgrade. The plan still waits on the invoice.
+    @org.junit.jupiter.api.Test
+    void anUpgradePaidOnAPassThroughHostedInvoiceIsNotRefusedByAnExhaustedBudgetOrMandate() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+        keyBudgetAndMandateAreExhausted("74.50");
+
+        com.tansoflow.tansocore.entity.Invoice adjustment = new com.tansoflow.tansocore.entity.Invoice();
+        adjustment.setId(UUID.randomUUID());
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
+                .thenReturn(adjustment);
+
+        callingWithAnApiKey(() -> {
+            com.tansoflow.tansocore.model.subscription.UpgradeResult pending = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(pending.pendingInvoiceId()).isEqualTo(adjustment.getId());
+        });
+
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(free);
+        verify(keyBudgetService, never()).assertWithinBudget(any(), any(), any());
+        verify(keyBudgetService, never()).assertWithinMandate(any(), any());
+    }
+
+    // Where Stripe runs the billing, the charge-first upgrade charges the saved card in this same call, so both
+    // limits still apply before Stripe is asked.
+    @org.junit.jupiter.api.Test
+    void aChargeFirstUpgradeIsStillRefusedByAnExhaustedMandate() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+        stripeIntegration(accountIdString);
+        org.mockito.Mockito.doThrow(new com.tansoflow.tansocore.model.exception.SpendMandateExceededException(
+                        "ref", new java.math.BigDecimal("5.00"), new java.math.BigDecimal("5.00"),
+                        new java.math.BigDecimal("74.50"), "month", java.time.Instant.now().plusSeconds(60)))
+                .when(keyBudgetService).assertWithinMandate(eq(customer.getId()), any());
+
+        callingWithAnApiKey(() -> org.assertj.core.api.Assertions.assertThatThrownBy(
+                        () -> subscriptionService.upgradeSubscription(
+                                currentSubscriptionId, accountIdString, starter.getId().toString(), true))
+                .isInstanceOf(com.tansoflow.tansocore.model.exception.SpendMandateExceededException.class));
+
+        verifyNoInteractions(stripeSyncService);
+    }
+
+    // Where Tanso bills with no payment processor there is no hosted page, so the key budget still applies.
     @org.junit.jupiter.api.Test
     void upgradeOnAnApiKeyStopsWhenTheKeyBudgetCannotCoverTheProration() {
         String accountIdString = account.getId().toString();
@@ -827,7 +957,7 @@ class SubscriptionServiceImplTest {
         when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
 
         com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
-        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.NONE);
         when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
 
         org.mockito.Mockito.doThrow(new com.tansoflow.tansocore.model.exception.BudgetExceededException(
@@ -1119,7 +1249,7 @@ class SubscriptionServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(free);
         verifyNoInteractions(entitlementService);
-        verify(keyBudgetService, org.mockito.Mockito.never()).recordSpend(any(), any(), any(), any(), any(), any());
+        verify(keyBudgetService, org.mockito.Mockito.never()).recordSpend(any(), any(), any(), any(), any(), any(), any());
         verify(invoiceService, org.mockito.Mockito.never()).createAdjustmentInvoice(any(), any(), any(), any(), any());
         // The price change went to Stripe as a charge-first call, not as the prorate-at-renewal event.
         verify(eventPublisher, org.mockito.Mockito.never()).publishEvent(
@@ -1164,7 +1294,8 @@ class SubscriptionServiceImplTest {
         verify(creditService).grantUpgradeDelta(eq(existing), eq(free), eq(starter), any());
         // The budget is drawn down by what Stripe actually collected.
         verify(keyBudgetService).recordSpend(eq(account.getId()), org.mockito.ArgumentMatchers.notNull(),
-                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new java.math.BigDecimal("74.50")),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION), eq(new java.math.BigDecimal("74.50")),
                 eq(existing.getId().toString()), org.mockito.ArgumentMatchers.startsWith("plan_change:"));
 
         ArgumentCaptor<com.tansoflow.tansocore.entity.SubscriptionScheduledChange> saved =
@@ -1319,7 +1450,8 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
         verify(entitlementService).processEntitlementsForSubscription(existing);
         verify(keyBudgetService).recordSpend(eq(account.getId()), org.mockito.ArgumentMatchers.notNull(),
-                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new java.math.BigDecimal("74.50")),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION), eq(new java.math.BigDecimal("74.50")),
                 eq(existing.getId().toString()), org.mockito.ArgumentMatchers.startsWith("plan_change:"));
     }
 
@@ -1373,7 +1505,8 @@ class SubscriptionServiceImplTest {
         done.setStatus(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.COMPLETED.name());
 
         org.assertj.core.api.Assertions.assertThatThrownBy(
-                        () -> subscriptionService.fulfilPaidUpgrade(done, new java.math.BigDecimal("74.50")))
+                        () -> subscriptionService.fulfilPaidUpgrade(done, new java.math.BigDecimal("74.50"),
+                                com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION))
                 .isInstanceOf(IllegalStateException.class);
         verifyNoInteractions(keyBudgetService, entitlementService);
     }

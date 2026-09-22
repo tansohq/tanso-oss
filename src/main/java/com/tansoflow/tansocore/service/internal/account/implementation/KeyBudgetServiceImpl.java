@@ -23,6 +23,7 @@ import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.KeyBudgetDto;
 import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
@@ -104,15 +105,16 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         }
         BudgetWindow window = BudgetWindow.tiling(customer.getMandateStartedAt(), customer.getMandatePeriod(),
                 Instant.now());
+        // What a human paid in person on a hosted page was approved there, not under the mandate.
         BigDecimal spent = spendRecordRepository.sumForCustomerSince(customer.getId(), SpendKind.MONEY,
-                window.start());
+                SpendChannel.OFF_SESSION, window.start());
         return new MandateUsage(customer.getMandateAmount(), spent,
                 remaining(customer.getMandateAmount(), spent), customer.getMandatePeriod(), window.resetsAt());
     }
 
     @Override
     @Transactional
-    public void recordSpend(UUID accountId, UUID apiKeyId, SpendKind kind, BigDecimal amount,
+    public void recordSpend(UUID accountId, UUID apiKeyId, SpendKind kind, SpendChannel channel, BigDecimal amount,
                             String referenceId, String idempotencyKey) {
         if (apiKeyId == null || amount == null || amount.signum() <= 0) {
             return;
@@ -126,6 +128,7 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         record.setAccountId(accountId);
         record.setApiKeyId(apiKeyId);
         record.setKind(kind);
+        record.setChannel(channel);
         record.setAmount(amount);
         record.setOccurredAt(Instant.now());
         record.setReferenceId(referenceId);

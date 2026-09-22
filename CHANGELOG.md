@@ -72,8 +72,9 @@ tags; this file starts where the changelog does.
   mandate now lives on the customer (`mandate_amount`, `mandate_period`,
   `mandate_started_at`) and every off-session charge, plus the upgrade
   proration check, must fit both the calling key's budget and the mandate,
-  where the mandate counts spend across all of the customer's keys. Hosted
-  checkout, where a human pays in person, is not checked against the mandate.
+  where the mandate counts off-session spend across all of the customer's keys.
+  Hosted checkout, where a human pays in person, is not checked against the
+  mandate.
   `/status` reports `spend_mandate` with `spent`, `remaining`, `period` and
   `resets_at` from the customer.
 - **Mandates activated before this release stay as the key budgets they were
@@ -103,6 +104,38 @@ tags; this file starts where the changelog does.
   marked FAILED so the next attempt starts fresh. Schema: new column
   `subscription_scheduled_changes.stripe_charge_first` (changelog
   `2026.09.23.20`).
+- **A hosted page a human pays is no longer refused by the key budget or the
+  mandate.** Buying credits without a card, subscribing to a paid plan without
+  a card, and a subscribe or upgrade on pass-through all hand the agent a
+  Stripe page a human pays in person. The key budget used to run first, so an
+  exhausted budget answered `budget_exceeded` or `spend_cap_exceeded` instead
+  of the page. Now only the operator's per-charge cap (`agentMaxTopupAmount`)
+  applies there. Off-session charges (a saved card charged by credit top-up,
+  subscribe, or an upgrade where Stripe runs the billing) still have to fit the
+  key budget and the mandate.
+- **Money paid on a hosted page no longer uses up the mandate.** Spend records
+  now say how the money moved: `OFF_SESSION` or `HOSTED` (new column
+  `api_key_spend_records.channel`, existing rows are `OFF_SESSION`). The
+  mandate, and `spend_mandate.spent` on `/status`, count only `OFF_SESSION`.
+  The key budget, and `spend.spent`, still count both, since the key caused the
+  spend either way. A Stripe invoice paid later for an upgrade counts as
+  `HOSTED` only when Stripe emails invoices for that subscription; otherwise
+  Stripe may have retried the saved card, so it counts as `OFF_SESSION`.
+- **An unpaid upgrade ends when its Stripe invoice is voided or written off.**
+  On STRIPE_DRIVEN and STRIPE_INTEGRATION, a charge-first upgrade on a
+  send_invoice subscription waited on `invoice.paid` forever, and Stripe stayed
+  on the new price. `invoice.voided` now cancels the waiting upgrade and puts
+  Stripe back on the old price. `invoice.marked_uncollectible` does the same
+  and also voids the invoice, since Stripe still accepts payment on it. Tanso's
+  copy of the invoice follows: VOID, or PAST_DUE when written off. Both events
+  are registered on new connections and added to existing ones at startup.
+- **A past-due invoice for the current period is voided on cancel, downgrade
+  and free-plan retirement.** Only DUE and PENDING invoices were voided, so a
+  PAST_DUE invoice for a period still running, and its Stripe copy, stayed
+  payable after the subscription behind it was gone. The same goes for the
+  past-due proration of an upgrade still waiting on payment. A PAST_DUE
+  invoice for a period that has already ended stays payable: that is money
+  owed for service already used.
 - **A renewal invoice no longer completes an unpaid upgrade.** On
   STRIPE_INTEGRATION any paid invoice for the subscription fulfilled the
   waiting upgrade. A charge-first upgrade now completes only on the invoice
@@ -126,8 +159,13 @@ tags; this file starts where the changelog does.
   lets it through. It now answers `spend_cap_exceeded` / `raise_spend_cap`
   with `retry_after: null`. A charge that fits the budget but not what is left
   of this window still answers `wait`.
-
-### Fixed
+- **After Stripe Checkout, the human no longer lands on example.com.** With
+  no `stripeCheckoutSuccessUrl` / `stripeCheckoutCancelUrl` set, card setup,
+  spend mandates, credit top-ups and plan checkouts sent the human to
+  `https://example.com/success` or `/cancel`. Tanso now serves its own pages,
+  `/public/checkout/complete` and `/public/checkout/cancelled`, on the host
+  the checkout was requested through, and uses them by default. URLs the
+  operator sets still win.
 
 - **Stripe now delivers the checkout and card-setup events Tanso handles.**
   The webhook endpoint Tanso registers left out `checkout.session.completed`,

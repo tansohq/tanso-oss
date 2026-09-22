@@ -211,6 +211,8 @@ public class StripeServiceImpl implements StripeService {
                 WebhookEndpointCreateParams.EnabledEvent.INVOICE__FINALIZED.getValue(),
                 WebhookEndpointCreateParams.EnabledEvent.INVOICE__CREATED.getValue(),
                 WebhookEndpointCreateParams.EnabledEvent.INVOICE__UPDATED.getValue(),
+                WebhookEndpointCreateParams.EnabledEvent.INVOICE__VOIDED.getValue(),
+                WebhookEndpointCreateParams.EnabledEvent.INVOICE__MARKED_UNCOLLECTIBLE.getValue(),
                 WebhookEndpointCreateParams.EnabledEvent.INVOICE__DELETED.getValue());
     }
 

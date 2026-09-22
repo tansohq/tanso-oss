@@ -33,6 +33,7 @@ import com.tansoflow.tansocore.model.event.events.EventGroupDto;
 import com.tansoflow.tansocore.model.event.events.EventIngestionResult;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
 import com.tansoflow.tansocore.auth.AuthContext;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.CreditLimitExceededException;
 import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
@@ -671,7 +672,7 @@ public class EventServiceImpl implements EventService {
 
                 String eventRef = event.getId() != null ? event.getId().toString() : null;
                 keyBudgetService.recordSpend(account.getId(), AuthContext.currentApiKeyId(),
-                        SpendKind.CREDITS, totalDeducted, eventRef,
+                        SpendKind.CREDITS, SpendChannel.OFF_SESSION, totalDeducted, eventRef,
                         eventRef != null ? "event:" + eventRef : null);
 
                 resultBuilder.creditsDeducted(totalDeducted)

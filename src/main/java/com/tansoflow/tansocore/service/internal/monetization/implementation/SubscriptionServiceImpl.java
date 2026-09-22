@@ -18,6 +18,7 @@
 package com.tansoflow.tansocore.service.internal.monetization.implementation;
 
 import com.tansoflow.tansocore.auth.AuthContext;
+import com.tansoflow.tansocore.model.apikey.type.SpendChannel;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.entity.Customer;
@@ -200,6 +201,18 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // account where Tanso does the billing (NONE, PAYMENT_PASS_THROUGH)
         // created the subscription and its invoice without ever consulting the
         // budget — the same per-path hole this was written to close, one level in.
+        boolean isStripeIntegration = accountSetting != null && accountSetting.getStripeMode().isStripeIntegration();
+        boolean paidInAdvance = BillingTiming.IN_ADVANCE.name().equals(plan.getBillingTiming())
+                && plan.getPriceAmount() != null && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0;
+        String effectivePaymentMethod = paymentMethodId != null
+                ? paymentMethodId
+                : customer.getStripeDefaultPaymentMethodId();
+        // A human pays these in person on a Stripe-hosted page: Checkout when Stripe integration has no card to
+        // charge, or the hosted invoice pass-through sends. Paying there is its own approval, so the key budget
+        // does not refuse the page. The operator's per-charge cap still does.
+        boolean paidOnHostedPage = paidInAdvance
+                && ((isStripeIntegration && effectivePaymentMethod == null)
+                || (accountSetting != null && accountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH));
         if (plan.getPriceAmount() != null && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
             // Scoped to customer keys, which is what "agent-initiated" means: an
             // operator subscribing through the console is not capped.
@@ -209,8 +222,10 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
                         accountSetting.getAgentMaxTopupAmount(), plan.getPriceAmount());
             }
-            keyBudgetService.assertWithinBudget(
-                    AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
+            if (!paidOnHostedPage) {
+                keyBudgetService.assertWithinBudget(
+                        AuthContext.currentApiKeyId(), SpendKind.MONEY, plan.getPriceAmount());
+            }
         }
 
         // Still unpaid from an earlier attempt: return that subscription and its DUE invoice. This sits
@@ -231,15 +246,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // STRIPE_INTEGRATION + paid IN_ADVANCE: use Stripe Checkout Session instead of creating
         // a subscription upfront. No dangling subscriptions if the customer doesn't pay.
         // The customer.subscription.created webhook will create the Tanso subscription after checkout.
-        boolean isStripeIntegration = accountSetting != null && accountSetting.getStripeMode().isStripeIntegration();
-        if (isStripeIntegration
-                && plan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())
-                && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0) {
+        if (isStripeIntegration && paidInAdvance) {
             // Programmatic path: a supplied or saved payment method charges off-session,
             // creating the Stripe subscription directly — no browser.
-            String effectivePaymentMethod = paymentMethodId != null
-                    ? paymentMethodId
-                    : customer.getStripeDefaultPaymentMethodId();
             if (effectivePaymentMethod != null) {
                 // Charged off-session with no human looking, so bounded by the principal's mandate. Outside
                 // the try below so the 403 reaches the caller instead of being wrapped as a payment failure.
@@ -255,7 +264,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                                 .subscriptionEntityToSubscriptionDto(bridge.getSubscription()));
                     }
                     keyBudgetService.recordSpend(UUID.fromString(accountId), AuthContext.currentApiKeyId(),
-                            SpendKind.MONEY, plan.getPriceAmount(), stripeSub.getId(),
+                            SpendKind.MONEY, SpendChannel.OFF_SESSION, plan.getPriceAmount(), stripeSub.getId(),
                             "stripe_sub:" + stripeSub.getId());
                     return response;
                 } catch (Exception e) {
@@ -352,8 +361,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // For paid IN_ADVANCE plans, defer until the initial invoice is paid — EXCEPT for STRIPE_INTEGRATION,
         // where we create the Stripe subscription immediately so its auto-generated invoice
         // becomes the payment vehicle (avoids duplicate standalone invoices).
-        boolean paidInAdvance = plan.getBillingTiming().equals(BillingTiming.IN_ADVANCE.name())
-                && plan.getPriceAmount().compareTo(BigDecimal.ZERO) > 0;
         if (!paidInAdvance || isStripeIntegration) {
             eventPublisher.publishEvent(new SubscriptionActivatedEvent(
                     subscription.getAccount().getId(), subscription.getId()));
@@ -513,7 +520,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 subscription.setCancelEffectiveAt(instantNow);
                 subscription.setIsActive(false);
 
-                // Void any outstanding DUE/PENDING invoices for the current period
+                // Void what is still payable for the current period; a past period's PAST_DUE stays owed
                 invoiceService.voidOutstandingInvoicesForSubscription(subscription);
 
                 // For IN_ADVANCE billing, create a prorated credit since the customer already paid
@@ -853,16 +860,6 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         boolean chargedNow = BillingTiming.IN_ADVANCE.name().equals(subscribedPlan.getBillingTiming())
                 && BillingTiming.IN_ADVANCE.name().equals(newPlan.getBillingTiming());
         BigDecimal prorationAmount = chargedNow ? prorationAmount(subscribedPlan, newPlan, ratio) : BigDecimal.ZERO;
-        if (grantNow && prorationAmount.signum() > 0) {
-            if (AuthContext.currentApiKeyId() != null && upgAccountSetting != null
-                    && upgAccountSetting.getAgentMaxTopupAmount() != null
-                    && prorationAmount.compareTo(upgAccountSetting.getAgentMaxTopupAmount()) > 0) {
-                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
-                        upgAccountSetting.getAgentMaxTopupAmount(), prorationAmount);
-            }
-            keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, prorationAmount);
-            keyBudgetService.assertWithinMandate(currentSubscription.getCustomer().getId(), prorationAmount);
-        }
 
         // An agent must not reach a paid tier before its principal pays for it. When the caller holds an API key
         // and Tanso is collecting the money itself, the adjustment invoice is raised and the plan swap waits on
@@ -874,6 +871,24 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 && !isStripeDriven
                 && AuthContext.currentApiKeyId() != null
                 && prorationAmount.signum() > 0;
+        // On pass-through that deferred invoice is Stripe's hosted invoice, which a human pays in person. Nothing is
+        // charged off-session, so neither the key budget nor the mandate refuses it. The charge-first path below can
+        // charge a saved card in this same call, so it keeps both.
+        boolean paidOnHostedInvoice = deferUntilPaid && upgAccountSetting != null
+                && upgAccountSetting.getStripeMode() == StripeMode.PAYMENT_PASS_THROUGH;
+
+        if (grantNow && prorationAmount.signum() > 0) {
+            if (AuthContext.currentApiKeyId() != null && upgAccountSetting != null
+                    && upgAccountSetting.getAgentMaxTopupAmount() != null
+                    && prorationAmount.compareTo(upgAccountSetting.getAgentMaxTopupAmount()) > 0) {
+                throw com.tansoflow.tansocore.model.exception.BudgetExceededException.perTransaction(
+                        upgAccountSetting.getAgentMaxTopupAmount(), prorationAmount);
+            }
+            if (!paidOnHostedInvoice) {
+                keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, prorationAmount);
+                keyBudgetService.assertWithinMandate(currentSubscription.getCustomer().getId(), prorationAmount);
+            }
+        }
 
         // Stripe must take the money before the plan moves. A CREATE_PRORATIONS price change only bills at the next
         // renewal. On STRIPE_INTEGRATION the plan then waited on that renewal for every caller, while the call
@@ -960,7 +975,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
                     // The budget was checked above; draw it down now that the plan has moved. A no-op without a key.
                     keyBudgetService.recordSpend(currentSubscription.getAccount().getId(), AuthContext.currentApiKeyId(),
-                            SpendKind.MONEY, prorationAmount, currentSubscription.getId().toString(),
+                            SpendKind.MONEY, SpendChannel.OFF_SESSION, prorationAmount, currentSubscription.getId().toString(),
                             "plan_change:" + scheduledChange.getId());
                 } else {
                     // Mixed billing timing has no proration rule. This used to fall through silently and answer
@@ -1124,7 +1139,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         subscriptionScheduledChangeRepository.save(change);
 
         if (charge.applied()) {
-            fulfilPaidUpgrade(change, charge.amountPaid());
+            // Stripe charged the saved card during this call, with nobody on a payment page.
+            fulfilPaidUpgrade(change, charge.amountPaid(), SpendChannel.OFF_SESSION);
             return UpgradeResult.notWaiting();
         }
 
@@ -1135,7 +1151,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
     @Override
     @Transactional
-    public void fulfilPaidUpgrade(SubscriptionScheduledChange pending, BigDecimal amountPaid) {
+    public void fulfilPaidUpgrade(SubscriptionScheduledChange pending, BigDecimal amountPaid, SpendChannel channel) {
         if (!SubscriptionScheduledChangeStatus.PENDING.name().equals(pending.getStatus())) {
             throw new IllegalStateException("Scheduled change " + pending.getId() + " is " + pending.getStatus()
                     + ", only a PENDING change can be fulfilled");
@@ -1155,7 +1171,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // A no-op when no key asked for the change (an operator, or a STRIPE_INTEGRATION change that waited on the
         // next renewal, which does not record one).
         keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),
-                SpendKind.MONEY, amountPaid, subscription.getId().toString(),
+                SpendKind.MONEY, channel, amountPaid, subscription.getId().toString(),
                 "plan_change:" + pending.getId());
 
         log.info("Upgrade of subscription {} to plan {} fulfilled after payment of {}",
