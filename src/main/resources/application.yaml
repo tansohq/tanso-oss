@@ -3,6 +3,7 @@ server:
 
 app:
   stripe-webhook-endpoint: https://example.com/public/stripe/ingest/webhook
+  stripe-event-destination-sync-enabled: true   # on boot, add newly handled events to each account's Stripe event destination
   dogfooding-enabled: false
   master-account-id: ${MASTER_ACCOUNT_ID:00000000-0000-0000-0000-000000000000}
   api-key-prefix: sk_test_

@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260922-10"
+      author: tanso
+      comment: >
+        The id of the Stripe event destination Tanso created for the account,
+        so startup can add newly handled events to it without the operator
+        editing it in the Stripe dashboard. Null for accounts connected before
+        this column; startup finds theirs by name and URL and fills it in.
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column: { name: stripe_event_destination_id, type: VARCHAR(255) }

@@ -23,9 +23,13 @@ tags; this file starts where the changelog does.
   `payment_intent.succeeded`, so on a real deployment a spend mandate never
   activated, a hosted top-up never granted its credits, and an unused Checkout
   page stayed pending. `stripe listen` forwards every event, which is why
-  local testing passed. New Stripe connections register them. **Existing
-  connections:** add those four events to the "Tanso Webhook StripeController
-  Endpoint" destination in the Stripe dashboard.
+  local testing passed. New Stripe connections register them, and on startup
+  Tanso adds any missing ones to each existing connection's event destination
+  (events added by hand are kept). Tanso now stores the destination's id
+  (`account_settings.stripe_event_destination_id`); for connections made
+  before that, it finds the destination by its Tanso name and the webhook URL
+  ending in the account id. If none is found, or Stripe refuses the update, the
+  log says so for that account and the others still update.
 
 ### Removed
 

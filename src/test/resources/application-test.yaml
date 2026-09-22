@@ -6,6 +6,8 @@ spring:
   liquibase:
     enabled: false   # or true, if you want it during tests
 app:
+  # Tests boot against the dev database, whose accounts hold real Stripe test keys; don't call Stripe on every boot.
+  stripe-event-destination-sync-enabled: false
   secrets:
     # Same fallback as application-dev.yaml: tests boot the full app against the dev database, and
     # SecretsUpgradeRunner rewrites plaintext rows on boot — a different key here would lock dev out.
