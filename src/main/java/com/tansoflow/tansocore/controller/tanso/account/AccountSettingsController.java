@@ -166,10 +166,30 @@ public class AccountSettingsController {
             }
             setting.setAgentSignupPerIpCap(request.getAgentSignupPerIpCap());
         }
+        // The ceiling is applied before the enable flag so one request can set both.
+        if (request.getAgentMaxMandateAmount() != null) {
+            if (request.getAgentMaxMandateAmount().compareTo(BigDecimal.ZERO) < 0) {
+                throw new IllegalArgumentException("agentMaxMandateAmount must not be negative");
+            }
+            boolean clearing = request.getAgentMaxMandateAmount().signum() == 0;
+            boolean staysEnabled = request.getAgentSpendMandateEnabled() != null
+                    ? request.getAgentSpendMandateEnabled() : setting.isAgentSpendMandateEnabled();
+            if (clearing && staysEnabled) {
+                throw new IllegalArgumentException(
+                        "Turn off agentSpendMandateEnabled before clearing agentMaxMandateAmount");
+            }
+            // Zero clears the ceiling
+            setting.setAgentMaxMandateAmount(clearing ? null : request.getAgentMaxMandateAmount());
+        }
         if (request.getAgentSpendMandateEnabled() != null) {
             if (request.getAgentSpendMandateEnabled() && !setting.isStripeEnabled()
                     && request.getStripeMode() == null) {
                 throw new IllegalArgumentException("Connect Stripe before enabling the agent spend mandate");
+            }
+            // Without a ceiling an agent could ask its principal to approve any amount at all.
+            if (request.getAgentSpendMandateEnabled() && setting.getAgentMaxMandateAmount() == null) {
+                throw new IllegalArgumentException(
+                        "Set agentMaxMandateAmount before enabling the agent spend mandate");
             }
             setting.setAgentSpendMandateEnabled(request.getAgentSpendMandateEnabled());
         }
@@ -227,6 +247,7 @@ public class AccountSettingsController {
         dto.setAgentSignupPerIpCap(setting.getAgentSignupPerIpCap());
         dto.setAgentSpendMandateEnabled(setting.isAgentSpendMandateEnabled());
         dto.setAgentMaxTopupAmount(setting.getAgentMaxTopupAmount());
+        dto.setAgentMaxMandateAmount(setting.getAgentMaxMandateAmount());
         if (setting.getDefaultCostConfig() != null) {
             dto.setDefaultCostConfig(objectMapper.convertValue(
                     setting.getDefaultCostConfig(), DefaultCostConfigDto.class));
@@ -251,6 +272,7 @@ public class AccountSettingsController {
         private Integer agentSignupPerIpCap;
         private boolean agentSpendMandateEnabled;
         private BigDecimal agentMaxTopupAmount;
+        private BigDecimal agentMaxMandateAmount;
     }
 
     @Data
@@ -269,6 +291,7 @@ public class AccountSettingsController {
         private Integer agentSignupPerIpCap;
         private Boolean agentSpendMandateEnabled;
         private BigDecimal agentMaxTopupAmount;
+        private BigDecimal agentMaxMandateAmount;
     }
 
     @Data

@@ -135,6 +135,7 @@ class AgentSignupServiceImplTest {
         settings.setAgentSignupPerIpCap(2);
         settings.setAgentProvisionalDays(14);
         settings.setAgentMaxTopupAmount(new BigDecimal("50.00"));
+        settings.setAgentMaxMandateAmount(new BigDecimal("200.00"));
 
         plan = new Plan();
         plan.setId(planId);
@@ -323,7 +324,7 @@ class AgentSignupServiceImplTest {
     void aStripeHelperFailureStillReturnsTheKeyWithTheMandateUnavailable() throws Exception {
         settings.setAgentSpendMandateEnabled(true);
         settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
-        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any()))
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any(), any(), any()))
                 .thenThrow(new RuntimeException("wrapped: Customer not found"));
         AgentSignupRequest request = new AgentSignupRequest();
         AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
@@ -340,7 +341,7 @@ class AgentSignupServiceImplTest {
     void stripeFailureLeavesTheSignupIntactAndTheMandateUnavailable() throws Exception {
         settings.setAgentSpendMandateEnabled(true);
         settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
-        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any()))
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any(), any(), any()))
                 .thenThrow(new com.stripe.exception.ApiConnectionException("stripe down"));
         AgentSignupRequest request = new AgentSignupRequest();
         AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
@@ -358,7 +359,7 @@ class AgentSignupServiceImplTest {
     void spendMandateOpensASetupSessionAndRecordsItWhenEnabled() throws Exception {
         settings.setAgentSpendMandateEnabled(true);
         settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
-        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any()))
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any(), any(), any()))
                 .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout.stripe.com/c/setup_1", "cs_setup_1"));
 
         AgentSignupRequest request = new AgentSignupRequest();
@@ -377,5 +378,91 @@ class AgentSignupServiceImplTest {
         assertThat(session.getValue().getStripeSessionId()).isEqualTo("cs_setup_1");
         assertThat(session.getValue().getAmount()).isEqualByComparingTo("100");
         assertThat(session.getValue().getApiKeyId()).isNotNull();
+        verify(stripePaymentMethodService).createSetupCheckoutSession(eq(accountId), any(),
+                eq(new BigDecimal("100")), eq("week"), any());
+    }
+
+    @Test
+    void mandateAboveTheOperatorCeilingIsRejectedBeforeAnythingIsSaved() {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("500"));
+        request.setSpendMandate(mandate);
+
+        assertThatThrownBy(() -> service.signup("acme", request, "http://x", null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("spend_mandate.max_amount 500.00 is above this account's limit of 200.00 USD;"
+                        + " ask for 200.00 or less.");
+        verify(customerService, never()).createCustomer(anyString(), any());
+        verify(customerApiKeyService, never()).createKey(anyString(), anyString(), any());
+    }
+
+    @Test
+    void mandateAtTheCeilingIsAccepted() throws Exception {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), any(), any(), any(), any()))
+                .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout.stripe.com/c/setup_2", "cs_setup_2"));
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("200.00"));
+        request.setSpendMandate(mandate);
+
+        assertThat(service.signup("acme", request, "http://x", null).getSpendMandate().getStatus())
+                .isEqualTo("pending");
+    }
+
+    @Test
+    void mandateIsUnavailableWhileTheOperatorHasNoCeiling() throws Exception {
+        // An account enabled before the ceiling existed: the flag is on but nothing bounds the ask.
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        settings.setAgentMaxMandateAmount(null);
+        AgentSignupRequest request = new AgentSignupRequest();
+        AgentSignupRequest.SpendMandate mandate = new AgentSignupRequest.SpendMandate();
+        mandate.setMaxAmount(new BigDecimal("5000"));
+        request.setSpendMandate(mandate);
+
+        AgentSignupResponse response = service.signup("acme", request, "http://x", null);
+
+        assertThat(response.getSpendMandate().getStatus()).isEqualTo("unavailable");
+        verify(stripePaymentMethodService, never()).createSetupCheckoutSession(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void requestingANewMandateForAnExistingCustomerChecksTheCeilingAndOpensAPage() throws Exception {
+        settings.setAgentSpendMandateEnabled(true);
+        settings.setStripeMode(StripeMode.PAYMENT_PASS_THROUGH);
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        customer.setExternalClientCustomerId("agent_abc");
+        when(accountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        when(customerRepository.getCustomerByReferenceIdAndAccountId("agent_abc", accountId))
+                .thenReturn(Optional.of(customer));
+        when(stripePaymentMethodService.createSetupCheckoutSession(eq(accountId), eq(customer.getId()),
+                eq(new BigDecimal("150")), eq("month"), any()))
+                .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout.stripe.com/c/raise", "cs_raise"));
+        UUID keyId = UUID.randomUUID();
+
+        AgentSignupRequest.SpendMandate tooMuch = new AgentSignupRequest.SpendMandate();
+        tooMuch.setMaxAmount(new BigDecimal("201"));
+        assertThatThrownBy(() -> service.requestSpendMandate(accountId.toString(), "agent_abc", keyId, tooMuch))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("limit of 200.00 USD");
+
+        AgentSignupRequest.SpendMandate raise = new AgentSignupRequest.SpendMandate();
+        raise.setMaxAmount(new BigDecimal("150"));
+        AgentSignupResponse.AgentSpendMandate result =
+                service.requestSpendMandate(accountId.toString(), "agent_abc", keyId, raise);
+
+        assertThat(result.getStatus()).isEqualTo("pending");
+        assertThat(result.getSetupUrl()).isEqualTo("https://checkout.stripe.com/c/raise");
+        ArgumentCaptor<CheckoutSession> session = ArgumentCaptor.forClass(CheckoutSession.class);
+        verify(checkoutSessionRepository).save(session.capture());
+        assertThat(session.getValue().getApiKeyId()).isEqualTo(keyId);
+        assertThat(session.getValue().getAmount()).isEqualByComparingTo("150");
     }
 }

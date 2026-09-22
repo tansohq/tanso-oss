@@ -127,4 +127,17 @@ public class Customer {
     @Column(name = "agent_signup_ip", length = 45)
     private String agentSignupIp;
 
+    // The spend mandate the principal approved: off-session charges across all of this customer's keys
+    // may total at most mandateAmount per mandatePeriod, windows tiling forward from mandateStartedAt.
+    // Null when no mandate is active.
+    @Column(name = "mandate_amount", precision = 18, scale = 2)
+    private java.math.BigDecimal mandateAmount;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "mandate_period", length = 10)
+    private com.tansoflow.tansocore.model.apikey.type.BudgetPeriod mandatePeriod;
+
+    @Column(name = "mandate_started_at")
+    private Instant mandateStartedAt;
+
 }

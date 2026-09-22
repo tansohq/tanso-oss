@@ -3665,6 +3665,53 @@
                 ]
             }
         },
+        "/api/v1/client/customers/{customerReferenceId}/spend-mandate": {
+            "post": {
+                "tags": [
+                    "Agent account"
+                ],
+                "summary": "Ask for a new spend mandate",
+                "description": "Opens a Stripe page where the principal saves a card and approves max_amount per period, for a first mandate after signup or a higher one. Completing it replaces the customer's current mandate and claims the account. max_amount above the operator's agentMaxMandateAmount is a 400.",
+                "operationId": "requestSpendMandate",
+                "parameters": [
+                    {
+                        "name": "customerReferenceId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/SpendMandate"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiResponseAgentSpendMandate"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ]
+            }
+        },
         "/api/v1/client/customers/{customerReferenceId}/payment-methods/setup-intent": {
             "post": {
                 "tags": [
@@ -8708,28 +8755,6 @@
                     }
                 }
             },
-            "AgentSpendMandate": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "description": "none | pending | active | unavailable"
-                    },
-                    "currency": {
-                        "type": "string"
-                    },
-                    "period": {
-                        "type": "string"
-                    },
-                    "setup_url": {
-                        "type": "string",
-                        "description": "Hand this to the principal. Saving a card here activates the mandate and claims the account."
-                    },
-                    "max_amount": {
-                        "type": "number"
-                    }
-                }
-            },
             "AgentStatusResponse": {
                 "type": "object",
                 "properties": {
@@ -8766,7 +8791,7 @@
                         "type": "string"
                     },
                     "spend_mandate": {
-                        "$ref": "#/components/schemas/AgentSpendMandate"
+                        "$ref": "#/components/schemas/SpendMandateStatus"
                     }
                 }
             },
@@ -8819,6 +8844,39 @@
                     },
                     "currency": {
                         "type": "string"
+                    },
+                    "resets_at": {
+                        "type": "string",
+                        "format": "date-time"
+                    }
+                }
+            },
+            "SpendMandateStatus": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "none | pending | active | expired"
+                    },
+                    "spent": {
+                        "type": "number",
+                        "description": "Off-session spend across all of the customer's keys in the current window"
+                    },
+                    "remaining": {
+                        "type": "number"
+                    },
+                    "period": {
+                        "type": "string",
+                        "description": "day | week | month"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "setup_url": {
+                        "type": "string"
+                    },
+                    "max_amount": {
+                        "type": "number"
                     },
                     "resets_at": {
                         "type": "string",
@@ -8965,6 +9023,28 @@
                     },
                     "owner_url": {
                         "type": "string"
+                    }
+                }
+            },
+            "AgentSpendMandate": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "pending | unavailable"
+                    },
+                    "currency": {
+                        "type": "string"
+                    },
+                    "period": {
+                        "type": "string"
+                    },
+                    "setup_url": {
+                        "type": "string",
+                        "description": "Hand this to the principal. Saving a card here activates the mandate and claims the account."
+                    },
+                    "max_amount": {
+                        "type": "number"
                     }
                 }
             },
@@ -12230,6 +12310,27 @@
                     }
                 }
             },
+            "ApiResponseAgentSpendMandate": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/AgentSpendMandate",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
             "ApiResponseMapStringString": {
                 "type": "object",
                 "description": "Generic API response wrapper",
@@ -12571,6 +12672,9 @@
                     },
                     "agentMaxTopupAmount": {
                         "type": "number"
+                    },
+                    "agentMaxMandateAmount": {
+                        "type": "number"
                     }
                 }
             },
@@ -12631,6 +12735,9 @@
                         "type": "boolean"
                     },
                     "agentMaxTopupAmount": {
+                        "type": "number"
+                    },
+                    "agentMaxMandateAmount": {
                         "type": "number"
                     }
                 }

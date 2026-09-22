@@ -240,6 +240,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     ? paymentMethodId
                     : customer.getStripeDefaultPaymentMethodId();
             if (effectivePaymentMethod != null) {
+                // Charged off-session with no human looking, so bounded by the principal's mandate. Outside
+                // the try below so the 403 reaches the caller instead of being wrapped as a payment failure.
+                keyBudgetService.assertWithinMandate(customer.getId(), plan.getPriceAmount());
                 try {
                     com.stripe.model.Subscription stripeSub = stripeSyncService.createDirectSubscription(
                             UUID.fromString(accountId), customer.getId(), plan.getId(), effectivePaymentMethod);
@@ -830,6 +833,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                         upgAccountSetting.getAgentMaxTopupAmount(), prorationAmount);
             }
             keyBudgetService.assertWithinBudget(AuthContext.currentApiKeyId(), SpendKind.MONEY, prorationAmount);
+            keyBudgetService.assertWithinMandate(currentSubscription.getCustomer().getId(), prorationAmount);
         }
 
         // An agent must not reach a paid tier before its principal pays for it. When the caller holds an API key

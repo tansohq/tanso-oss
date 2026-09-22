@@ -26,6 +26,7 @@ import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.SpendMandateExceededException;
 import com.tansoflow.tansocore.repository.AccountApiKeyRepository;
 import com.tansoflow.tansocore.repository.ApiKeySpendRecordRepository;
 import com.tansoflow.tansocore.repository.CustomerRepository;
@@ -109,6 +110,93 @@ class KeyBudgetServiceImplTest {
                     assertThat(e.getRemaining()).isEqualByComparingTo("50");
                     assertThat(e.getResetsAt()).isNotNull();
                 });
+    }
+
+    @Test
+    void aChargeLargerThanTheWholeBudgetCarriesNoResetTime() {
+        // Waiting for the window can never let 250 through a 200 budget, so no reset is offered.
+        when(accountApiKeyRepository.findById(keyId)).thenReturn(Optional.of(key));
+        when(spendRecordRepository.sumSince(eq(keyId), eq(SpendKind.MONEY), any()))
+                .thenReturn(BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.assertWithinBudget(keyId, SpendKind.MONEY, new BigDecimal("250.00")))
+                .isInstanceOf(BudgetExceededException.class)
+                .satisfies(thrown -> assertThat(((BudgetExceededException) thrown).getResetsAt()).isNull());
+    }
+
+    @Test
+    void noMandateMeansNoMandateCheck() {
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+
+        service.assertWithinMandate(customer.getId(), new BigDecimal("10000"));
+
+        verify(spendRecordRepository, never()).sumForCustomerSince(any(), any(), any());
+    }
+
+    @Test
+    void theMandateSumsSpendAcrossAllOfTheCustomersKeys() {
+        // Two keys each spent 30 against a 50 mandate: each is under 50 alone, together they are over.
+        customer.setMandateAmount(new BigDecimal("50.00"));
+        customer.setMandatePeriod(BudgetPeriod.MONTH);
+        customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(3)));
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+                .thenReturn(new BigDecimal("60.00"));
+
+        assertThatThrownBy(() -> service.assertWithinMandate(customer.getId(), new BigDecimal("1.00")))
+                .isInstanceOf(SpendMandateExceededException.class)
+                .satisfies(thrown -> {
+                    SpendMandateExceededException e = (SpendMandateExceededException) thrown;
+                    assertThat(e.isAboveWholeMandate()).isFalse();
+                    assertThat(e.getResetsAt()).isNotNull();
+                    assertThat(e.getCustomerReferenceId()).isEqualTo("cust_1");
+                });
+        verify(spendRecordRepository, never()).sumSince(any(), any(), any());
+    }
+
+    @Test
+    void aChargeThatFitsWhatIsLeftOfTheMandateIsAllowed() {
+        customer.setMandateAmount(new BigDecimal("50.00"));
+        customer.setMandatePeriod(BudgetPeriod.MONTH);
+        customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(3)));
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+                .thenReturn(new BigDecimal("30.00"));
+
+        service.assertWithinMandate(customer.getId(), new BigDecimal("20.00"));
+    }
+
+    @Test
+    void aChargeLargerThanTheWholeMandateAsksForAHigherOne() {
+        customer.setMandateAmount(new BigDecimal("50.00"));
+        customer.setMandatePeriod(BudgetPeriod.MONTH);
+        customer.setMandateStartedAt(Instant.now());
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+                .thenReturn(BigDecimal.ZERO);
+
+        assertThatThrownBy(() -> service.assertWithinMandate(customer.getId(), new BigDecimal("60")))
+                .isInstanceOf(SpendMandateExceededException.class)
+                .hasMessage("This charge (60.00) is above the 50.00 per month your principal approved; give your"
+                        + " principal url to approve a higher limit, or buy less.")
+                .satisfies(thrown -> assertThat(((SpendMandateExceededException) thrown).isAboveWholeMandate()).isTrue());
+    }
+
+    @Test
+    void mandateUsageReportsTheCustomerWideWindow() {
+        customer.setMandateAmount(new BigDecimal("50.00"));
+        customer.setMandatePeriod(BudgetPeriod.WEEK);
+        customer.setMandateStartedAt(Instant.now().minus(Duration.ofDays(1)));
+        when(spendRecordRepository.sumForCustomerSince(eq(customer.getId()), eq(SpendKind.MONEY), any()))
+                .thenReturn(new BigDecimal("70.00"));
+
+        var usage = service.mandateUsage(customer);
+
+        assertThat(usage.limit()).isEqualByComparingTo("50");
+        assertThat(usage.spent()).isEqualByComparingTo("70");
+        assertThat(usage.remaining()).isEqualByComparingTo("0");
+        assertThat(usage.period()).isEqualTo(BudgetPeriod.WEEK);
+        assertThat(usage.resetsAt()).isAfter(Instant.now());
     }
 
     @Test

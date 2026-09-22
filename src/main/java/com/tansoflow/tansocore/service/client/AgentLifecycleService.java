@@ -38,8 +38,9 @@ public interface AgentLifecycleService {
     void setOwnerEmail(Customer customer, String email);
 
     /**
-     * Saved card arrived for a spend mandate: cap the signup key's money budget at
-     * {@code maxAmount} per {@code period}, store the card as default, claim the customer.
+     * Saved card arrived for a spend mandate: store {@code maxAmount} per {@code period} on the
+     * customer (replacing any earlier mandate), store the card as default, claim the customer.
+     * Key budgets are not touched.
      */
     void activateSpendMandate(UUID accountId, UUID customerId, UUID apiKeyId, String paymentMethodId,
                               BigDecimal maxAmount, String period);

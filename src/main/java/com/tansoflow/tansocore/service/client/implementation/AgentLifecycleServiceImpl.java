@@ -20,12 +20,10 @@ package com.tansoflow.tansocore.service.client.implementation;
 import com.tansoflow.tansocore.entity.AgentStatus;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
-import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.service.client.AgentLifecycleService;
 import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
-import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,7 +43,6 @@ public class AgentLifecycleServiceImpl implements AgentLifecycleService {
 
     private final CustomerRepository customerRepository;
     private final CustomerApiKeyService customerApiKeyService;
-    private final KeyBudgetService keyBudgetService;
     private final TransactionTemplate transactionTemplate;
     private final com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
 
@@ -115,24 +112,21 @@ public class AgentLifecycleServiceImpl implements AgentLifecycleService {
                 .orElseThrow(() -> new IllegalStateException("Spend mandate for unknown customer " + customerId));
         String reference = customer.getExternalClientCustomerId();
 
-        // The principal approved a ceiling for the customer, so every live key gets it, not only the one
-        // that asked. A key issued later inherits it through rotation or the operator's console.
-        UpdateKeyBudgetRequest budget = new UpdateKeyBudgetRequest();
-        budget.setPeriod(BudgetPeriod.valueOf(period.toUpperCase(Locale.ROOT)));
-        budget.setAmountLimit(maxAmount);
-        int capped = 0;
-        for (CustomerApiKeyDto key : customerApiKeyService.listKeys(accountId.toString(), reference)) {
-            if (Boolean.TRUE.equals(key.getActive())) {
-                keyBudgetService.setBudget(accountId.toString(), reference, key.getId(), budget);
-                capped++;
-            }
+        // One mandate per customer, checked against spend summed across all of its keys. It used to be
+        // copied onto every key as a budget, which multiplied the approved amount by the number of keys and
+        // overwrote budgets the operator had set. A replacement keeps the running window when the period is
+        // unchanged, so raising the amount does not also forget what was already spent in it.
+        BudgetPeriod mandatePeriod = BudgetPeriod.valueOf(period.toUpperCase(Locale.ROOT));
+        if (customer.getMandateStartedAt() == null || customer.getMandatePeriod() != mandatePeriod) {
+            customer.setMandateStartedAt(Instant.now());
         }
-
+        customer.setMandateAmount(maxAmount);
+        customer.setMandatePeriod(mandatePeriod);
         customer.setStripeDefaultPaymentMethodId(paymentMethodId);
         customerRepository.save(customer);
         claimOnPayment(customer);
-        log.info("Spend mandate active for agent customer {}: {} per {} on {} key(s), requested by key {}",
-                reference, maxAmount, period, capped, apiKeyId);
+        log.info("Spend mandate active for agent customer {}: {} per {}, requested by key {}",
+                reference, maxAmount, period, apiKeyId);
     }
 
     @Override

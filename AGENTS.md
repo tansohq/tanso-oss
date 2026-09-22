@@ -108,9 +108,15 @@ sent to, and never used to find an existing customer: every signup creates a
 new customer. Signups are capped per account per hour and per IP per hour
 (`agent_signup_ip`, the connection's remote address; behind a proxy
 `server.forward-headers-strategy` supplies it). An optional `spend_mandate`
-opens a Stripe Checkout setup session (`agentSpendMandateEnabled`); on
-completion the cap is applied to every active key of the customer and rotated
-keys inherit it. Payment is the only human gate: the first paid checkout or
+opens a Stripe Checkout setup session (`agentSpendMandateEnabled`, which needs
+the operator ceiling `agentMaxMandateAmount`; a larger `max_amount` is a 400).
+On completion the mandate is stored on the customer (`customers.mandate_amount`,
+`mandate_period`, `mandate_started_at`), never copied onto keys.
+`KeyBudgetService.assertWithinMandate` checks it next to `assertWithinBudget` on
+every off-session charge and the upgrade proration, summing MONEY spend across
+all of the customer's keys; hosted checkout is exempt. A charge above the whole
+mandate answers `raise_mandate` pointing at
+`POST /api/v1/client/customers/{ref}/spend-mandate`, which opens a replacement. Payment is the only human gate: the first paid checkout or
 invoice sets the customer to `CLAIMED`. There is no claim gate in the API;
 every 402 and every limit or access 403 returns the `GateError` envelope
 (`gate` is `payment`, `budget` or `scope`). Unpaid provisional customers become

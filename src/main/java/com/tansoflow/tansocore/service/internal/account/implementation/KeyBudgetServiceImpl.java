@@ -26,6 +26,7 @@ import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 import com.tansoflow.tansocore.model.exception.BudgetExceededException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.SpendMandateExceededException;
 import com.tansoflow.tansocore.repository.AccountApiKeyRepository;
 import com.tansoflow.tansocore.repository.ApiKeySpendRecordRepository;
 import com.tansoflow.tansocore.repository.CustomerRepository;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Slf4j
@@ -66,9 +68,46 @@ public class KeyBudgetServiceImpl implements KeyBudgetService {
         }
         Instant windowStart = windowStart(key, Instant.now());
         BigDecimal spent = spendRecordRepository.sumSince(apiKeyId, kind, windowStart);
+        if (amount.compareTo(limit) > 0) {
+            // Larger than the whole budget: no window reset lets it through, so no reset time is given
+            // and the caller is told to get the cap raised rather than to wait.
+            throw new BudgetExceededException(kind, limit, spent, amount, null);
+        }
         if (spent.add(amount).compareTo(limit) > 0) {
             throw new BudgetExceededException(kind, limit, spent, amount, resetsAt(key, windowStart));
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void assertWithinMandate(UUID customerId, BigDecimal amount) {
+        if (customerId == null || amount == null || amount.signum() <= 0) {
+            return;
+        }
+        Customer customer = customerRepository.getCustomerById(customerId)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerId));
+        MandateUsage usage = mandateUsage(customer);
+        if (usage == null) {
+            return;
+        }
+        if (amount.compareTo(usage.limit()) > 0 || usage.spent().add(amount).compareTo(usage.limit()) > 0) {
+            throw new SpendMandateExceededException(customer.getExternalClientCustomerId(), usage.limit(),
+                    usage.spent(), amount, usage.period().name().toLowerCase(Locale.ROOT), usage.resetsAt());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MandateUsage mandateUsage(Customer customer) {
+        if (customer.getMandateAmount() == null || customer.getMandatePeriod() == null) {
+            return null;
+        }
+        BudgetWindow window = BudgetWindow.tiling(customer.getMandateStartedAt(), customer.getMandatePeriod(),
+                Instant.now());
+        BigDecimal spent = spendRecordRepository.sumForCustomerSince(customer.getId(), SpendKind.MONEY,
+                window.start());
+        return new MandateUsage(customer.getMandateAmount(), spent,
+                remaining(customer.getMandateAmount(), spent), customer.getMandatePeriod(), window.resetsAt());
     }
 
     @Override

@@ -49,6 +49,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -97,11 +99,8 @@ public class AgentSignupServiceImpl implements AgentSignupService {
 
         // Everything that can reject the request runs before anything is saved, so a 400 never leaves
         // behind an account the agent was not given a key for.
-        AgentSignupRequest.SpendMandate requestedMandate = request.getSpendMandate();
-        if (requestedMandate != null && requestedMandate.getCurrency() != null
-                && !requestedMandate.getCurrency().equalsIgnoreCase(settings.getCurrency())) {
-            throw new IllegalArgumentException("spend_mandate.currency must be " + settings.getCurrency()
-                    + ", the account currency");
+        if (request.getSpendMandate() != null) {
+            validateMandate(settings, request.getSpendMandate());
         }
         List<FeatureDto> features = featureService.retrieveFeaturesLinkedToPlan(plan);
 
@@ -157,7 +156,8 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 .status(customer.getAgentStatus().name().toLowerCase(Locale.ROOT))
                 .expiresAt(customer.getAgentExpiresAt())
                 .limits(created.limits())
-                .spendMandate(spendMandate(account, settings, customer, key, request.getSpendMandate()))
+                .spendMandate(request.getSpendMandate() == null ? null
+                        : openMandate(account, settings, customer, UUID.fromString(key.getId()), request.getSpendMandate()))
                 .statusUrl(customerBase + "/status")
                 .ownerUrl(customerBase + "/owner")
                 .nextSteps(nextSteps(baseUrl, slug, referenceId, exampleFeatureKey))
@@ -211,21 +211,55 @@ public class AgentSignupServiceImpl implements AgentSignupService {
                 .build();
     }
 
-    private AgentSignupResponse.AgentSpendMandate spendMandate(Account account, AccountSetting settings,
-                                                               Customer customer, CustomerApiKeyDto key,
-                                                               AgentSignupRequest.SpendMandate requested) {
-        if (requested == null) {
-            return null;
+    @Override
+    public AgentSignupResponse.AgentSpendMandate requestSpendMandate(String accountId, String customerReferenceId,
+                                                                     UUID apiKeyId,
+                                                                     AgentSignupRequest.SpendMandate requested) {
+        UUID accountUuid = UUID.fromString(accountId);
+        Account account = accountRepository.findById(accountUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountId));
+        AccountSetting settings = accountSettingRepository.findAccountSettingById(accountUuid);
+        Customer customer = customerRepository.getCustomerByReferenceIdAndAccountId(customerReferenceId, accountUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customerReferenceId));
+        validateMandate(settings, requested);
+        return openMandate(account, settings, customer, apiKeyId, requested);
+    }
+
+    /**
+     * Rejects, never clamps: an agent that asked for 500 and silently got 200 would plan against money
+     * it does not have. Runs before anything is saved.
+     */
+    private void validateMandate(AccountSetting settings, AgentSignupRequest.SpendMandate requested) {
+        if (requested.getCurrency() != null && !requested.getCurrency().equalsIgnoreCase(settings.getCurrency())) {
+            throw new IllegalArgumentException("spend_mandate.currency must be " + settings.getCurrency()
+                    + ", the account currency");
         }
+        BigDecimal ceiling = settings.getAgentMaxMandateAmount();
+        if (ceiling != null && requested.getMaxAmount().compareTo(ceiling) > 0) {
+            String limit = ceiling.setScale(2, RoundingMode.HALF_UP).toPlainString();
+            throw new IllegalArgumentException("spend_mandate.max_amount "
+                    + requested.getMaxAmount().setScale(2, RoundingMode.HALF_UP).toPlainString()
+                    + " is above this account's limit of " + limit + " "
+                    + settings.getCurrency().toUpperCase(Locale.ROOT) + "; ask for " + limit + " or less.");
+        }
+    }
+
+    private AgentSignupResponse.AgentSpendMandate openMandate(Account account, AccountSetting settings,
+                                                              Customer customer, UUID apiKeyId,
+                                                              AgentSignupRequest.SpendMandate requested) {
         String period = requested.getPeriod() == null ? "month" : requested.getPeriod().toLowerCase(Locale.ROOT);
         String currency = settings.getCurrency();
         AgentSignupResponse.AgentSpendMandate.AgentSpendMandateBuilder mandate = AgentSignupResponse.AgentSpendMandate.builder()
                 .maxAmount(requested.getMaxAmount())
                 .currency(currency)
                 .period(period);
-        if (!settings.isAgentSpendMandateEnabled() || !settings.isStripeEnabled()) {
-            log.info("Spend mandate requested on account {} but unavailable (enabled={}, stripe={})",
-                    account.getId(), settings.isAgentSpendMandateEnabled(), settings.isStripeEnabled());
+        // No ceiling means the operator never finished turning mandates on (older accounts can have the flag
+        // set without one), so an agent could ask for any amount. Treated the same as switched off.
+        if (!settings.isAgentSpendMandateEnabled() || !settings.isStripeEnabled()
+                || settings.getAgentMaxMandateAmount() == null) {
+            log.info("Spend mandate requested on account {} but unavailable (enabled={}, stripe={}, ceiling={})",
+                    account.getId(), settings.isAgentSpendMandateEnabled(), settings.isStripeEnabled(),
+                    settings.getAgentMaxMandateAmount());
             return mandate.status("unavailable").build();
         }
 
@@ -236,11 +270,12 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         metadata.put("tanso_period", period);
         StripePaymentMethodService.HostedCheckout hosted;
         try {
-            hosted = stripePaymentMethodService.createSetupCheckoutSession(account.getId(), customer.getId(), metadata);
+            hosted = stripePaymentMethodService.createSetupCheckoutSession(account.getId(), customer.getId(),
+                    requested.getMaxAmount(), period, metadata);
         } catch (StripeException | RuntimeException e) {
-            // The account and key are already committed and the mandate is optional, so a failure here must not
-            // turn a working signup into an error the agent cannot recover from. Stripe helpers also wrap their
-            // failures in RuntimeException, hence both.
+            // At signup the account and key are already committed and the mandate is optional, so a failure here
+            // must not turn a working signup into an error the agent cannot recover from. Stripe helpers also wrap
+            // their failures in RuntimeException, hence both.
             log.error("Could not open the spend mandate session for agent customer {} on account {}: {}",
                     customer.getExternalClientCustomerId(), account.getId(), e.getMessage(), e);
             return mandate.status("unavailable").build();
@@ -252,7 +287,7 @@ public class AgentSignupServiceImpl implements AgentSignupService {
         session.setPurpose(CheckoutSession.PURPOSE_SPEND_MANDATE);
         session.setStripeSessionId(hosted.stripeSessionId());
         session.setCheckoutUrl(hosted.url());
-        session.setApiKeyId(UUID.fromString(key.getId()));
+        session.setApiKeyId(apiKeyId);
         session.setAmount(requested.getMaxAmount());
         checkoutSessionRepository.save(session);
 

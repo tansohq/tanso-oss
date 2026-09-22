@@ -112,6 +112,8 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
                                           BigDecimal amount, String currency, String description,
                                           Map<String, String> metadata) throws StripeException {
         enforceSpendCap(accountId, amount);
+        // Off-session means no human sees this charge, so it is bounded by what the principal approved.
+        keyBudgetService.assertWithinMandate(customerId, amount);
 
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
@@ -150,6 +152,7 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     public HostedCheckout createTopupCheckoutSession(UUID accountId, UUID customerId, BigDecimal amount,
                                                      String currency, String description,
                                                      Map<String, String> metadata) throws StripeException {
+        // No mandate check here: a human pays this page in person, which is its own approval.
         enforceSpendCap(accountId, amount);
 
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
@@ -184,11 +187,13 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     }
 
     @Override
-    public HostedCheckout createSetupCheckoutSession(UUID accountId, UUID customerId,
-                                                     Map<String, String> metadata) throws StripeException {
+    public HostedCheckout createSetupCheckoutSession(UUID accountId, UUID customerId, BigDecimal maxAmount,
+                                                     String period, Map<String, String> metadata)
+            throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
         StripeCustomer stripeCustomer = ensureStripeCustomer(accountId, customerId);
         AccountSetting settings = accountService.retrieveAccountSettings(accountId.toString());
+        Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
         String successUrl = settings.getStripeCheckoutSuccessUrl() != null
                 ? settings.getStripeCheckoutSuccessUrl() : "https://example.com/success";
         String cancelUrl = settings.getStripeCheckoutCancelUrl() != null
@@ -205,11 +210,31 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
                         .addPaymentMethodType(com.stripe.param.checkout.SessionCreateParams.PaymentMethodType.CARD)
                         .setSuccessUrl(successUrl)
                         .setCancelUrl(cancelUrl)
-                        .setSetupIntentData(setupIntentData.build());
+                        .setSetupIntentData(setupIntentData.build())
+                        .setCustomText(com.stripe.param.checkout.SessionCreateParams.CustomText.builder()
+                                .setSubmit(com.stripe.param.checkout.SessionCreateParams.CustomText.Submit.builder()
+                                        .setMessage(mandateNotice(customer.getAccount().getName(), maxAmount,
+                                                settings.getCurrency(), period))
+                                        .build())
+                                .build());
         metadata.forEach(params::putMetadata);
 
         com.stripe.model.checkout.Session session = stripeClient.v1().checkout().sessions().create(params.build());
         return new HostedCheckout(session.getUrl(), session.getId());
+    }
+
+    /**
+     * What the principal reads next to the save button. Names the operator only when the account has a
+     * name; an invented one would be worse than none.
+     */
+    static String mandateNotice(String operatorName, BigDecimal maxAmount, String currency, String period) {
+        String payee = operatorName == null || operatorName.isBlank() ? "" : " " + operatorName.trim();
+        String purpose = payee.isEmpty() ? "so your agent can use it without asking you"
+                : "so your agent can pay" + payee + " without asking you";
+        return "You're saving this card " + purpose + ", up to "
+                + maxAmount.setScale(2, RoundingMode.HALF_UP).toPlainString() + " "
+                + currency.toUpperCase(java.util.Locale.ROOT) + " per " + period
+                + ". Anything above that comes back to you for approval.";
     }
 
     /**

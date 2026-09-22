@@ -122,6 +122,10 @@ public class AccountSetting {
     @Column(name = "agent_max_topup_amount", precision = 18, scale = 2)
     private java.math.BigDecimal agentMaxTopupAmount;
 
+    // Largest spend mandate an agent may ask its principal to approve, per period; null = mandates cannot be enabled
+    @Column(name = "agent_max_mandate_amount", precision = 18, scale = 2)
+    private java.math.BigDecimal agentMaxMandateAmount;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "default_cost_config")
     private Map<String, Object> defaultCostConfig;

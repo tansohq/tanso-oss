@@ -18,11 +18,14 @@
 package com.tansoflow.tansocore.service.internal.account;
 
 import com.tansoflow.tansocore.entity.AccountApiKey;
+import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.KeyBudgetDto;
 import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
+import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -38,6 +41,20 @@ public interface KeyBudgetService {
      * No-op when the caller has no key id (JWT/UI traffic) or no budget is set.
      */
     void assertWithinBudget(UUID apiKeyId, SpendKind kind, BigDecimal amount);
+
+    /**
+     * Throws {@link com.tansoflow.tansocore.model.exception.SpendMandateExceededException} if charging
+     * the customer {@code amount} off-session would pass the spend mandate its principal approved,
+     * summed across all of the customer's keys. No-op when the customer has no mandate. Runs next to
+     * {@link #assertWithinBudget}, never instead of it: a charge must pass both.
+     */
+    void assertWithinMandate(UUID customerId, BigDecimal amount);
+
+    /** Where the customer stands against its mandate right now; null when it has none. */
+    MandateUsage mandateUsage(Customer customer);
+
+    record MandateUsage(BigDecimal limit, BigDecimal spent, BigDecimal remaining, BudgetPeriod period,
+                        Instant resetsAt) {}
 
     /** Records spend against a key. Silently ignored when apiKeyId is null. */
     void recordSpend(UUID accountId, UUID apiKeyId, SpendKind kind, BigDecimal amount,

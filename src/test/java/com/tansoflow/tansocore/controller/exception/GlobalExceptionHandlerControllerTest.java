@@ -173,5 +173,65 @@ class GlobalExceptionHandlerControllerTest {
         assertEquals("spend_cap_exceeded", error.getCode());
         assertEquals("raise_spend_cap", error.getAction());
         assertEquals(null, error.getRetryAfter());
+        assertTrue(error.getMessage().endsWith("ask the operator to raise the cap."));
+    }
+
+    @Test
+    void chargeLargerThanTheWholeKeyBudget_SaysRaiseTheCapNotWait() {
+        // KeyBudgetServiceImpl throws with no reset time when the charge alone is over the budget.
+        ResponseEntity<ApiResponse<Void>> response = handler.handleBudgetExceededException(
+                new com.tansoflow.tansocore.model.exception.BudgetExceededException(
+                        com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY, new java.math.BigDecimal("50"),
+                        java.math.BigDecimal.ZERO, new java.math.BigDecimal("60"), null));
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("spend_cap_exceeded", error.getCode());
+        assertEquals("raise_spend_cap", error.getAction());
+        assertEquals(null, error.getRetryAfter());
+    }
+
+    @Test
+    void chargeLargerThanTheWholeMandate_RaiseMandateWithTheEndpointUrl() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest(
+                "POST", "/api/v1/client/credits/purchases");
+        request.setServerName("tanso.example");
+        request.setServerPort(443);
+        request.setScheme("https");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleSpendMandateExceededException(
+                new com.tansoflow.tansocore.model.exception.SpendMandateExceededException("agent_abc",
+                        new java.math.BigDecimal("50"), java.math.BigDecimal.ZERO, new java.math.BigDecimal("60"),
+                        "month", java.time.Instant.now().plusSeconds(3600)), request);
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("budget", error.getGate());
+        assertEquals("raise_mandate", error.getAction());
+        assertEquals(null, error.getRetryAfter());
+        assertEquals("https://tanso.example/api/v1/client/customers/agent_abc/spend-mandate", error.getUrl());
+        assertEquals("This charge (60.00) is above the 50.00 per month your principal approved; give your principal"
+                + " url to approve a higher limit, or buy less.", error.getMessage());
+    }
+
+    @Test
+    void chargeThatFitsTheMandateButNotThisWindow_Waits() {
+        org.springframework.mock.web.MockHttpServletRequest request = new org.springframework.mock.web.MockHttpServletRequest(
+                "POST", "/api/v1/client/credits/purchases");
+
+        ResponseEntity<ApiResponse<Void>> response = handler.handleSpendMandateExceededException(
+                new com.tansoflow.tansocore.model.exception.SpendMandateExceededException("agent_abc",
+                        new java.math.BigDecimal("50"), new java.math.BigDecimal("40"), new java.math.BigDecimal("20"),
+                        "month", java.time.Instant.now().plusSeconds(3600)), request);
+
+        com.tansoflow.tansocore.model.response.GateError error =
+                (com.tansoflow.tansocore.model.response.GateError) response.getBody().getError();
+        assertEquals("budget_exceeded", error.getCode());
+        assertEquals("wait", error.getAction());
+        assertEquals(null, error.getUrl());
+        assertNotNull(error.getRetryAfter());
+        assertTrue(error.getRetryAfter() > 3500 && error.getRetryAfter() <= 3600);
     }
 }

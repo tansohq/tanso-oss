@@ -603,20 +603,28 @@ budget.
 
 `spend_mandate` is null when the request did not ask for one. It is
 `{ "status": "unavailable", "max_amount", "currency", "period" }` when the
-request asked but the operator has not enabled mandates, Stripe is not
-connected, or Stripe failed to open a session; the signup still succeeds. It is
+request asked but the operator has not enabled mandates or set
+`agentMaxMandateAmount`, Stripe is not connected, or Stripe failed to open a
+session; the signup still succeeds. It is
 `{ "status": "pending", "setup_url", "max_amount", "currency", "period" }` when
-a Checkout page was opened. `currency` must equal the account currency or the
-request is a 400 `validation_failed`.
+a Checkout page was opened. `currency` must equal the account currency, and
+`max_amount` must not be above `agentMaxMandateAmount`, or the request is a 400
+`validation_failed` and nothing is created. The over-limit message names the
+limit: `spend_mandate.max_amount 500.00 is above this account's limit of 200.00
+USD; ask for 200.00 or less.`
 
 **Status.** `GET /api/v1/client/customers/{ref}/status` with the customer key
 returns `status` (`provisional`, `claimed`, `expired`), `expires_at`,
 `claimed_at`, `plan`, `limits` (same shape as signup), `remaining` per feature
 key, `spend` (`cap`, `spent`, `remaining`, `currency`, `resets_at`, or null
 when the key has no budget), `owner_email` and `spend_mandate`
-(`{ "status": "none|pending|active|expired", "setup_url", "max_amount", "currency" }`;
-`setup_url` only while pending, no `period`). `expired` means the Stripe setup
-page expired unused after 24 hours; sign up again or ask for a new mandate.
+(`{ "status", "setup_url", "max_amount", "spent", "remaining", "period", "resets_at", "currency" }`).
+`status` is `none`, `pending`, `active` or `expired`. `spent`, `remaining`,
+`period` and `resets_at` are filled while a mandate is active and count
+off-session spend across all of the customer's keys. `setup_url` is set while a
+setup page waits for the principal, including a raise while an older mandate is
+still active. `expired` means the Stripe setup page expired unused after 24
+hours; ask for a new mandate.
 
 **Owner.** `PUT /api/v1/client/customers/{ref}/owner` with `{ "email" }`
 records a human contact and returns the status body. It sends nothing.
@@ -647,8 +655,9 @@ keeps its existing `data` payload. `detail` carries the error id.
 | 402 | `payment_required` | `payment` | `complete_checkout` | hand `url` to a human, poll `poll` (`/api/v1/client/checkout-sessions/{id}`, or the customer's status URL when `url` is a hosted invoice). With no processor connected, `url` and `poll` are null and the message says to contact the operator |
 | 402 | `payment_required` | `payment` | `complete_checkout` | on `plan-change`: the upgrade is raised but not granted; hand `url` to a human and poll the customer's status URL until `plan` shows the new plan |
 | 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to; `PUT {"email": ...}` to `url` (the owner endpoint), then retry. Signing up with an email avoids this |
-| 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window is used up; `retry_after` is seconds until it resets |
-| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap or the mandate cap; `retry_after` null, waiting will not help |
+| 403 | `budget_exceeded` | `budget` | `wait` | the key's budget window, or the customer's spend mandate window, is used up; the charge fits once it resets. `retry_after` is seconds until then |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | one charge is above the operator's per-charge cap (`agentMaxTopupAmount`) or larger than the key's whole budget; `retry_after` null, waiting will not help. Ask the operator to raise the cap, or buy less |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | one off-session charge is larger than the whole spend mandate the principal approved; `retry_after` null, `url` is `POST /api/v1/client/customers/{ref}/spend-mandate`. Open a higher mandate there and hand its `setup_url` to the principal, or buy less |
 | 403 | `forbidden` | `scope` | `use_own_reference` | the key belongs to another customer; use your own `customerReferenceId` or omit it |
 | 403 | `scope_denied` | `scope` | `request_scope` | the key lacks the `purchase` scope |
 | 403 | `forbidden` | `scope` | `request_scope` | the endpoint is not open to this kind of key |
@@ -656,14 +665,30 @@ keeps its existing `data` payload. `detail` carries the error id.
 There is no claim gate. Nothing is closed to a provisional account; paying is
 the claim.
 
-**Spend mandate.** When `agentSpendMandateEnabled` is on, Stripe is connected,
-and the request includes `spend_mandate`, signup creates a Stripe Checkout
-session in setup mode and returns its URL as `setup_url`. When a human
-completes it, the payment method becomes the customer's default, the cap
-(`max_amount`) is applied to every active key of the customer, keys rotated
-later inherit it, the mandate becomes `active`, and the customer is claimed.
-Purchases inside the cap charge off-session; purchases above it return the
-gate envelope with `gate: "budget"`.
+**Spend mandate.** When `agentSpendMandateEnabled` is on,
+`agentMaxMandateAmount` is set, Stripe is connected, and the request includes
+`spend_mandate`, signup creates a Stripe Checkout session in setup mode and
+returns its URL as `setup_url`. The page tells the principal what they approve:
+"You're saving this card so your agent can pay {account name} without asking
+you, up to {amount} {CURRENCY} per {period}. Anything above that comes back to
+you for approval." (without the account name when the account has none). When
+the principal completes it, the payment method becomes the customer's default,
+the mandate (`max_amount` per `period`) is stored on the customer, and the
+customer is claimed. Key budgets are not touched. Every off-session charge
+(saved-card credit top-up, paid subscribe with a saved card, upgrade proration)
+must fit both the calling key's budget and the mandate, where the mandate
+counts spend summed across all of the customer's keys. Hosted checkout pages
+are not checked against the mandate, since a human pays those in person; money
+paid on them is still recorded against the key that opened them, so it counts
+toward the mandate total.
+
+To ask for a first mandate after signup, or a higher one, call
+`POST /api/v1/client/customers/{ref}/spend-mandate` with
+`{ "max_amount", "currency", "period" }` (customer key with the `purchase`
+scope). The same ceiling check applies. It returns the same `spend_mandate`
+object as signup; when the principal completes the new page it replaces the
+customer's mandate. Keeping the same period keeps the running window, so raising
+the amount does not reset what was already spent.
 
 **Provisional expiry.** A signed-up customer is `PROVISIONAL` with
 `expires_at = now + agentProvisionalDays`. The first paid checkout or invoice
@@ -676,7 +701,7 @@ Payment is the only human gate: no email confirmation, no CAPTCHA, no claim
 link.
 
 **Other signup errors.** 400 `validation_failed` (bad email, `spend_mandate`
-without `max_amount`, wrong currency), 404 `not_found` (unknown slug or signup
+without `max_amount`, wrong currency, `max_amount` above `agentMaxMandateAmount`), 404 `not_found` (unknown slug or signup
 off, same body for both on purpose), 429 `rate_limited` with a `Retry-After`
 header and the message `Signup rate limit reached for this catalog; retry after
 Retry-After seconds` or `... for this address; ...`, each with `(errorId=...)`
@@ -693,7 +718,8 @@ appended.
 | `agentSignupHourlyCap` | `10` | signups per account per hour; 429 + `Retry-After` above it |
 | `agentSignupPerIpCap` | `5` | signups per IP per hour; 429 + `Retry-After` above it. The IP is the connection's remote address, or behind a proxy the leftmost `X-Forwarded-For`; see [Deployment](#deployment) for what the proxy must do |
 | `agentProvisionalDays` | `14` | days before an unpaid provisional customer expires |
-| `agentSpendMandateEnabled` | `false` | honor `spend_mandate` on signup |
+| `agentSpendMandateEnabled` | `false` | honor `spend_mandate` on signup and the spend-mandate endpoint; refused with 400 while `agentMaxMandateAmount` is not set |
+| `agentMaxMandateAmount` | none | largest `max_amount` per period an agent may ask its principal to approve; a larger ask is a 400. `0` clears it, which is refused while mandates are on |
 
 `deploy/setup.sh` turns on the catalog and signup for the seeded account on
 the `developer_demo` plan at slug `demo`. Set `TANSO_SKIP_AGENT_SIGNUP=1` to

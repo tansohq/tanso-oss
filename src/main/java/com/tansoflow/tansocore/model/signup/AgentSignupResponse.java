@@ -83,7 +83,7 @@ public class AgentSignupResponse {
     @Builder
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class AgentSpendMandate {
-        @Schema(description = "none | pending | active | unavailable")
+        @Schema(description = "pending | unavailable")
         private String status;
         @JsonProperty("setup_url")
         @Schema(description = "Hand this to the principal. Saving a card here activates the mandate and claims the account.")

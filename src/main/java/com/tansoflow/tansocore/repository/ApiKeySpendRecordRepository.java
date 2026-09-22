@@ -42,5 +42,20 @@ public interface ApiKeySpendRecordRepository extends JpaRepository<ApiKeySpendRe
                         @Param("kind") SpendKind kind,
                         @Param("windowStart") Instant windowStart);
 
+    /**
+     * Spend across every key the customer holds, revoked ones included, so rotating a key does not
+     * hand the customer a fresh allowance. Used by the spend mandate, which is per customer.
+     */
+    @Query("""
+            SELECT COALESCE(SUM(r.amount), 0)
+            FROM ApiKeySpendRecord r
+            WHERE r.apiKeyId IN (SELECT k.id FROM AccountApiKey k WHERE k.customer.id = :customerId)
+              AND r.kind = :kind
+              AND r.occurredAt >= :windowStart
+            """)
+    BigDecimal sumForCustomerSince(@Param("customerId") UUID customerId,
+                                   @Param("kind") SpendKind kind,
+                                   @Param("windowStart") Instant windowStart);
+
     boolean existsByAccountIdAndIdempotencyKey(UUID accountId, String idempotencyKey);
 }
