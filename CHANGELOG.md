@@ -14,6 +14,60 @@ tags; this file starts where the changelog does.
   `featureKey`, page-based paging, a window that defaults to 90 days and is
   capped at 366. The events endpoint was write-only; recorded usage stays
   append-only, and a correction is another event.
+- **Operator ceiling on spend mandates.** New account setting
+  `agentMaxMandateAmount`: the largest `max_amount` per period an agent may ask
+  its principal to approve. A larger ask, at signup or on the new endpoint, is
+  a 400 that names the limit (`spend_mandate.max_amount 500.00 is above this
+  account's limit of 200.00 USD; ask for 200.00 or less.`); it is rejected,
+  never clamped. **Upgrading: set `agentMaxMandateAmount` before mandates work
+  again.** Enabling `agentSpendMandateEnabled` without it is refused with 400,
+  and an account that already has the flag on answers `unavailable` to every
+  mandate request until the ceiling is set.
+- **Ask for a new or higher mandate.** `POST /api/v1/client/customers/{ref}/spend-mandate`
+  (customer key with `purchase`) opens a new setup page for `max_amount` per
+  `period`. Completing it replaces the customer's mandate and claims the
+  account, as at signup.
+- **The setup page says what the principal approves.** The Stripe page shows
+  "You're saving this card so your agent can pay {account name} without asking
+  you, up to {amount} {CURRENCY} per {period}. Anything above that comes back
+  to you for approval." next to the save button.
+- **`raise_mandate` gate action.** A single off-session charge larger than the
+  whole mandate answers 403 `spend_cap_exceeded` / `raise_mandate` with
+  `retry_after: null` and `url` set to the spend-mandate endpoint.
+
+### Changed
+
+- **A spend mandate is stored once per customer, not copied onto its keys.**
+  It used to be written as a money budget on every active key. Spend is summed
+  per key, so two keys meant twice the approved amount could be charged, and
+  the write overwrote any budget the operator had set on those keys. The
+  mandate now lives on the customer (`mandate_amount`, `mandate_period`,
+  `mandate_started_at`) and every off-session charge, plus the upgrade
+  proration check, must fit both the calling key's budget and the mandate,
+  where the mandate counts spend across all of the customer's keys. Hosted
+  checkout, where a human pays in person, is not checked against the mandate.
+  `/status` reports `spend_mandate` with `spent`, `remaining`, `period` and
+  `resets_at` from the customer.
+- **Mandates activated before this release stay as the key budgets they were
+  written as.** They are not migrated: those rows cannot be told apart from
+  budgets an operator set by hand, and the period was never stored outside
+  Stripe, so a migration could clear an operator's budget or guess the window
+  wrong. Those customers show `spend_mandate.status: "active"` with only
+  `max_amount`; asking for a new mandate moves them onto the customer model,
+  and the operator can clear the old key budgets from the console.
+- **Gate messages.** The per-charge cap message now says "ask the operator to
+  raise the cap" (the operator sets `agentMaxTopupAmount`; the owner is the
+  person who pays). The `GateError` schema no longer lists the unused `claim`
+  gate or `claim_account` action and now lists `nominate_owner`,
+  `use_own_reference` and `raise_mandate`.
+
+### Fixed
+
+- **A charge larger than the whole key budget no longer says `wait`.** It
+  answered `budget_exceeded` / `wait` with a `retry_after`, but no window reset
+  lets it through. It now answers `spend_cap_exceeded` / `raise_spend_cap`
+  with `retry_after: null`. A charge that fits the budget but not what is left
+  of this window still answers `wait`.
 
 ### Removed
 

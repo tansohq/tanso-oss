@@ -19,6 +19,7 @@ package com.tansoflow.tansocore.model.signup;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -42,7 +43,30 @@ public class AgentStatusResponse {
     @JsonProperty("owner_email")
     private String ownerEmail;
     @JsonProperty("spend_mandate")
-    private AgentSignupResponse.AgentSpendMandate spendMandate;
+    private SpendMandateStatus spendMandate;
+
+    /**
+     * The customer's mandate, shared by all of its keys. The numbers are null until a mandate is active;
+     * setup_url is set while a page (first or raised mandate) waits for the principal.
+     */
+    @Getter
+    @Builder
+    public static class SpendMandateStatus {
+        @Schema(description = "none | pending | active | expired")
+        private String status;
+        @JsonProperty("setup_url")
+        private String setupUrl;
+        @JsonProperty("max_amount")
+        private BigDecimal maxAmount;
+        @Schema(description = "Off-session spend across all of the customer's keys in the current window")
+        private BigDecimal spent;
+        private BigDecimal remaining;
+        @Schema(description = "day | week | month")
+        private String period;
+        @JsonProperty("resets_at")
+        private Instant resetsAt;
+        private String currency;
+    }
 
     @Getter
     @Builder

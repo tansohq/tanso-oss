@@ -42,12 +42,15 @@ curl -X POST {base}/public/v1/catalog/{slug}/signup \
   new provisional customer, even with an email seen before.
 - `name`: optional, up to 100 characters.
 - `spend_mandate`: optional. `currency` must equal the account currency. `max_amount` is required
-  when the object is present. See step 3 for what comes back.
+  when the object is present and must not be above the operator's limit. `period` is `day`, `week`
+  or `month` (default `month`). See step 3 for what comes back.
 
 Errors: `404 not_found` when there is no catalog at that slug or signup is not enabled on it (same
 body for both, on purpose). `400 validation_failed` for a bad email, a `spend_mandate` without
-`max_amount`, or a currency that does not match the account. `429 rate_limited` when a rate limit
-is hit (see Rate limits).
+`max_amount`, a currency that does not match the account, or a `max_amount` above the operator's
+limit. That last message names the limit, for example: `spend_mandate.max_amount 500.00 is above
+this account's limit of 200.00 USD; ask for 200.00 or less.` Ask again with the limit or less.
+Nothing is created by a 400. `429 rate_limited` when a rate limit is hit (see Rate limits).
 
 ## 3. The response (201)
 
@@ -113,8 +116,17 @@ budget, which the status endpoint reports as `spend.cap`.
   has not enabled mandates, Stripe is not connected, or Stripe failed to open a session. The signup
   still succeeds.
 - `{ "status": "pending", "setup_url", "max_amount", "currency", "period" }` when a Stripe Checkout
-  page was opened. Hand `setup_url` to a human. When they finish, the cap is applied to every active
-  key of the customer, keys rotated later inherit it, and the customer is claimed.
+  page was opened. Hand `setup_url` to your principal, the human who pays. The page tells them they
+  are letting you pay without asking, up to `max_amount` per `period`. When they finish, the card is
+  saved, the mandate is stored on your customer, and the customer is claimed.
+
+The mandate covers the whole customer, not one key. Every charge made off-session with the saved
+card (buying credits, subscribing to a paid plan, the prorated part of an upgrade) must fit two
+limits: the calling key's own budget, if the operator set one, and the mandate. The mandate counts
+what all of the customer's keys spent in the current window together. Hosted checkout pages are not
+checked against the mandate, because a human pays those in person, but money paid on them still
+counts toward the total. Windows start when the mandate starts and repeat every day, 7 days or 30
+days.
 
 ## 4. Store the key once
 
@@ -147,7 +159,16 @@ curl {base}/api/v1/client/customers/agent_7f3c9a2e/status \
     "remaining": { "ai.chat": 3 },
     "spend": null,
     "owner_email": "ops@example.com",
-    "spend_mandate": { "status": "pending", "setup_url": "https://checkout.stripe.com/c/pay/cs_test_...", "max_amount": 50.00, "currency": "usd" }
+    "spend_mandate": {
+      "status": "active",
+      "setup_url": null,
+      "max_amount": 50.00,
+      "spent": 12.00,
+      "remaining": 38.00,
+      "period": "month",
+      "resets_at": "2026-10-21T09:14:00Z",
+      "currency": "usd"
+    }
   }
 }
 ```
@@ -157,9 +178,28 @@ the feature is unmetered. `spend` is null until the calling key has a budget; th
 `spent`, `remaining`, `currency` and `resets_at`. `limits.features[].period` uses the same
 vocabulary as signup (`"month"` or `"N months"`).
 
-`spend_mandate.status` is `none`, `pending`, `active` or `expired`. `setup_url` is present only
-while `pending`. There is no `period` here. `expired` means the Stripe setup page expired unused
-(24 hours); sign up again or ask for a new mandate.
+`spend_mandate.status` is `none`, `pending`, `active` or `expired`. All fields are always present.
+`spent`, `remaining`, `period` and `resets_at` are filled while a mandate is `active`; they count
+off-session spend across all of the customer's keys. `setup_url` is set while a setup page waits for
+your principal, including a raise you asked for while an older mandate is still `active` (the older
+one keeps applying until the new page is completed). `expired` means the Stripe setup page expired
+unused (24 hours); ask for a new mandate (step 5a).
+
+## 5a. Ask for a new mandate
+
+For a first mandate after signup, a higher limit, or after a setup page expired:
+
+```
+curl -X POST {base}/api/v1/client/customers/agent_7f3c9a2e/spend-mandate \
+  -H 'X-API-Key: ck_test_9b1d...e4' -H 'Content-Type: application/json' \
+  -d '{ "max_amount": 100.00, "currency": "usd", "period": "month" }'
+```
+
+The key needs the `purchase` scope. The body and the checks are the same as `spend_mandate` at
+signup, including the operator's limit (400 above it). The response `data` is the same
+`spend_mandate` object as in step 3: hand `setup_url` to your principal. When they finish, the new
+mandate replaces the old one. Keeping the same `period` keeps the current window, so raising the
+amount does not reset what was already spent.
 
 ## 6. Use the free plan
 
@@ -239,8 +279,9 @@ What to do per row:
 | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
 | 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. |
 | 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to. `PUT {"email": ...}` to `url` (the owner endpoint), then retry the call. Signing up with an email avoids this. |
-| 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window is used up. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
-| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap or the mandate cap. `retry_after` is null; waiting will not help. Ask the owner to raise the cap or make a smaller purchase. |
+| 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window, or the mandate's window, is used up, but the charge fits once it resets. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap (`limits.spend_cap`) or larger than the key's whole budget. `retry_after` is null; waiting will not help. Ask the operator to raise the cap, or make a smaller purchase. |
+| 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | One off-session charge is larger than the whole mandate your principal approved. `retry_after` is null; waiting will not help. `url` is the spend-mandate endpoint: `POST` a higher `max_amount` to it (step 5a) and hand the new `setup_url` to your principal, or buy less. |
 | 403 | `forbidden` | `scope` | `use_own_reference` | The key belongs to another customer. Message: "This API key belongs to another customer; use your own customerReferenceId or omit it." |
 | 403 | `scope_denied` | `scope` | `request_scope` | The key lacks the `purchase` scope. Ask the operator for a key with it. |
 | 403 | `forbidden` | `scope` | `request_scope` | The endpoint is not open to this kind of key. Use a tenant key or ask the account owner. |
@@ -299,7 +340,7 @@ All carry `success: false` and `error.code`; `error.message` ends with `(errorId
 
 | status | code | when |
 |--------|------|------|
-| 400 | `validation_failed` | Bad email, `spend_mandate` without `max_amount`, or a `currency` that does not match the account. |
+| 400 | `validation_failed` | Bad email, `spend_mandate` without `max_amount`, a `currency` that does not match the account, or a `max_amount` above the operator's limit. |
 | 401 | `unauthorized` | Missing, wrong or revoked `X-API-Key`. After expiry every endpoint answers this. |
 | 404 | `not_found` | Unknown slug, or signup is off for that catalog. Same body for both, on purpose. |
 | 405 | `not_found` | Wrong verb, for example `GET` on the signup URL. The code is `not_found`, the status is 405. |

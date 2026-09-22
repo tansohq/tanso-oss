@@ -21,15 +21,12 @@ import com.tansoflow.tansocore.entity.Account;
 import com.tansoflow.tansocore.entity.AgentStatus;
 import com.tansoflow.tansocore.entity.Customer;
 import com.tansoflow.tansocore.model.apikey.CustomerApiKeyDto;
-import com.tansoflow.tansocore.model.apikey.request.UpdateKeyBudgetRequest;
 import com.tansoflow.tansocore.model.apikey.type.BudgetPeriod;
 import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerApiKeyService;
-import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.support.SimpleTransactionStatus;
@@ -45,7 +42,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -59,8 +55,6 @@ class AgentLifecycleServiceImplTest {
     private CustomerRepository customerRepository;
     @Mock
     private CustomerApiKeyService customerApiKeyService;
-    @Mock
-    private KeyBudgetService keyBudgetService;
 
     private TransactionTemplate transactionTemplate;
     private com.tansoflow.tansocore.integration.stripe.StripeSyncService stripeSyncService;
@@ -76,7 +70,7 @@ class AgentLifecycleServiceImplTest {
         lenient().when(transactionTemplate.execute(any())).thenAnswer(inv ->
                 ((TransactionCallback<Object>) inv.getArgument(0)).doInTransaction(new SimpleTransactionStatus()));
         stripeSyncService = mock(com.tansoflow.tansocore.integration.stripe.StripeSyncService.class);
-        service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, keyBudgetService, transactionTemplate,
+        service = new AgentLifecycleServiceImpl(customerRepository, customerApiKeyService, transactionTemplate,
                 stripeSyncService);
 
         Account account = new Account();
@@ -133,24 +127,38 @@ class AgentLifecycleServiceImplTest {
     }
 
     @Test
-    void spendMandateCapsEveryActiveKeyStoresTheCardAndClaims() {
+    void spendMandateIsStoredOnTheCustomerAndLeavesKeysAlone() {
         UUID keyId = UUID.randomUUID();
         when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
-        when(customerApiKeyService.listKeys(accountId.toString(), "agent_abc")).thenReturn(List.of(
-                CustomerApiKeyDto.builder().id(keyId.toString()).active(true).build(),
-                CustomerApiKeyDto.builder().id("k2").active(true).build(),
-                CustomerApiKeyDto.builder().id("k3").active(false).build()));
 
         service.activateSpendMandate(accountId, customer.getId(), keyId, "pm_123", new BigDecimal("40"), "month");
 
-        ArgumentCaptor<UpdateKeyBudgetRequest> budget = ArgumentCaptor.forClass(UpdateKeyBudgetRequest.class);
-        verify(keyBudgetService).setBudget(eq(accountId.toString()), eq("agent_abc"), eq(keyId.toString()), budget.capture());
-        verify(keyBudgetService).setBudget(eq(accountId.toString()), eq("agent_abc"), eq("k2"), any());
-        verify(keyBudgetService, never()).setBudget(eq(accountId.toString()), eq("agent_abc"), eq("k3"), any());
-        assertThat(budget.getValue().getPeriod()).isEqualTo(BudgetPeriod.MONTH);
-        assertThat(budget.getValue().getAmountLimit()).isEqualByComparingTo("40");
+        assertThat(customer.getMandateAmount()).isEqualByComparingTo("40");
+        assertThat(customer.getMandatePeriod()).isEqualTo(BudgetPeriod.MONTH);
+        assertThat(customer.getMandateStartedAt()).isNotNull();
         assertThat(customer.getStripeDefaultPaymentMethodId()).isEqualTo("pm_123");
         assertThat(customer.getAgentStatus()).isEqualTo(AgentStatus.CLAIMED);
+        // Keys, and any budget an operator set on them, are never read or written.
+        verify(customerApiKeyService, never()).listKeys(any(), any());
+    }
+
+    @Test
+    void aRaisedMandateReplacesTheAmountButKeepsTheRunningWindow() {
+        Instant started = Instant.now().minusSeconds(86_400);
+        customer.setMandateAmount(new BigDecimal("40"));
+        customer.setMandatePeriod(BudgetPeriod.MONTH);
+        customer.setMandateStartedAt(started);
+        when(customerRepository.getCustomerById(customer.getId())).thenReturn(Optional.of(customer));
+
+        service.activateSpendMandate(accountId, customer.getId(), UUID.randomUUID(), "pm_456", new BigDecimal("90"), "month");
+
+        assertThat(customer.getMandateAmount()).isEqualByComparingTo("90");
+        assertThat(customer.getMandateStartedAt()).isEqualTo(started);
+
+        service.activateSpendMandate(accountId, customer.getId(), UUID.randomUUID(), "pm_456", new BigDecimal("20"), "week");
+
+        assertThat(customer.getMandatePeriod()).isEqualTo(BudgetPeriod.WEEK);
+        assertThat(customer.getMandateStartedAt()).isAfter(started);
     }
 
     @Test

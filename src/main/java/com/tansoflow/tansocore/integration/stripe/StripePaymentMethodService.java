@@ -42,8 +42,8 @@ public interface StripePaymentMethodService {
 
     /**
      * Charges an off_session PaymentIntent with the given payment method,
-     * confirmed synchronously. Enforces the account's agent spend cap before
-     * any money moves. Returns a failed result (never throws) for declines
+     * confirmed synchronously. Enforces the account's agent spend cap, the
+     * calling key's budget and the customer's spend mandate before any money moves. Returns a failed result (never throws) for declines
      * and SCA challenges so the caller can fall back to hosted checkout.
      */
     PaymentResult chargeOffSession(UUID accountId, UUID customerId, String paymentMethodId,
@@ -56,9 +56,11 @@ public interface StripePaymentMethodService {
     /**
      * Hosted card-saving page (mode=setup). The agent hands the URL to its principal; on
      * completion the webhook stores the card as the customer's default for off-session charges.
+     * The page tells the principal what they are approving: {@code maxAmount} per {@code period}.
      */
-    HostedCheckout createSetupCheckoutSession(UUID accountId, UUID customerId,
-                                              java.util.Map<String, String> metadata) throws StripeException;
+    HostedCheckout createSetupCheckoutSession(UUID accountId, UUID customerId, BigDecimal maxAmount,
+                                              String period, java.util.Map<String, String> metadata)
+            throws StripeException;
 
     /** Hosted one-off payment fallback (mode=payment) for credit top-ups when no payment method is on file. */
     HostedCheckout createTopupCheckoutSession(UUID accountId, UUID customerId, BigDecimal amount,

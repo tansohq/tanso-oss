@@ -29,11 +29,11 @@ import lombok.Getter;
 @Schema(description = "Error with a machine-readable gate and the action that clears it")
 public class GateError extends Error {
 
-    @Schema(description = "payment | budget | claim | scope")
+    @Schema(description = "payment | budget | scope")
     private final String gate;
-    @Schema(description = "complete_checkout | wait | claim_account | request_scope | raise_spend_cap")
+    @Schema(description = "complete_checkout | nominate_owner | wait | raise_spend_cap | raise_mandate | use_own_reference | request_scope")
     private final String action;
-    @Schema(description = "Checkout URL to hand to a human, or null", nullable = true)
+    @Schema(description = "URL to hand to a human (checkout page, owner endpoint, or the spend-mandate endpoint), or null", nullable = true)
     private final String url;
     @Schema(description = "URL to poll until the gate clears, or null", nullable = true)
     private final String poll;
@@ -71,6 +71,11 @@ public class GateError extends Error {
 
     public static GateError spendCapExceeded(String message) {
         return new GateError(ErrorCode.SPEND_CAP_EXCEEDED, "budget", "raise_spend_cap", null, null, null, message);
+    }
+
+    /** The charge alone is above the whole mandate; url opens a page for the principal to approve more. */
+    public static GateError raiseMandate(String mandateUrl, String message) {
+        return new GateError(ErrorCode.SPEND_CAP_EXCEEDED, "budget", "raise_mandate", mandateUrl, null, null, message);
     }
 
     public static GateError scopeDenied(String message) {

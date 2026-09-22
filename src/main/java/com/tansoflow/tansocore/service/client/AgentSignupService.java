@@ -20,6 +20,8 @@ package com.tansoflow.tansocore.service.client;
 import com.tansoflow.tansocore.model.signup.AgentSignupResponse;
 import com.tansoflow.tansocore.model.signup.request.AgentSignupRequest;
 
+import java.util.UUID;
+
 public interface AgentSignupService {
 
     /**
@@ -32,4 +34,15 @@ public interface AgentSignupService {
      * or per-IP hourly cap is hit.
      */
     AgentSignupResponse signup(String slug, AgentSignupRequest request, String baseUrl, String clientIp);
+
+    /**
+     * Opens a new spend mandate page for an existing customer, for a first mandate after signup or a
+     * higher one. Same checks as signup: currency must match and max_amount must not be above the
+     * operator's agentMaxMandateAmount. When the principal completes it, it replaces the customer's
+     * current mandate. Status is {@code unavailable} when mandates are off, Stripe is not connected or
+     * Stripe failed to open a page.
+     */
+    AgentSignupResponse.AgentSpendMandate requestSpendMandate(String accountId, String customerReferenceId,
+                                                              UUID apiKeyId,
+                                                              AgentSignupRequest.SpendMandate requested);
 }

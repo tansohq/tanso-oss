@@ -24,12 +24,14 @@ import com.tansoflow.tansocore.model.exception.IdempotencyConflictException;
 import com.tansoflow.tansocore.model.exception.RateLimitExceededException;
 import com.tansoflow.tansocore.model.exception.InvalidRuleValueException;
 import com.tansoflow.tansocore.model.exception.ResourceNotFoundException;
+import com.tansoflow.tansocore.model.exception.SpendMandateExceededException;
 import com.tansoflow.tansocore.model.exception.VendorApiException;
 import com.tansoflow.tansocore.model.exception.TariffConflictException;
 import com.tansoflow.tansocore.model.response.ApiResponse;
 import com.tansoflow.tansocore.model.response.Error;
 import com.tansoflow.tansocore.model.response.ErrorCode;
 import com.tansoflow.tansocore.model.response.GateError;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -99,12 +101,30 @@ public class GlobalExceptionHandlerController {
         // No reset time means a per-charge cap or a TOTAL budget: waiting never helps.
         if (exception.getResetsAt() == null) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(gateResponse(GateError.spendCapExceeded(
-                    exception.getMessage() + "; ask the account owner to raise the cap."), errorId));
+                    exception.getMessage() + "; ask the operator to raise the cap."), errorId));
         }
         long retryAfter = Math.max(0L, Duration.between(Instant.now(), exception.getResetsAt()).getSeconds());
         String message = exception.getMessage() + "; wait for the window to reset or ask the key owner to raise the budget.";
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(gateResponse(GateError.budgetExceeded(retryAfter, message), errorId));
+    }
+
+    @ExceptionHandler(SpendMandateExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSpendMandateExceededException(
+            SpendMandateExceededException exception, HttpServletRequest request) {
+        String errorId = assignErrorId();
+        log.info("Spend mandate exceeded [errorId={}]: {}", errorId, exception.getMessage());
+
+        // Bigger than the whole mandate: waiting never helps, only the principal approving more does.
+        if (exception.isAboveWholeMandate()) {
+            String base = request.getRequestURL().toString().replace(request.getRequestURI(), "");
+            String mandateUrl = base + "/api/v1/client/customers/" + exception.getCustomerReferenceId() + "/spend-mandate";
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(gateResponse(GateError.raiseMandate(mandateUrl, exception.getMessage()), errorId));
+        }
+        long retryAfter = Math.max(0L, Duration.between(Instant.now(), exception.getResetsAt()).getSeconds());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(gateResponse(GateError.budgetExceeded(retryAfter, exception.getMessage()), errorId));
     }
 
     @ExceptionHandler(IdempotencyConflictException.class)

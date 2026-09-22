@@ -1,0 +1,34 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260922-5"
+      author: tanso
+      comment: >
+        Spend mandate moves from the customer's keys to the customer. It used to
+        be written as a money budget onto every active key, which multiplied the
+        approved amount by the number of keys (spend is summed per key) and
+        overwrote budgets the operator had set. The customer row now holds the
+        approved amount, period and window anchor, and off-session charges are
+        checked against the sum across all of the customer's keys.
+        agent_max_mandate_amount is the operator's ceiling on what an agent may
+        ask its principal to approve; mandates stay off until it is set.
+        Mandates activated before this change stay as the key budgets they were
+        written as.
+      changes:
+        - addColumn:
+            tableName: account_settings
+            columns:
+              - column:
+                  name: agent_max_mandate_amount
+                  type: NUMERIC(18,2)
+        - addColumn:
+            tableName: customers
+            columns:
+              - column:
+                  name: mandate_amount
+                  type: NUMERIC(18,2)
+              - column:
+                  name: mandate_period
+                  type: VARCHAR(10)
+              - column:
+                  name: mandate_started_at
+                  type: TIMESTAMPTZ
