@@ -585,22 +585,28 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             throw new ResourceNotFoundException("Subscription not found for invoice id: " + invoiceId);
         }
 
-        switch (invoice.getSubscription().getPlan().getBillingTiming()) {
-            case "IN_ADVANCE" -> {
-                subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
-                subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
-            }
-            case "IN_ARREARS" -> {
-                Instant newPeriodStart = invoice.getInvoicePeriodEnd();
-                Instant newPeriodEnd = newPeriodStart
-                        .atOffset(ZoneOffset.UTC)
-                        .plusMonths(subscription.getIntervalMonths())
-                        .toInstant();
+        // An adjustment invoice covers the rest of the current period from the upgrade moment. Moving the period
+        // to its start would corrupt the cycle and change the key the period's credit grant is idempotent on, so
+        // the full plan allocation would be granted again on top of the upgrade delta.
+        boolean isAdjustment = InvoiceType.ADJUSTMENT.name().equals(invoice.getType());
+        if (!isAdjustment) {
+            switch (invoice.getSubscription().getPlan().getBillingTiming()) {
+                case "IN_ADVANCE" -> {
+                    subscription.setCurrentPeriodStart(invoice.getInvoicePeriodStart());
+                    subscription.setCurrentPeriodEnd(invoice.getInvoicePeriodEnd());
+                }
+                case "IN_ARREARS" -> {
+                    Instant newPeriodStart = invoice.getInvoicePeriodEnd();
+                    Instant newPeriodEnd = newPeriodStart
+                            .atOffset(ZoneOffset.UTC)
+                            .plusMonths(subscription.getIntervalMonths())
+                            .toInstant();
 
-                subscription.setCurrentPeriodStart(newPeriodStart);
-                subscription.setCurrentPeriodEnd(newPeriodEnd);
-            }
+                    subscription.setCurrentPeriodStart(newPeriodStart);
+                    subscription.setCurrentPeriodEnd(newPeriodEnd);
+                }
 
+            }
         }
         invoiceService.markInvoiceAsPaid(invoice);
         subscriptionRepository.save(subscription);

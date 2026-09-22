@@ -1054,4 +1054,47 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
         verify(entitlementService).processEntitlementsForSubscription(existing);
     }
+
+    private com.tansoflow.tansocore.entity.Invoice paidInvoiceOfType(InvoiceType type, Instant periodStart, Instant periodEnd) {
+        com.tansoflow.tansocore.entity.Invoice invoice = new com.tansoflow.tansocore.entity.Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setSubscription(subscription);
+        invoice.setType(type.name());
+        invoice.setInvoicePeriodStart(periodStart);
+        invoice.setInvoicePeriodEnd(periodEnd);
+        when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(invoice.getId().toString(), account.getId().toString()))
+                .thenReturn(invoice);
+        return invoice;
+    }
+
+    // An operator marking an upgrade's adjustment invoice paid used to move the billing period to the upgrade
+    // moment. That broke the cycle and gave the period credit grant a new idempotency key, so the full new-plan
+    // allocation was granted on top of the upgrade delta.
+    @Test
+    void markingAnAdjustmentInvoicePaidLeavesTheBillingPeriodAlone() {
+        plan.setBillingTiming(BillingTiming.IN_ADVANCE.name());
+        Instant periodStart = subscription.getCurrentPeriodStart();
+        Instant periodEnd = subscription.getCurrentPeriodEnd();
+        Instant upgradedAt = periodStart.plus(10, ChronoUnit.DAYS);
+        com.tansoflow.tansocore.entity.Invoice adjustment = paidInvoiceOfType(InvoiceType.ADJUSTMENT, upgradedAt, periodEnd);
+
+        subscriptionService.subscriptionInvoicePaid(adjustment.getId().toString(), account.getId().toString());
+
+        assertEquals(periodStart, subscription.getCurrentPeriodStart());
+        assertEquals(periodEnd, subscription.getCurrentPeriodEnd());
+        verify(invoiceService).markInvoiceAsPaid(adjustment);
+    }
+
+    @Test
+    void markingARegularInAdvanceInvoicePaidStillMovesTheBillingPeriod() {
+        plan.setBillingTiming(BillingTiming.IN_ADVANCE.name());
+        Instant nextStart = subscription.getCurrentPeriodEnd();
+        Instant nextEnd = nextStart.plus(30, ChronoUnit.DAYS);
+        com.tansoflow.tansocore.entity.Invoice regular = paidInvoiceOfType(InvoiceType.REGULAR, nextStart, nextEnd);
+
+        subscriptionService.subscriptionInvoicePaid(regular.getId().toString(), account.getId().toString());
+
+        assertEquals(nextStart, subscription.getCurrentPeriodStart());
+        assertEquals(nextEnd, subscription.getCurrentPeriodEnd());
+    }
 }

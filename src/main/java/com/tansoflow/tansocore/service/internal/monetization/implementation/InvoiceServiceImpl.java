@@ -479,6 +479,20 @@ public class InvoiceServiceImpl implements InvoiceService {
             other.setCurrentPeriodEnd(now);
             subscriptionRepository.save(other);
 
+            // Anything the retired subscription still owes must stop being payable. Paying a leftover upgrade
+            // invoice would swap the plan on this retired subscription and grant its entitlements again.
+            // The scheduled changes are cancelled through the repository: SubscriptionService depends on this one.
+            voidOutstandingInvoicesForSubscription(other);
+            subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(other).ifPresent(pending -> {
+                Invoice adjustment = pending.getAdjustmentInvoice();
+                if (adjustment != null
+                        && !InvoiceStatus.PAID.name().equals(adjustment.getStatus())
+                        && !InvoiceStatus.VOID.name().equals(adjustment.getStatus())) {
+                    voidInvoice(adjustment);
+                }
+            });
+            subscriptionScheduledChangeRepository.cancelAllScheduledChanges(other);
+
             entitlementService.processEntitlementRevokeForSubscription(other);
             creditService.clawBackPlanIncludedCredits(other.getId(), other.getAccount().getId());
 
@@ -565,7 +579,12 @@ public class InvoiceServiceImpl implements InvoiceService {
         }
 
         entitlementService.processEntitlementsForSubscription(invoice.getSubscription());
-        creditService.processCreditGrantsForSubscription(invoice.getSubscription());
+        // An adjustment invoice pays for part of a period whose credits were already granted; the upgrade's extra
+        // credits come from grantUpgradeDelta. Running the period grant here would hand out the full allocation
+        // again whenever the period start has moved.
+        if (!InvoiceType.ADJUSTMENT.name().equals(invoice.getType())) {
+            creditService.processCreditGrantsForSubscription(invoice.getSubscription());
+        }
     }
 
     @Override
@@ -754,6 +773,9 @@ public class InvoiceServiceImpl implements InvoiceService {
             invoice.setStatus(InvoiceStatus.VOID.name());
             invoiceRepository.save(invoice);
             log.info("Voided invoice {} for cancelled subscription {}", invoice.getId(), subscription.getId());
+            // Same as voidInvoice: the Stripe copy stays payable until Stripe is told.
+            eventPublisher.publishEvent(new com.tansoflow.tansocore.model.event.service.InvoiceVoidedEvent(
+                    subscription.getAccount().getId(), invoice.getId()));
         }
     }
 
