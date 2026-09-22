@@ -163,6 +163,33 @@ class CreditServiceImplTest {
         creditAllocation.setCreditAmount(new BigDecimal("1000"));
     }
 
+    // ── grantDeltaCredits ──────────────────────────────────────────────────────
+
+    // The upgrade delta's idempotency key used to end in the current time, so it never matched and a second report
+    // of the same paid upgrade granted the credits again. It is keyed on the scheduled change now.
+    @Test
+    void grantDeltaCredits_sameUpgradeTwice_grantsOnce() {
+        CreditPool pool = new CreditPool();
+        pool.setId(UUID.randomUUID());
+        pool.setAccount(account);
+        pool.setDenomination("api_credits");
+        when(creditPoolRepository.findByCustomerIdAndAccountIdAndDenomination(
+                customer.getId(), account.getId(), "api_credits"))
+                .thenReturn(Optional.of(pool));
+
+        UUID scheduledChangeId = UUID.randomUUID();
+        when(creditGrantRepository.existsByAccountIdAndIdempotencyKeyAndDeletedAtIsNull(
+                account.getId(), "upgrade_delta_" + scheduledChangeId + "_api_credits"))
+                .thenReturn(true);
+
+        creditService.grantDeltaCredits(subscription, "api_credits", new BigDecimal("500"), account.getId(),
+                scheduledChangeId);
+
+        verify(creditGrantRepository, never()).saveAndFlush(any(CreditGrant.class));
+        verify(creditPoolRepository, never()).updatePoolBalanceAtomically(any(UUID.class), any(BigDecimal.class),
+                anyString(), anyLong());
+    }
+
     // ── processCreditGrantsForSubscription tests ──────────────────────────────
 
     @Test

@@ -719,7 +719,11 @@ class SubscriptionServiceImplTest {
         existing.setIsActive(true);
         existing.setCurrentPeriodStart(java.time.Instant.now().minus(java.time.Duration.ofDays(15)));
         existing.setCurrentPeriodEnd(java.time.Instant.now().plus(java.time.Duration.ofDays(15)));
-        when(subscriptionRepository.findSubscriptionByUuidAndAccountId(
+        // The upgrade reads it under a row lock; cancelling scheduled changes reads it plainly. Not every test
+        // reaches both, hence lenient.
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findSubscriptionByUuidAndAccountIdForUpdate(
+                UUID.fromString(currentSubscriptionId), UUID.fromString(accountIdString))).thenReturn(existing);
+        org.mockito.Mockito.lenient().when(subscriptionRepository.findSubscriptionByUuidAndAccountId(
                 UUID.fromString(currentSubscriptionId), UUID.fromString(accountIdString))).thenReturn(existing);
         return existing;
     }
@@ -846,6 +850,71 @@ class SubscriptionServiceImplTest {
 
         verifyNoInteractions(invoiceService);
         verify(subscriptionScheduledChangeRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    // Two concurrent calls (an agent retrying after a timeout) both used to read "nothing pending" and each raised
+    // a payable adjustment invoice. The subscription row is now locked before that check, so the second call waits
+    // for the first to commit and then finds its pending change.
+    @org.junit.jupiter.api.Test
+    void upgradeLocksTheSubscriptionBeforeCheckingForAPendingUpgrade() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+
+        com.tansoflow.tansocore.entity.Invoice open = new com.tansoflow.tansocore.entity.Invoice();
+        open.setId(UUID.randomUUID());
+        open.setStatus(com.tansoflow.tansocore.model.billing.type.InvoiceStatus.DUE.name());
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange waiting =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        waiting.setSubscription(existing);
+        waiting.setToPlan(starter);
+        waiting.setAdjustmentInvoice(open);
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(existing))
+                .thenReturn(java.util.Optional.of(waiting));
+
+        callingWithAnApiKey(() -> subscriptionService.upgradeSubscription(
+                currentSubscriptionId, accountIdString, starter.getId().toString(), true));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(subscriptionRepository, subscriptionScheduledChangeRepository);
+        inOrder.verify(subscriptionRepository).findSubscriptionByUuidAndAccountIdForUpdate(
+                UUID.fromString(currentSubscriptionId), UUID.fromString(accountIdString));
+        inOrder.verify(subscriptionScheduledChangeRepository).findPendingUpgradeBySubscription(existing);
+        verify(subscriptionRepository, org.mockito.Mockito.never()).findSubscriptionByUuidAndAccountId(any(), any());
+    }
+
+    // The upgrade's credit delta is keyed on its scheduled change, so the change is saved before the grant.
+    @org.junit.jupiter.api.Test
+    void immediateUpgradeGrantsTheCreditDeltaUnderTheScheduledChangeId() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.PAYMENT_PASS_THROUGH);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+        when(invoiceService.createAdjustmentInvoice(eq(free), eq(starter), eq(existing), any(), any()))
+                .thenReturn(new com.tansoflow.tansocore.entity.Invoice());
+
+        UUID changeId = UUID.randomUUID();
+        when(subscriptionScheduledChangeRepository.save(any())).thenAnswer(i -> {
+            com.tansoflow.tansocore.entity.SubscriptionScheduledChange change = i.getArgument(0);
+            change.setId(changeId);
+            return change;
+        });
+
+        subscriptionService.upgradeSubscription(currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+
+        verify(creditService).grantUpgradeDelta(existing, free, starter, changeId);
     }
 
     @org.junit.jupiter.api.Test
@@ -984,5 +1053,48 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(pending).isNull();
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
         verify(entitlementService).processEntitlementsForSubscription(existing);
+    }
+
+    private com.tansoflow.tansocore.entity.Invoice paidInvoiceOfType(InvoiceType type, Instant periodStart, Instant periodEnd) {
+        com.tansoflow.tansocore.entity.Invoice invoice = new com.tansoflow.tansocore.entity.Invoice();
+        invoice.setId(UUID.randomUUID());
+        invoice.setSubscription(subscription);
+        invoice.setType(type.name());
+        invoice.setInvoicePeriodStart(periodStart);
+        invoice.setInvoicePeriodEnd(periodEnd);
+        when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(invoice.getId().toString(), account.getId().toString()))
+                .thenReturn(invoice);
+        return invoice;
+    }
+
+    // An operator marking an upgrade's adjustment invoice paid used to move the billing period to the upgrade
+    // moment. That broke the cycle and gave the period credit grant a new idempotency key, so the full new-plan
+    // allocation was granted on top of the upgrade delta.
+    @Test
+    void markingAnAdjustmentInvoicePaidLeavesTheBillingPeriodAlone() {
+        plan.setBillingTiming(BillingTiming.IN_ADVANCE.name());
+        Instant periodStart = subscription.getCurrentPeriodStart();
+        Instant periodEnd = subscription.getCurrentPeriodEnd();
+        Instant upgradedAt = periodStart.plus(10, ChronoUnit.DAYS);
+        com.tansoflow.tansocore.entity.Invoice adjustment = paidInvoiceOfType(InvoiceType.ADJUSTMENT, upgradedAt, periodEnd);
+
+        subscriptionService.subscriptionInvoicePaid(adjustment.getId().toString(), account.getId().toString());
+
+        assertEquals(periodStart, subscription.getCurrentPeriodStart());
+        assertEquals(periodEnd, subscription.getCurrentPeriodEnd());
+        verify(invoiceService).markInvoiceAsPaid(adjustment);
+    }
+
+    @Test
+    void markingARegularInAdvanceInvoicePaidStillMovesTheBillingPeriod() {
+        plan.setBillingTiming(BillingTiming.IN_ADVANCE.name());
+        Instant nextStart = subscription.getCurrentPeriodEnd();
+        Instant nextEnd = nextStart.plus(30, ChronoUnit.DAYS);
+        com.tansoflow.tansocore.entity.Invoice regular = paidInvoiceOfType(InvoiceType.REGULAR, nextStart, nextEnd);
+
+        subscriptionService.subscriptionInvoicePaid(regular.getId().toString(), account.getId().toString());
+
+        assertEquals(nextStart, subscription.getCurrentPeriodStart());
+        assertEquals(nextEnd, subscription.getCurrentPeriodEnd());
     }
 }
