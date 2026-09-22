@@ -78,14 +78,23 @@ public interface StripeSyncService {
     void updateStripeSubscriptionPrice(UUID subscriptionId, UUID accountId, UUID planId, boolean prorate) throws StripeException;
 
     /**
-     * STRIPE_DRIVEN agent upgrade: moves the Stripe subscription to planId's price only if Stripe can charge the
-     * proration now (always_invoice + pending_if_incomplete). Otherwise Stripe keeps the old price and leaves a
-     * pending_update waiting on the returned invoice.
+     * Charge-first upgrade (STRIPE_INTEGRATION, and agent keys on STRIPE_DRIVEN): invoices the proration now
+     * (always_invoice). On a charge_automatically subscription Stripe moves to planId's price only if that charge
+     * succeeds (pending_if_incomplete), otherwise it keeps the old price with a pending_update waiting on the
+     * returned invoice. A send_invoice subscription cannot hold a pending_update, so Stripe moves the price and
+     * sends the invoice; the result is applied only once that invoice is paid.
      */
     com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge chargeUpgradeBeforeApplying(UUID subscriptionId, UUID accountId, UUID planId) throws StripeException;
 
     /** Voids a Stripe invoice by its Stripe id. Voiding the invoice behind a pending_update discards that update. */
     void voidStripeInvoice(String stripeInvoiceId, UUID accountId) throws StripeException;
+
+    /**
+     * Drops a charge-first upgrade nobody paid for: voids its Stripe invoice, and on a send_invoice subscription,
+     * where Stripe had already moved to the new price, puts the subscription back on the Tanso plan's price
+     * without proration.
+     */
+    void cancelUnpaidUpgrade(String stripeInvoiceId, UUID subscriptionId, UUID accountId) throws StripeException;
 
     void cancelStripeSubscription(UUID subscriptionId, UUID accountId, String cancelMode) throws StripeException;
 

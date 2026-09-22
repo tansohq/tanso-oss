@@ -847,12 +847,13 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 && AuthContext.currentApiKeyId() != null
                 && prorationAmount.signum() > 0;
 
-        // STRIPE_DRIVEN with an API key: Stripe must take the money before the plan moves. A CREATE_PRORATIONS
-        // price change only bills at the next renewal, so the agent used the paid tier for up to a period before
-        // anyone paid, and a failed renewal never took it back.
-        boolean chargeStripeFirst = isStripeDriven
-                && AuthContext.currentApiKeyId() != null
-                && prorationAmount.signum() > 0;
+        // Stripe must take the money before the plan moves. A CREATE_PRORATIONS price change only bills at the next
+        // renewal. On STRIPE_INTEGRATION the plan then waited on that renewal for every caller, while the call
+        // answered 200 as if the upgrade were done. On STRIPE_DRIVEN with an API key, the agent used the paid tier
+        // for up to a period before anyone paid, and a failed renewal never took it back. Operators on
+        // STRIPE_DRIVEN keep the immediate swap: the plan moves at once and Stripe bills the proration at renewal.
+        boolean chargeStripeFirst = prorationAmount.signum() > 0
+                && (isStripeIntegrationUpgrade || (isStripeDriven && AuthContext.currentApiKeyId() != null));
 
         if (grantNow && chargeStripeFirst) {
             return chargeStripeBeforeUpgrade(currentSubscription, subscribedPlan, newPlan, now);
@@ -891,9 +892,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
         if (grantNow) {
             if (isStripeIntegrationUpgrade) {
-                // STRIPE_INTEGRATION: defer plan swap until proration invoice is paid.
-                // Stripe handles proration via CREATE_PRORATIONS. The invoice.paid webhook
-                // will fulfill this upgrade (swap plan, grant entitlements, credits).
+                // STRIPE_INTEGRATION with nothing to charge now (in arrears, or no positive proration): defer the
+                // plan swap to the next paid invoice. Stripe handles proration via CREATE_PRORATIONS, and the
+                // invoice.paid webhook fulfils this upgrade (swap plan, grant entitlements, credits).
                 cancelScheduledChangesForSubscription(currentSubscription.getId(), currentSubscription.getAccount().getId());
                 scheduledChange.setStatus(SubscriptionScheduledChangeStatus.PENDING.name());
                 scheduledChange.setType(SubscriptionScheduledChangeType.UPGRADE.name());
@@ -971,10 +972,11 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     }
 
     /**
-     * STRIPE_DRIVEN agent upgrade. The change is recorded PENDING and Stripe is asked to charge the proration
-     * now; the plan moves only once Stripe has the money. When the saved card is charged, that happens here.
-     * When it is not (no card, a decline, 3-D Secure), Stripe keeps the old price with a pending_update, the
-     * agent gets the hosted invoice, and the invoice.paid webhook completes the change when a human pays it.
+     * Charge-first upgrade: any STRIPE_INTEGRATION caller, or an agent key on STRIPE_DRIVEN. The change is
+     * recorded PENDING and Stripe is asked to charge the proration now; the plan moves only once Stripe has the
+     * money. When the saved card is charged, that happens here. When it is not (no card, a decline, 3-D Secure,
+     * or a send_invoice subscription that waits for a human), the caller gets the hosted invoice and the
+     * invoice.paid webhook for that invoice completes the change.
      */
     private UpgradeResult chargeStripeBeforeUpgrade(Subscription currentSubscription, Plan subscribedPlan, Plan newPlan, Instant now) {
         // Asking again while the same change is still waiting on payment must not raise a second Stripe invoice.
@@ -1042,7 +1044,8 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         pending.setPaymentUrl(null);
         subscriptionScheduledChangeRepository.save(pending);
 
-        // A no-op when no key asked for the change (an operator, or STRIPE_INTEGRATION which does not record one).
+        // A no-op when no key asked for the change (an operator, or a STRIPE_INTEGRATION change that waited on the
+        // next renewal, which does not record one).
         keyBudgetService.recordSpend(subscription.getAccount().getId(), pending.getApiKeyId(),
                 SpendKind.MONEY, amountPaid, subscription.getId().toString(),
                 "plan_change:" + pending.getId());
@@ -1150,11 +1153,13 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         if (waiting == null) {
             return;
         }
-        // STRIPE_DRIVEN charge-first upgrade still waiting on its Stripe invoice. Voiding that invoice is how
-        // Stripe cancels a pending_update; left open, a human paying it would move Stripe to a plan Tanso dropped.
+        // Charge-first upgrade still waiting on its Stripe invoice. Voiding that invoice is how Stripe cancels a
+        // pending_update; left open, a human paying it would move Stripe to a plan Tanso dropped. On send_invoice
+        // Stripe already holds the new price, so it is also put back.
         if (waiting.getStripeInvoiceId() != null) {
             try {
-                stripeSyncService.voidStripeInvoice(waiting.getStripeInvoiceId(), subscription.getAccount().getId());
+                stripeSyncService.cancelUnpaidUpgrade(waiting.getStripeInvoiceId(), subscription.getId(),
+                        subscription.getAccount().getId());
             } catch (StripeException e) {
                 throw new IllegalStateException("Could not void Stripe invoice " + waiting.getStripeInvoiceId()
                         + " behind the pending upgrade of subscription " + subscription.getId() + ": " + e.getMessage(), e);

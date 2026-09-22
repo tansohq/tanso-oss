@@ -800,7 +800,7 @@ class StripeWebhookImplTest {
     }
 
     @Test
-    void handleStripeDrivenPendingUpdateExpired_CancelsTheUpgradeNobodyPaidFor() {
+    void handlePendingUpdateExpired_CancelsTheUpgradeNobodyPaidFor() {
         StripeSubscription bridge = new StripeSubscription();
         bridge.setSubscription(subscription);
         Plan starter = new Plan();
@@ -820,11 +820,149 @@ class StripeWebhookImplTest {
         when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
                 .thenReturn(Optional.of(pending));
 
-        stripeWebhook.handleStripeDrivenPendingUpdateExpired(stripeSub);
+        stripeWebhook.handlePendingUpdateExpired(stripeSub);
 
         assertEquals("CANCELLED", pending.getStatus());
         verify(subscriptionScheduledChangeRepository).save(pending);
         verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+    }
+
+    // ── STRIPE_INTEGRATION charge-first upgrades ──────────────────────────────
+
+    private StripeInvoice linkedStripeInvoice(String stripeInvoiceId) {
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = new com.tansoflow.tansocore.entity.Invoice();
+        tansoInvoice.setId(UUID.randomUUID());
+        tansoInvoice.setSubscription(subscription);
+        StripeInvoice link = new StripeInvoice();
+        link.setInvoice(tansoInvoice);
+        when(stripeSyncService.stripeInvoiceLinked(stripeInvoiceId)).thenReturn(true);
+        when(stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoiceId)).thenReturn(link);
+        return link;
+    }
+
+    // Matching by subscription let any paid invoice, such as a renewal, complete an upgrade whose proration was
+    // never paid. Only the invoice Stripe raised for the upgrade completes it, and only once.
+    @Test
+    void handleFullSyncInvoicePaid_FulfilsAChargeFirstUpgradeOnlyByItsOwnInvoiceAndOnce() {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setToPlan(plan);
+        pending.setStatus("PENDING");
+        pending.setStripeInvoiceId("in_proration");
+
+        Invoice renewal = createStripeInvoiceWithSubscription("in_renewal", "sub_si_1");
+        renewal.setAmountPaid(14900L);
+        linkedStripeInvoice("in_renewal");
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_renewal"))
+                .thenReturn(Optional.empty());
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
+                .thenReturn(Optional.of(pending));
+
+        stripeWebhook.handleFullSyncInvoicePaid(renewal, accountId);
+
+        verify(subscriptionService, never()).fulfilPaidUpgrade(any(), any());
+
+        Invoice proration = createStripeInvoiceWithSubscription("in_proration", "sub_si_1");
+        proration.setAmountPaid(7450L);
+        linkedStripeInvoice("in_proration");
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeByStripeInvoiceId("in_proration"))
+                .thenReturn(Optional.of(pending))
+                .thenReturn(Optional.empty());
+
+        stripeWebhook.handleFullSyncInvoicePaid(proration, accountId);
+        stripeWebhook.handleFullSyncInvoicePaid(proration, accountId);
+
+        verify(subscriptionService, org.mockito.Mockito.times(1)).fulfilPaidUpgrade(pending, new BigDecimal("74.50"));
+    }
+
+    // The first charge attempt failing is how a charge-first upgrade starts waiting on a human. Reverting the price
+    // and marking it FAILED here would kill the hosted invoice the caller was just handed.
+    @Test
+    void handleFullSyncInvoicePaymentFailed_LeavesAChargeFirstUpgradeWaiting() throws Exception {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending =
+                new com.tansoflow.tansocore.entity.SubscriptionScheduledChange();
+        pending.setSubscription(subscription);
+        pending.setStatus("PENDING");
+        pending.setStripeInvoiceId("in_proration");
+        linkedStripeInvoice("in_proration");
+        when(subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(subscription))
+                .thenReturn(Optional.of(pending));
+
+        stripeWebhook.handleFullSyncInvoicePaymentFailed(createStripeInvoiceWithSubscription("in_proration", "sub_si_1"));
+
+        assertEquals("PENDING", pending.getStatus());
+        verify(stripeSyncService, never()).updateStripeSubscriptionPrice(any(), any(), any(), org.mockito.ArgumentMatchers.anyBoolean());
+        verify(subscriptionScheduledChangeRepository, never()).save(any());
+    }
+
+    // A proration invoice covers now until period end. Reading the period off it moved the subscription's period
+    // start, and the accumulate path billed a whole period's base price and usage on it.
+    @Test
+    void handleFullSyncInvoiceCreated_AnUpgradeProrationInvoiceKeepsThePeriodAndSkipsAccumulateBilling() throws Exception {
+        Invoice proration = createStripeInvoiceWithPeriod("in_proration", 7450L,
+                Instant.parse("2025-01-16T00:00:00Z").getEpochSecond(),
+                Instant.parse("2025-02-01T00:00:00Z").getEpochSecond());
+        proration.setBillingReason("subscription_update");
+        proration.setMetadata(Map.of("tanso_subscription_id", subscription.getId().toString()));
+
+        when(stripeSyncService.stripeInvoiceLinked("in_proration")).thenReturn(false);
+        when(subscriptionService.getSubscriptionById(subscription.getId().toString(), accountId))
+                .thenReturn(subscription);
+        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+                .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
+
+        stripeWebhook.handleFullSyncInvoiceCreated(proration, accountId);
+
+        assertEquals(Instant.parse("2025-01-01T00:00:00Z"), subscription.getCurrentPeriodStart());
+        verify(subscriptionRepository, never()).save(any());
+        verify(invoiceService, never()).planHasAccumulateModeFeatures(any());
+        verify(stripeSyncService, never()).disableAutoAdvanceOnStripeInvoice(any(), any());
+        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("74.50")), eq(InvoiceStatus.DUE),
+                eq(Instant.parse("2025-01-01T00:00:00Z")), eq(Instant.parse("2025-02-01T00:00:00Z")));
+    }
+
+    // ── Spend mandate completion records the owner email ─────────────────────
+
+    private com.stripe.model.checkout.Session mandateSession(String email) {
+        com.stripe.model.checkout.Session session = new com.stripe.model.checkout.Session();
+        session.setId("cs_mandate_1");
+        session.setMode("setup");
+        session.setSetupIntent("seti_1");
+        session.setCustomer("cus_1");
+        session.setMetadata(Map.of("tanso_account_id", accountId,
+                "tanso_purpose", com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_SPEND_MANDATE));
+        com.stripe.model.checkout.Session.CustomerDetails details = new com.stripe.model.checkout.Session.CustomerDetails();
+        details.setEmail(email);
+        session.setCustomerDetails(details);
+
+        com.tansoflow.tansocore.entity.CheckoutSession record = new com.tansoflow.tansocore.entity.CheckoutSession();
+        record.setAccountId(account.getId());
+        record.setCustomerId(customer.getId());
+        record.setAmount(new BigDecimal("50.00"));
+        when(checkoutSessionRepository.findByStripeSessionId("cs_mandate_1")).thenReturn(Optional.of(record));
+        return session;
+    }
+
+    @Test
+    void aCompletedSpendMandateRecordsTheCheckoutEmailWhenTheCustomerHasNone() throws Exception {
+        com.stripe.model.checkout.Session session = mandateSession("owner@example.com");
+        when(customerService.validateAndRetrieveCustomer(customer.getId().toString(), accountId)).thenReturn(customer);
+
+        stripeWebhook.handleSessionsComplete(session);
+
+        verify(agentLifecycleService).setOwnerEmail(customer, "owner@example.com");
+    }
+
+    @Test
+    void aCompletedSpendMandateNeverReplacesAnExistingEmail() throws Exception {
+        customer.setEmail("signup@example.com");
+        com.stripe.model.checkout.Session session = mandateSession("owner@example.com");
+        when(customerService.validateAndRetrieveCustomer(customer.getId().toString(), accountId)).thenReturn(customer);
+
+        stripeWebhook.handleSessionsComplete(session);
+
+        verify(agentLifecycleService, never()).setOwnerEmail(any(), any());
     }
 
     @Test

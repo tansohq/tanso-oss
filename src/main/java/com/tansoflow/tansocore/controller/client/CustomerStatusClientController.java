@@ -97,8 +97,8 @@ public class CustomerStatusClientController {
 
     @PutMapping("/owner")
     @PreAuthorize("hasAnyRole('CLIENT','CUSTOMER')")
-    @Operation(summary = "Nominate an owner", description = "Records the principal's email on the account. Nothing "
-            + "is sent to it; paying is what claims the account.",
+    @Operation(summary = "Nominate an owner", description = "Records the principal's email on the account. Tanso "
+            + "sends nothing to it; Stripe may send receipts and invoices to it. Paying is what claims the account.",
             security = @SecurityRequirement(name = "Bearer"))
     public ResponseEntity<ApiResponse<AgentStatusResponse>> setOwner(
             @AuthenticationPrincipal UserContext userContext,

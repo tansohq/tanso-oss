@@ -37,6 +37,34 @@ tags; this file starts where the changelog does.
 
 ### Changed
 
+- **STRIPE_INTEGRATION upgrades now charge the prorated amount immediately,
+  for every caller.** Agent keys, tenant (`sk_`) keys and the MCP tool all go
+  through the charge-first path STRIPE_DRIVEN agent upgrades already used:
+  Stripe invoices the proration during the call and the plan moves only once
+  it is paid. Before, Tanso recorded a pending change, sent Stripe a
+  `create_prorations` price change and answered 200, while the plan only moved
+  when the next renewal invoice was paid. Applies to in-advance to in-advance
+  upgrades that cost money; downgrades stay end of period and in-arrears
+  upgrades are unchanged. There is no setting for it. Operators on
+  STRIPE_DRIVEN keep the immediate swap.
+- **What a plan-change call answers while an upgrade waits on payment.** A
+  customer (`ck_`) key gets the 402 `complete_checkout` gate with Stripe's
+  hosted invoice. A tenant (`sk_`) key gets `202` with
+  `data: { "status": "payment_pending", "paymentUrl": ... }`, not a gate.
+- **Accumulate-mode plans (billed by emailed invoice) upgrade too.** Their
+  Stripe subscriptions use `send_invoice`, where Stripe does not support
+  pending updates. The upgrade is invoiced without `pending_if_incomplete`:
+  Stripe moves to the new price and sends the prorated invoice, and Tanso
+  leaves the plan where it is until that invoice is paid. Cancelling or
+  replacing such an upgrade voids the invoice and puts the Stripe price back.
+- **`nominate_owner` only where an email is needed.** An agent upgrade on
+  STRIPE_DRIVEN or STRIPE_INTEGRATION no longer asks for an owner email when
+  the customer has a saved card, since Stripe charges the card. Pass-through
+  accounts, and Stripe-billed customers without a card, still get it.
+- **A completed spend mandate records the owner email.** When the customer has
+  no email, the one the principal typed on the Checkout page is stored as the
+  owner and pushed to the Stripe customer, so receipts and dunning reach them.
+  An email already on the customer is kept.
 - **A spend mandate is stored once per customer, not copied onto its keys.**
   It used to be written as a money budget on every active key. Spend is summed
   per key, so two keys meant twice the approved amount could be charged, and
@@ -63,6 +91,24 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **A renewal invoice no longer completes an unpaid upgrade.** On
+  STRIPE_INTEGRATION any paid invoice for the subscription fulfilled the
+  waiting upgrade. A charge-first upgrade now completes only on the invoice
+  Stripe raised for it.
+- **A failed first charge no longer kills the upgrade's invoice.** On
+  STRIPE_INTEGRATION a failed payment reverted the Stripe price and marked
+  the change FAILED, so the hosted invoice the caller had just been handed led
+  nowhere. The charge-first change now stays payable until it is paid,
+  expires (`customer.subscription.pending_update_expired`, now handled on
+  STRIPE_INTEGRATION too) or is cancelled.
+- **An upgrade's proration invoice no longer moves the billing period.** On
+  STRIPE_INTEGRATION the period was read off the first invoice line, which for
+  a proration invoice starts now, and accumulate-mode plans billed a full
+  period's base price and usage on it. Invoices with `billing_reason:
+  subscription_update` now keep the subscription's period and are mirrored as
+  they are.
+- **The runbook said nothing is sent to the owner email.** Tanso sends
+  nothing, but Stripe may send receipts and invoices to it.
 - **A charge larger than the whole key budget no longer says `wait`.** It
   answered `budget_exceeded` / `wait` with a `retry_after`, but no window reset
   lets it through. It now answers `spend_cap_exceeded` / `raise_spend_cap`

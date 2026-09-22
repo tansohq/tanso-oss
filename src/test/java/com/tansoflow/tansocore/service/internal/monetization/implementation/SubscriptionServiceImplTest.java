@@ -1194,7 +1194,7 @@ class SubscriptionServiceImplTest {
         subscriptionService.cancelScheduledChangesForSubscription(
                 UUID.fromString(currentSubscriptionId), account.getId());
 
-        verify(stripeSyncService).voidStripeInvoice("in_stale", account.getId());
+        verify(stripeSyncService).cancelUnpaidUpgrade("in_stale", existing.getId(), account.getId());
         verify(subscriptionScheduledChangeRepository).cancelAllScheduledChanges(existing);
     }
 
@@ -1221,25 +1221,119 @@ class SubscriptionServiceImplTest {
                 account.getId(), existing.getId(), starter.getId(), true));
     }
 
-    // STRIPE_INTEGRATION leaves the Tanso plan unchanged until payment, and the listener used to read
-    // subscription.getPlan(), so Stripe was re-sent the old price and never billed the upgrade.
+    // --- STRIPE_INTEGRATION: every caller is charged the proration before the plan moves ---------------------
+    // The upgrade used to record a PENDING change and send Stripe a CREATE_PRORATIONS price change, so the call
+    // answered 200 while the plan only moved when the NEXT renewal invoice was paid.
+
+    private void stripeIntegration(String accountIdString) {
+        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
+        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
+        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+    }
+
     @org.junit.jupiter.api.Test
-    void aStripeIntegrationUpgradeSendsStripeTheNewPlanNotTheUnswappedOne() {
+    void anOperatorUpgradeOnStripeIntegrationIsChargedFirstAndWaitsOnTheInvoice() throws Exception {
         String accountIdString = account.getId().toString();
         String currentSubscriptionId = UUID.randomUUID().toString();
         Plan free = inAdvancePlan("developer_demo", "0.00");
         Plan starter = inAdvancePlan("starter", "149.00");
         Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
         when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
-        com.tansoflow.tansocore.entity.AccountSetting setting = new com.tansoflow.tansocore.entity.AccountSetting();
-        setting.setStripeMode(com.tansoflow.tansocore.model.api.external.StripeMode.STRIPE_INTEGRATION);
-        when(accountService.retrieveAccountSettings(accountIdString)).thenReturn(setting);
+        stripeIntegration(accountIdString);
+        when(stripeSyncService.chargeUpgradeBeforeApplying(existing.getId(), account.getId(), starter.getId()))
+                .thenReturn(new com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge(
+                        "in_proration", "https://invoice.stripe.com/i/acct_test/in_proration",
+                        java.math.BigDecimal.ZERO, false));
 
-        subscriptionService.upgradeSubscription(currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+        // No security context: an operator.
+        com.tansoflow.tansocore.model.subscription.UpgradeResult result = subscriptionService.upgradeSubscription(
+                currentSubscriptionId, accountIdString, starter.getId().toString(), true);
 
+        org.assertj.core.api.Assertions.assertThat(result.stripePaymentUrl())
+                .isEqualTo("https://invoice.stripe.com/i/acct_test/in_proration");
         org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(free);
+        verifyNoInteractions(entitlementService);
+        // No prorate-at-renewal price change: Stripe got the charge-first call instead.
+        verify(eventPublisher, org.mockito.Mockito.never()).publishEvent(
+                org.mockito.ArgumentMatchers.isA(com.tansoflow.tansocore.model.event.service.SubscriptionPlanChangedEvent.class));
+
+        ArgumentCaptor<com.tansoflow.tansocore.entity.SubscriptionScheduledChange> saved =
+                ArgumentCaptor.forClass(com.tansoflow.tansocore.entity.SubscriptionScheduledChange.class);
+        verify(subscriptionScheduledChangeRepository).save(saved.capture());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getStatus())
+                .isEqualTo(com.tansoflow.tansocore.model.subscription.type.SubscriptionScheduledChangeStatus.PENDING.name());
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getStripeInvoiceId()).isEqualTo("in_proration");
+        org.assertj.core.api.Assertions.assertThat(saved.getValue().getApiKeyId()).isNull();
+    }
+
+    @org.junit.jupiter.api.Test
+    void anAgentUpgradeOnStripeIntegrationSwapsOnceStripeHasChargedTheSavedCard() throws Exception {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+        stripeIntegration(accountIdString);
+        when(stripeSyncService.chargeUpgradeBeforeApplying(existing.getId(), account.getId(), starter.getId()))
+                .thenReturn(new com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge(
+                        "in_proration", "https://invoice.stripe.com/i/acct_test/in_proration",
+                        new java.math.BigDecimal("74.50"), true));
+
+        callingWithAnApiKey(() -> {
+            com.tansoflow.tansocore.model.subscription.UpgradeResult result = subscriptionService.upgradeSubscription(
+                    currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+            org.assertj.core.api.Assertions.assertThat(result.waitingOnPayment()).isFalse();
+        });
+
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
+        verify(entitlementService).processEntitlementsForSubscription(existing);
+        verify(keyBudgetService).recordSpend(eq(account.getId()), org.mockito.ArgumentMatchers.notNull(),
+                eq(com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY), eq(new java.math.BigDecimal("74.50")),
+                eq(existing.getId().toString()), org.mockito.ArgumentMatchers.startsWith("plan_change:"));
+    }
+
+    @org.junit.jupiter.api.Test
+    void anOperatorUpgradeOnStripeIntegrationSwapsWhenStripeChargedTheCard() throws Exception {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan free = inAdvancePlan("developer_demo", "0.00");
+        Plan starter = inAdvancePlan("starter", "149.00");
+        Subscription existing = subscriptionOnPlanForUpgrade(free, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(starter.getId().toString()))).thenReturn(starter);
+        stripeIntegration(accountIdString);
+        when(stripeSyncService.chargeUpgradeBeforeApplying(existing.getId(), account.getId(), starter.getId()))
+                .thenReturn(new com.tansoflow.tansocore.model.data.stripe.StripeUpgradeCharge(
+                        "in_proration", null, new java.math.BigDecimal("74.50"), true));
+
+        com.tansoflow.tansocore.model.subscription.UpgradeResult result = subscriptionService.upgradeSubscription(
+                currentSubscriptionId, accountIdString, starter.getId().toString(), true);
+
+        org.assertj.core.api.Assertions.assertThat(result.waitingOnPayment()).isFalse();
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(starter);
+        verify(creditService).grantUpgradeDelta(eq(existing), eq(free), eq(starter), any());
+    }
+
+    // Nothing is charged now for an in-arrears upgrade, so it keeps waiting on the next paid invoice. The listener
+    // used to read subscription.getPlan(), so Stripe was re-sent the old price and never billed the upgrade.
+    @org.junit.jupiter.api.Test
+    void anInArrearsStripeIntegrationUpgradeSendsStripeTheNewPlanNotTheUnswappedOne() {
+        String accountIdString = account.getId().toString();
+        String currentSubscriptionId = UUID.randomUUID().toString();
+        Plan small = inAdvancePlan("metered_small", "10.00");
+        small.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ARREARS.name());
+        Plan large = inAdvancePlan("metered_large", "50.00");
+        large.setBillingTiming(com.tansoflow.tansocore.model.plan.BillingTiming.IN_ARREARS.name());
+        Subscription existing = subscriptionOnPlanForUpgrade(small, currentSubscriptionId, accountIdString);
+        when(planService.retrievePlan(account, UUID.fromString(large.getId().toString()))).thenReturn(large);
+        stripeIntegration(accountIdString);
+
+        subscriptionService.upgradeSubscription(currentSubscriptionId, accountIdString, large.getId().toString(), true);
+
+        org.assertj.core.api.Assertions.assertThat(existing.getPlan()).isEqualTo(small);
+        verifyNoInteractions(stripeSyncService);
         verify(eventPublisher).publishEvent(new com.tansoflow.tansocore.model.event.service.SubscriptionPlanChangedEvent(
-                account.getId(), existing.getId(), starter.getId(), true));
+                account.getId(), existing.getId(), large.getId(), true));
     }
 
     @org.junit.jupiter.api.Test

@@ -33,7 +33,8 @@ import java.math.BigDecimal;
 public class AgentSignupRequest {
     @Email
     @Size(max = 255)
-    @Schema(description = "Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. "
+    @Schema(description = "Optional contact email of the agent's principal. Recorded as the owner; Tanso sends nothing "
+            + "to it, Stripe may send receipts and invoices to it. "
             + "Can be set later via PUT /api/v1/client/customers/{ref}/owner.")
     private String email;
 

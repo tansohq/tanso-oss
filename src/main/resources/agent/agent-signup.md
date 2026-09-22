@@ -37,9 +37,10 @@ curl -X POST {base}/public/v1/catalog/{slug}/signup \
   }'
 ```
 
-- `email`: optional. Must be a valid address if present. It is recorded as the owner contact only.
-  Nothing is sent to it, and it never resolves to an existing customer: every signup creates a
-  new provisional customer, even with an email seen before.
+- `email`: optional. Must be a valid address if present. Recorded as the owner contact. Tanso sends
+  nothing; Stripe may send receipts and invoices to it. It never resolves to an existing customer:
+  every signup creates a new provisional customer, even with an email seen before. Without one, the
+  email your principal types on the spend mandate page is recorded instead.
 - `name`: optional, up to 100 characters.
 - `spend_mandate`: optional. `currency` must equal the account currency. `max_amount` is required
   when the object is present and must not be above the operator's limit. `period` is `day`, `week`
@@ -223,8 +224,11 @@ Buy credits: `POST {base}/api/v1/client/credits/purchases`.
 Change plan: `POST {base}/api/v1/client/subscriptions` with a plan key from pricing.json.
 Change an existing subscription in place: `POST {base}/api/v1/client/subscriptions/{subscriptionId}/plan-change`.
 An upgrade that costs money answers 402 with the invoice to pay; the plan swaps when the invoice is paid.
-Where Stripe runs the billing and a card is on file, Stripe charges it during the call: a 200 means it was
-paid and the new plan is already yours. The 402 comes only when that charge did not go through.
+Where Stripe runs the billing, Stripe charges the prorated amount during the call: a 200 means it was
+paid and the new plan is already yours. You get the 402 instead when there is no card, the charge did not
+go through, or the operator's Stripe sends invoices by email rather than charging a card. `url` is then
+Stripe's invoice; the plan moves when it is paid. A downgrade is scheduled for the end of the period and
+charges nothing.
 Mutating requests accept an `Idempotency-Key` header; replays return the stored response for 24h.
 
 ## 7. Gates: 402 and 403
@@ -279,8 +283,8 @@ What to do per row:
 | status | code | gate | action | do this |
 |--------|------|------|--------|---------|
 | 402 | `payment_required` | `payment` | `complete_checkout` | Hand `url` to the human who owns the account. Poll `poll` (`{base}/api/v1/client/checkout-sessions/{id}`) until the session is complete, then retry the call. |
-| 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. A Stripe invoice left unpaid for about 23 hours expires and the change is dropped; ask again after that. |
-| 402 | `payment_required` | `payment` | `nominate_owner` | Stripe needs an email to send the invoice to. `PUT {"email": ...}` to `url` (the owner endpoint), then retry the call. Signing up with an email avoids this. |
+| 402 | `payment_required` | `payment` | `complete_checkout` | On `plan-change`: the upgrade is raised but not granted. Hand `url` to the human, poll `poll` (the customer's status URL) until `plan` shows the new plan. Do not retry the call; paying completes it. A Stripe invoice for a declined card, left unpaid for about 23 hours, expires and the change is dropped; ask again after that. |
+| 402 | `payment_required` | `payment` | `nominate_owner` | Only on accounts where Tanso sends Stripe invoices by email, when no card is saved. `PUT {"email": ...}` to `url`, then retry. A completed spend mandate or a signup email avoids this. |
 | 403 | `budget_exceeded` | `budget` | `wait` | The key's budget window, or the mandate's window, is used up, but the charge fits once it resets. Wait `retry_after` seconds, then retry. Do not retry in a loop. |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_spend_cap` | One charge is above the operator's per-charge cap (`limits.spend_cap`) or larger than the key's whole budget. `retry_after` is null; waiting will not help. Ask the operator to raise the cap, or make a smaller purchase. |
 | 403 | `spend_cap_exceeded` | `budget` | `raise_mandate` | One off-session charge is larger than the whole mandate your principal approved. `retry_after` is null; waiting will not help. `url` is the spend-mandate endpoint: `POST` a higher `max_amount` to it (step 5a) and hand the new `setup_url` to your principal, or buy less. |
@@ -295,7 +299,8 @@ says what to do. It is safe to show it to a human.
 
 ## 8. Set the owner
 
-Optional. Records a human contact on the customer. Sends nothing.
+Optional. Records a human contact on the customer. Tanso sends nothing; Stripe may send receipts and
+invoices to it.
 
 ```
 curl -X PUT {base}/api/v1/client/customers/agent_7f3c9a2e/owner \

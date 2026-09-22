@@ -213,8 +213,8 @@ public class StripeWebhookImpl implements StripeWebhook {
                     com.stripe.model.Subscription stripeSub = deserializeEvent(event, com.stripe.model.Subscription.class);
                     log.info("Subscription pending update expired. Subscription Id: {}", stripeSub.getId());
 
-                    if (stripeMode == StripeMode.STRIPE_DRIVEN) {
-                        handleStripeDrivenPendingUpdateExpired(stripeSub);
+                    if (stripeMode == StripeMode.STRIPE_DRIVEN || stripeMode.isStripeIntegration()) {
+                        handlePendingUpdateExpired(stripeSub);
                     }
                 }
                 case "customer.created" -> {
@@ -388,6 +388,21 @@ public class StripeWebhookImpl implements StripeWebhook {
         String period = session.getMetadata().getOrDefault("tanso_period", "month");
         agentLifecycleService.activateSpendMandate(record.getAccountId(), record.getCustomerId(),
                 record.getApiKeyId(), paymentMethodId, record.getAmount(), period);
+
+        // The human who approved the mandate typed an email on the Checkout page. When the agent signed up without
+        // one, record it as the owner so Stripe's receipts and dunning reach that human. An email already on the
+        // customer is never replaced.
+        String checkoutEmail = session.getCustomerDetails() != null ? session.getCustomerDetails().getEmail() : null;
+        if (checkoutEmail != null && !checkoutEmail.isBlank()) {
+            Customer customer = customerService.validateAndRetrieveCustomer(
+                    record.getCustomerId().toString(), record.getAccountId().toString());
+            if (customer.getEmail() == null || customer.getEmail().isBlank()) {
+                agentLifecycleService.setOwnerEmail(customer, checkoutEmail);
+                log.info("Recorded owner email for customer {} from spend mandate session {}",
+                        customer.getExternalClientCustomerId(), session.getId());
+            }
+        }
+
         record.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
         record.setCompletedAt(java.time.Instant.now());
         checkoutSessionRepository.save(record);
@@ -563,9 +578,14 @@ public class StripeWebhookImpl implements StripeWebhook {
         // Extract period dates from the Stripe invoice to keep tanso subscription in sync.
         // This fixes stale period dates for FULL_SYNC subscriptions since SubscriptionCycleJob
         // excludes FULL_SYNC and no other code path updates periods.
+        // The proration invoice of a charge-first upgrade covers only the rest of the current period. Its lines
+        // start now, so reading the period off it would move the subscription's period start, and the accumulate
+        // path would bill a whole period's base price and usage on it.
+        boolean upgradeProration = "subscription_update".equals(stripeInvoice.getBillingReason());
+
         Instant periodStart = subscription.getCurrentPeriodStart();
         Instant periodEnd = subscription.getCurrentPeriodEnd();
-        Instant[] stripePeriod = extractPeriodFromStripeInvoice(stripeInvoice);
+        Instant[] stripePeriod = upgradeProration ? null : extractPeriodFromStripeInvoice(stripeInvoice);
         if (stripePeriod != null) {
             periodStart = stripePeriod[0];
             periodEnd = stripePeriod[1];
@@ -581,7 +601,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             return;
         }
 
-        if (invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())) {
+        if (!upgradeProration && invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())) {
             handleAccumulateModeInvoiceCreated(stripeInvoice, subscription, accountId, periodStart, periodEnd);
         } else {
             // Non-accumulate: mirror Stripe's amountDue as-is (existing behavior)
@@ -738,6 +758,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             // using Stripe's amountPaid to avoid StripeException on an already-finalized invoice.
             Subscription subscription = resolveSubscription(stripeInvoice, accountId);
             if (subscription != null
+                    && !"subscription_update".equals(stripeInvoice.getBillingReason())
                     && invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())
                     && "paid".equals(stripeInvoice.getStatus())) {
                 createMirrorInvoiceFromPaidStripeInvoice(stripeInvoice, subscription, accountId);
@@ -757,11 +778,20 @@ public class StripeWebhookImpl implements StripeWebhook {
         // processes entitlements, and grants credits.
         invoiceService.markInvoiceAsPaid(invoiceId);
 
-        // Fulfill pending upgrade if this payment was for a proration invoice
+        // A charge-first upgrade completes only on the invoice Stripe raised for it. Matching by subscription would
+        // let any paid invoice, such as a renewal, move the plan while the proration is still unpaid.
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange chargedFirst = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        // An upgrade with nothing charged up front (in arrears) waits on the next paid invoice for the subscription.
         Subscription paidSubscription = stripeInvoiceEntity.getInvoice().getSubscription();
-        if (paidSubscription != null) {
+        if (chargedFirst != null) {
+            subscriptionService.fulfilPaidUpgrade(chargedFirst, amountPaidOf(stripeInvoice));
+            log.info("STRIPE_INTEGRATION: Fulfilled upgrade for subscription {} to plan {} paid by Stripe invoice {}",
+                    chargedFirst.getSubscription().getId(), chargedFirst.getToPlan().getId(), stripeInvoice.getId());
+        } else if (paidSubscription != null) {
             subscriptionScheduledChangeRepository
                     .findPendingUpgradeBySubscription(paidSubscription)
+                    .filter(ssc -> ssc.getStripeInvoiceId() == null)
                     .ifPresent(ssc -> {
                         subscriptionService.fulfilPaidUpgrade(ssc,
                                 amountPaidOf(stripeInvoice));
@@ -816,11 +846,15 @@ public class StripeWebhookImpl implements StripeWebhook {
             log.info("STRIPE_INTEGRATION: Marked Tanso invoice {} as PAST_DUE from Stripe invoice payment failure {}",
                     tansoInvoice.getId(), stripeInvoice.getId());
 
-            // If a pending upgrade caused this invoice, revert Stripe to the old plan's price
+            // If a pending upgrade caused this invoice, revert Stripe to the old plan's price.
+            // A charge-first upgrade is left alone: its invoice stays payable at the hosted URL the caller holds,
+            // Stripe never moved the price on charge_automatically, and it ends by payment, by expiry
+            // (customer.subscription.pending_update_expired) or by being cancelled or replaced.
             Subscription subscription = tansoInvoice.getSubscription();
             if (subscription != null) {
                 subscriptionScheduledChangeRepository
                         .findPendingUpgradeBySubscription(subscription)
+                        .filter(ssc -> ssc.getStripeInvoiceId() == null)
                         .ifPresent(ssc -> {
                             try {
                                 // Tanso subscription still has OLD plan — pricing against it reverts Stripe
@@ -1193,15 +1227,16 @@ public class StripeWebhookImpl implements StripeWebhook {
     }
 
     /**
-     * STRIPE_DRIVEN: nobody paid the invoice behind an agent's upgrade in time. Stripe has voided it and dropped
-     * the pending_update, so the Tanso change waiting on it can never complete.
+     * STRIPE_DRIVEN or STRIPE_INTEGRATION: nobody paid the invoice behind a charge-first upgrade in time. Stripe has
+     * voided it and dropped the pending_update, so the Tanso change waiting on it can never complete. Only
+     * charge_automatically subscriptions get here; a send_invoice subscription never holds a pending_update.
      */
     @Transactional
-    protected void handleStripeDrivenPendingUpdateExpired(com.stripe.model.Subscription stripeSub) {
+    protected void handlePendingUpdateExpired(com.stripe.model.Subscription stripeSub) {
         StripeSubscription bridge = stripeSubscriptionRepository
                 .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
         if (bridge == null) {
-            log.debug("STRIPE_DRIVEN: No mapped subscription for expired pending update on Stripe sub {}", stripeSub.getId());
+            log.debug("No mapped subscription for expired pending update on Stripe sub {}", stripeSub.getId());
             return;
         }
         subscriptionScheduledChangeRepository.findPendingUpgradeBySubscription(bridge.getSubscription())
@@ -1210,7 +1245,7 @@ public class StripeWebhookImpl implements StripeWebhook {
                     pending.setStatus(SubscriptionScheduledChangeStatus.CANCELLED.name());
                     pending.setPaymentUrl(null);
                     subscriptionScheduledChangeRepository.save(pending);
-                    log.info("STRIPE_DRIVEN: Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} expired unpaid",
+                    log.info("Upgrade of subscription {} to plan {} cancelled, Stripe invoice {} expired unpaid",
                             bridge.getSubscription().getId(), pending.getToPlan().getKey(), pending.getStripeInvoiceId());
                 });
     }
