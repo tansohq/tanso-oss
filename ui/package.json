@@ -10,7 +10,7 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
-    "openapi": "curl -s \"http://localhost:8080/v3/api-docs/Tanso%20API\" -o openapi/tanso-api.json && openapi-typescript openapi/tanso-api.json -o lib/api/schema.d.ts"
+    "openapi": "curl -s \"http://localhost:8080/v3/api-docs\" -o openapi/tanso-api.json && openapi-typescript openapi/tanso-api.json -o lib/api/schema.d.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
