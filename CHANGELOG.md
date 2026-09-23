@@ -5,6 +5,23 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+## 0.11.1 — 2026-09-22
+
+Found by running 0.11.0 end to end against Stripe test mode. Upgrades on plans
+with a usage-priced feature failed outright, subscriptions Stripe created left
+usage unbilled, Tanso stored the wrong amount for Stripe's invoices, and
+concurrent Stripe webhooks could fail or copy one invoice twice.
+
+### Upgrading from 0.11.0
+
+- **A new migration merges duplicate Stripe invoice copies** before making
+  the Stripe invoice id unique. Per Stripe invoice it keeps the copy linked to
+  a paid Tanso invoice, otherwise the oldest, and voids the rest.
+- **Check Stripe subscriptions on usage-priced plans that Tanso created
+  before this release.** Most creation paths added only the licensed price,
+  so Stripe did not bill their usage. This release fixes new subscriptions
+  only; existing ones keep the missing price until they change plan.
+
 ### Fixed
 
 - **`invoice.paid` no longer fails on `STRIPE_INTEGRATION` when it arrives
