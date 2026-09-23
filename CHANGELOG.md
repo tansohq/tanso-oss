@@ -20,7 +20,7 @@ concurrent Stripe webhooks could fail or copy one invoice twice.
 - **Check Stripe subscriptions on usage-priced plans that Tanso created
   before this release.** Most creation paths added only the licensed price,
   so Stripe did not bill their usage. This release fixes new subscriptions
-  only; existing ones keep the missing price until they change plan.
+  only; existing subscriptions are not changed.
 
 ### Fixed
 
