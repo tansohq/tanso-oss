@@ -113,6 +113,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     private final InvoiceRepository invoiceRepository;
     private final InvoiceItemRepository invoiceItemRepository;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final jakarta.persistence.EntityManager entityManager;
 
     @Override
     public void syncStripeSubscriptionTansoSubscription(String stripeSubscriptionId, String tansoSubscription, String accountId) {
@@ -585,6 +586,13 @@ public class StripeSyncServiceImpl implements StripeSyncService {
     @Override
     public boolean stripeInvoiceLinked(String stripeInvoiceId) {
         return stripeInvoiceRepository.existsStripeInvoiceByStripeInvoiceExternalId(stripeInvoiceId);
+    }
+
+    @Override
+    public void lockStripeInvoice(String stripeInvoiceId) {
+        entityManager.createNativeQuery("SELECT pg_advisory_xact_lock(hashtext(:k))")
+                .setParameter("k", "stripe-invoice:" + stripeInvoiceId)
+                .getSingleResult();
     }
 
     @Override

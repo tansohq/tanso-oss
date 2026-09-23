@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260924-10"
+      author: tanso
+      comment: >
+        One Tanso copy per Stripe invoice. Stripe sends invoice.created, invoice.paid and
+        invoice.payment_succeeded for one payment at the same moment; each webhook found no copy
+        yet and inserted its own, so one Stripe invoice could be linked to several Tanso invoices
+        and a later lookup failed with "2 results were returned". Existing duplicates are merged
+        first: per Stripe invoice the link to a PAID Tanso invoice is kept, otherwise the oldest
+        link; the Tanso invoices behind the other links are copies of the same Stripe invoice, so
+        they are voided and their links deleted. Then the Stripe id is made unique.
+      changes:
+        - sql:
+            sql: >
+              WITH ranked AS (
+                SELECT si.stripe_invoice_id,
+                       si.invoice_id,
+                       row_number() OVER (
+                         PARTITION BY si.stripe_invoice_external_id
+                         ORDER BY (i.status = 'PAID') DESC NULLS LAST, si.created_at, si.stripe_invoice_id
+                       ) AS rn
+                  FROM stripe_invoices si
+                  LEFT JOIN invoices i ON i.invoice_id = si.invoice_id
+                 WHERE si.stripe_invoice_external_id IS NOT NULL
+              )
+              UPDATE invoices
+                 SET status = 'VOID', modified_at = now()
+               WHERE invoice_id IN (SELECT invoice_id FROM ranked WHERE rn > 1 AND invoice_id IS NOT NULL);
+              WITH ranked AS (
+                SELECT si.stripe_invoice_id,
+                       row_number() OVER (
+                         PARTITION BY si.stripe_invoice_external_id
+                         ORDER BY (i.status = 'PAID') DESC NULLS LAST, si.created_at, si.stripe_invoice_id
+                       ) AS rn
+                  FROM stripe_invoices si
+                  LEFT JOIN invoices i ON i.invoice_id = si.invoice_id
+                 WHERE si.stripe_invoice_external_id IS NOT NULL
+              )
+              DELETE FROM stripe_invoices
+               WHERE stripe_invoice_id IN (SELECT stripe_invoice_id FROM ranked WHERE rn > 1);
+        - addUniqueConstraint:
+            tableName: stripe_invoices
+            columnNames: stripe_invoice_external_id
+            constraintName: uq_stripe_invoices_external_id

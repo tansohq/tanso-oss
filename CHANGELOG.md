@@ -16,6 +16,16 @@ tags; this file starts where the changelog does.
   endpoints (`complete_checkout`, `nominate_owner`, no payment processor)
   answered `detail: null`, so an agent had nothing to quote to the operator.
   They now carry `errorId=<uuid>`, and the id is logged.
+- **One Tanso copy per Stripe invoice.** Stripe sends `invoice.created`,
+  `invoice.paid` and `invoice.payment_succeeded` for one payment at the same
+  moment. Each webhook found no copy yet and inserted its own, so a Stripe
+  invoice could be linked to several Tanso invoices, and the next lookup failed
+  with `2 results were returned` (webhook 400). Invoice webhooks now take a lock
+  on the Stripe invoice id before looking for a copy, so a concurrent delivery
+  waits and reuses it. Changelog `2026.09.24.10` first merges existing
+  duplicates: per Stripe invoice it keeps the link to a `PAID` Tanso invoice,
+  otherwise the oldest link, and voids the other copies. It then makes
+  `stripe_invoices.stripe_invoice_external_id` unique.
 - **An agent customer on `STRIPE_DRIVEN` is claimed when a saved card pays.**
   Stripe charges a saved card while it creates the invoice, so `invoice.created`
   already reports it paid. Tanso mirrored it straight to `PAID`, which skipped
