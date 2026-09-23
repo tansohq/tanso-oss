@@ -7,6 +7,16 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **An agent customer on `STRIPE_DRIVEN` is claimed when a saved card pays.**
+  Stripe charges a saved card while it creates the invoice, so `invoice.created`
+  already reports it paid. Tanso mirrored it straight to `PAID`, which skipped
+  `markInvoiceAsPaid`: the customer stayed `provisional` after paying, and
+  `invoice.paid` found the invoice already `PAID` and did nothing. The mirror is
+  now written `DUE` and marked paid in the same transaction. When
+  `invoice.paid` arrived before `invoice.created`, it created the mirror and
+  then marked it paid in a new transaction that could not see it yet, so the
+  webhook failed with `Invoice not found` and answered 400; it now marks the
+  mirror it created in its own transaction.
 - **Upgrading between plans with a usage-priced feature no longer fails in
   Stripe.** A plan with a usage-priced feature has a metered Stripe price, and
   a paid one also has a licensed base price. A plan change put the plan's newest

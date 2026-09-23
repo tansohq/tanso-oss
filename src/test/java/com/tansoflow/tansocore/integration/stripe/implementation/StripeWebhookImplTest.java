@@ -716,6 +716,35 @@ class StripeWebhookImplTest {
         verify(stripeSyncService).saveStripeInvoice(eq("inv_sd_mirror_001"), any(String.class), eq(accountId));
     }
 
+    // Stripe charges a saved card while it creates the invoice, so invoice.created already reports it paid. Written
+    // straight to PAID, it never went through markInvoiceAsPaid: the agent customer stayed provisional after paying,
+    // and invoice.paid then found the invoice PAID and did nothing.
+    @Test
+    void handleStripeDrivenInvoiceCreated_AnInvoiceStripeAlreadyCollectedIsMarkedPaid() {
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("inv_sd_mirror_paid", "sub_sd_030");
+        stripeInvoice.setAmountDue(3000L);
+        stripeInvoice.setStatus("paid");
+
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        UUID tansoInvoiceId = UUID.randomUUID();
+        com.tansoflow.tansocore.entity.Invoice tansoInvoice = new com.tansoflow.tansocore.entity.Invoice();
+        tansoInvoice.setId(tansoInvoiceId);
+
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked("inv_sd_mirror_paid")).thenReturn(false);
+        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+                .thenReturn(createInvoiceDto(tansoInvoiceId.toString()));
+        when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(tansoInvoiceId.toString(), accountId)).thenReturn(tansoInvoice);
+
+        stripeWebhook.handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
+
+        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
+                any(Instant.class), any(Instant.class));
+        verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
+    }
+
     @Test
     void handleStripeDrivenInvoiceCreated_AlreadyLinked_Skips() {
         Invoice stripeInvoice = createStripeInvoiceWithSubscription("inv_sd_mirror_002", "sub_sd_030");
@@ -1303,13 +1332,16 @@ class StripeWebhookImplTest {
         when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
                 .thenReturn(createInvoiceDto(tansoInvoiceId.toString()));
         when(stripeSyncService.retrieveStripeInvoiceLinkedData("inv_sd_race_001")).thenReturn(stripeInvoiceEntity);
+        when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(tansoInvoiceId.toString(), accountId)).thenReturn(tansoInvoice);
 
         stripeWebhook.handleStripeDrivenInvoicePaid(stripeInvoice, accountId);
 
-        // Verify mirror was created first, then marked as paid
-        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("30.00")), any(InvoiceStatus.class),
+        // The mirror is created DUE and marked paid in this transaction. markInvoiceAsPaid(String) opens a new one,
+        // which could not see the mirror yet and threw "Invoice not found", failing the webhook with 400.
+        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
                 any(Instant.class), any(Instant.class));
-        verify(invoiceService).markInvoiceAsPaid(tansoInvoiceId.toString());
+        verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
+        verify(invoiceService, never()).markInvoiceAsPaid(any(String.class));
         verify(creditService).processCreditGrantsForSubscription(subscription);
     }
 
