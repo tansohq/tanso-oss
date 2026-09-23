@@ -120,6 +120,18 @@ class SubscriptionServiceImplTest {
     @Mock
     private com.tansoflow.tansocore.repository.PlanCreditAllocationRepository planCreditAllocationRepository;
 
+    @Mock
+    private com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
+
+    @Mock
+    private com.tansoflow.tansocore.repository.CustomerRepository customerRepository;
+
+    @Mock
+    private com.tansoflow.tansocore.repository.StripeSubscriptionRepository stripeSubscriptionRepository;
+
+    @Mock
+    private org.springframework.beans.factory.ObjectProvider<com.tansoflow.tansocore.integration.stripe.StripeWebhook> stripeWebhookProvider;
+
     // Real Spring transactions with no database, so a test can ask whether code runs inside one.
     private final com.tansoflow.tansocore.util.TestTransactionManager transactionManager =
             new com.tansoflow.tansocore.util.TestTransactionManager();
@@ -372,6 +384,10 @@ class SubscriptionServiceImplTest {
         subscription.setBillingAnchorDay((short) 1);
         subscription.setCurrentPeriodStart(Instant.now().minus(30, ChronoUnit.DAYS));
         subscription.setCurrentPeriodEnd(Instant.now().minus(1, ChronoUnit.MINUTES));
+
+        // Stripe-billed subscribes lock the customer row first; the row exists in every test that gets there.
+        org.mockito.Mockito.lenient().when(customerRepository.findByIdAndAccountIdForUpdate(any(), any()))
+                .thenAnswer(i -> Optional.of(new Customer()));
 
         // A save assigns the id, as JPA does on persist; the charge-first upgrade keys Stripe on it.
         org.mockito.Mockito.lenient().when(subscriptionScheduledChangeRepository.save(any())).thenAnswer(i -> {
@@ -1707,5 +1723,160 @@ class SubscriptionServiceImplTest {
 
         assertEquals(nextStart, subscription.getCurrentPeriodStart());
         assertEquals(nextEnd, subscription.getCurrentPeriodEnd());
+    }
+
+    // --- saved-card subscribe: no money moves inside a transaction --------------------------------------------
+    // subscribe was @Transactional and created (and charged) the Stripe subscription inside it. A commit that failed
+    // after Stripe charged left a paid Stripe subscription, no spend record, and no key for a retry to reuse.
+
+    private final List<com.tansoflow.tansocore.entity.CheckoutSession> savedCharges = new java.util.ArrayList<>();
+
+    private Plan savedCardSubscribeOnStripeIntegration() {
+        customer.setStripeDefaultPaymentMethodId("pm_saved");
+        Plan paid = inAdvancePlan("starter", "49.00");
+        paid.setIntervalMonths(1);
+        stripeIntegration(account.getId().toString());
+        when(subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())).thenReturn(List.of());
+        org.mockito.Mockito.lenient().when(checkoutSessionRepository.save(any())).thenAnswer(i -> {
+            com.tansoflow.tansocore.entity.CheckoutSession row = i.getArgument(0);
+            if (row.getId() == null) {
+                row.setId(UUID.randomUUID());
+                savedCharges.add(row);
+            }
+            return row;
+        });
+        org.mockito.Mockito.lenient().when(checkoutSessionRepository.findByIdForUpdate(any()))
+                .thenAnswer(i -> savedCharges.stream().filter(r -> r.getId().equals(i.getArgument(0))).findFirst());
+        return paid;
+    }
+
+    private com.stripe.model.Subscription createdStripeSubscription() {
+        com.stripe.model.Subscription stripeSub = new com.stripe.model.Subscription();
+        stripeSub.setId("sub_direct_1");
+        return stripeSub;
+    }
+
+    @org.junit.jupiter.api.Test
+    void aSavedCardSubscribeChargesWithNoTransactionOpenAfterThePendingChargeIsCommitted() throws Exception {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+        com.tansoflow.tansocore.integration.stripe.StripeWebhook webhook =
+                org.mockito.Mockito.mock(com.tansoflow.tansocore.integration.stripe.StripeWebhook.class);
+        when(stripeWebhookProvider.getObject()).thenReturn(webhook);
+        when(stripeSyncService.createDirectSubscription(eq(account.getId()), eq(customer.getId()), eq(paid.getId()),
+                eq("pm_saved"), any())).thenAnswer(i -> {
+            org.assertj.core.api.Assertions.assertThat(
+                            org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive())
+                    .as("Stripe charged inside a transaction").isFalse();
+            // The pending charge is committed, and Stripe is keyed on its id.
+            org.assertj.core.api.Assertions.assertThat(transactionManager.commits()).isEqualTo(1);
+            org.assertj.core.api.Assertions.assertThat(savedCharges).singleElement().satisfies(row -> {
+                org.assertj.core.api.Assertions.assertThat(row.getId()).isEqualTo(i.getArgument(4));
+                org.assertj.core.api.Assertions.assertThat(row.getStatus()).isEqualTo("PENDING");
+                org.assertj.core.api.Assertions.assertThat(row.getPurpose()).isEqualTo("DIRECT_SUBSCRIPTION");
+                org.assertj.core.api.Assertions.assertThat(row.getAmount()).isEqualByComparingTo("49.00");
+            });
+            return createdStripeSubscription();
+        });
+        // Materializing happens in a transaction of its own, after Stripe.
+        org.mockito.Mockito.doAnswer(i -> {
+            org.assertj.core.api.Assertions.assertThat(
+                    org.springframework.transaction.support.TransactionSynchronizationManager.isActualTransactionActive()).isTrue();
+            return null;
+        }).when(webhook).materializeStripeSubscription(any(), eq(account.getId().toString()));
+
+        transactionalProxy().subscribe(customer, paid, account.getId().toString(), null);
+
+        verify(webhook).materializeStripeSubscription(any(), eq(account.getId().toString()));
+        org.assertj.core.api.Assertions.assertThat(transactionManager.commits()).isEqualTo(2);
+    }
+
+    // Recording failed after Stripe charged. The pending row stays PENDING for customer.subscription.created (see
+    // StripeWebhookImplTest), and a retry reuses it, so Stripe is asked under the same key.
+    @org.junit.jupiter.api.Test
+    void whenRecordingASavedCardSubscribeFailsARetryReusesThePendingChargeAndItsKey() throws Exception {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+        com.tansoflow.tansocore.integration.stripe.StripeWebhook webhook =
+                org.mockito.Mockito.mock(com.tansoflow.tansocore.integration.stripe.StripeWebhook.class);
+        when(stripeWebhookProvider.getObject()).thenReturn(webhook);
+        when(stripeSyncService.createDirectSubscription(any(), any(), any(), any(), any())).thenReturn(createdStripeSubscription());
+        org.mockito.Mockito.doThrow(new org.springframework.dao.CannotAcquireLockException("lock timeout"))
+                .when(webhook).materializeStripeSubscription(any(), any());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> transactionalProxy().subscribe(
+                        customer, paid, account.getId().toString(), null))
+                .isInstanceOf(org.springframework.dao.CannotAcquireLockException.class);
+        com.tansoflow.tansocore.entity.CheckoutSession pending = savedCharges.getFirst();
+        org.assertj.core.api.Assertions.assertThat(pending.getStatus()).isEqualTo("PENDING");
+
+        when(checkoutSessionRepository.findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                customer.getId(), paid.getId(), "DIRECT_SUBSCRIPTION", "PENDING")).thenReturn(Optional.of(pending));
+        org.mockito.Mockito.doNothing().when(webhook).materializeStripeSubscription(any(), any());
+
+        transactionalProxy().subscribe(customer, paid, account.getId().toString(), null);
+
+        ArgumentCaptor<UUID> keyedOn = ArgumentCaptor.forClass(UUID.class);
+        verify(stripeSyncService, org.mockito.Mockito.times(2))
+                .createDirectSubscription(any(), any(), any(), any(), keyedOn.capture());
+        org.assertj.core.api.Assertions.assertThat(keyedOn.getAllValues()).containsOnly(pending.getId());
+        org.assertj.core.api.Assertions.assertThat(savedCharges).hasSize(1);
+    }
+
+    // Stripe refused the card. Left PENDING, the next attempt would reuse the key and get the refusal back for a day.
+    @org.junit.jupiter.api.Test
+    void aSavedCardSubscribeStripeRefusesMarksThePendingChargeFailed() throws Exception {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+        when(stripeSyncService.createDirectSubscription(any(), any(), any(), any(), any()))
+                .thenThrow(new com.stripe.exception.CardException("Your card was declined.", "req_1", "card_declined",
+                        null, "generic_decline", null, 402, null));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> subscriptionService.subscribe(
+                        customer, paid, account.getId().toString(), null))
+                .hasMessageContaining("Payment with the saved payment method failed");
+
+        org.assertj.core.api.Assertions.assertThat(savedCharges).singleElement()
+                .satisfies(row -> org.assertj.core.api.Assertions.assertThat(row.getStatus()).isEqualTo("FAILED"));
+        verifyNoInteractions(stripeWebhookProvider);
+    }
+
+    // Two saved-card subscribes at once each found no pending charge, each opened one under its own idempotency key,
+    // and Stripe created and charged two subscriptions. The customer row is now locked before the lookup, so the
+    // second waits, finds the first one's pending charge, and asks Stripe under the same key.
+    @org.junit.jupiter.api.Test
+    void aConcurrentSavedCardSubscribeLocksTheCustomerThenReusesThePendingChargeAndItsKey() throws Exception {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+        com.tansoflow.tansocore.entity.CheckoutSession firstCallersCharge = new com.tansoflow.tansocore.entity.CheckoutSession();
+        firstCallersCharge.setId(UUID.randomUUID());
+        firstCallersCharge.setStatus("PENDING");
+        when(checkoutSessionRepository.findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                customer.getId(), paid.getId(), "DIRECT_SUBSCRIPTION", "PENDING")).thenReturn(Optional.of(firstCallersCharge));
+        when(stripeSyncService.createDirectSubscription(any(), any(), any(), any(), any()))
+                .thenThrow(new com.stripe.exception.IdempotencyException(
+                        "There is currently another in-progress request using this Stripe token", "req_2", null, 409));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> subscriptionService.subscribe(
+                customer, paid, account.getId().toString(), null));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(customerRepository, subscriptionRepository, checkoutSessionRepository);
+        inOrder.verify(customerRepository).findByIdAndAccountIdForUpdate(customer.getId(), account.getId());
+        inOrder.verify(subscriptionRepository).findSubscriptionsByCustomer_Id(customer.getId());
+        inOrder.verify(checkoutSessionRepository).findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                customer.getId(), paid.getId(), "DIRECT_SUBSCRIPTION", "PENDING");
+        verify(stripeSyncService).createDirectSubscription(account.getId(), customer.getId(), paid.getId(), "pm_saved",
+                firstCallersCharge.getId());
+        // No second pending charge, and the first caller's is left PENDING for the request Stripe is still running.
+        org.assertj.core.api.Assertions.assertThat(savedCharges).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(firstCallersCharge.getStatus()).isEqualTo("PENDING");
+    }
+
+    // A caller that wraps subscribe in its own transaction would put the charge back inside it.
+    @org.junit.jupiter.api.Test
+    void aSavedCardSubscribeInsideTheCallersTransactionIsRefusedBeforeStripe() {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> transactionTemplate.executeWithoutResult(status ->
+                        subscriptionService.subscribe(customer, paid, account.getId().toString(), null)))
+                .isInstanceOf(IllegalStateException.class);
+
+        verifyNoInteractions(stripeSyncService);
     }
 }

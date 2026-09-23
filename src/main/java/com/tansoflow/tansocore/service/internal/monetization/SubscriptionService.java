@@ -31,13 +31,12 @@ import java.util.List;
 import java.util.UUID;
 
 public interface SubscriptionService {
-    @Transactional
+    // The subscribe methods are not @Transactional, here or on the implementation: a saved-card subscribe charges
+    // the card, which must happen with no transaction open. The implementation opens its own.
     SubscribedCustomerResponse clientSubscribeCustomer(ClientSubscriptionRequest request, String accountId);
 
-    @Transactional
     SubscribedCustomerResponse subscribeCustomer(SubscriptionRequest request, String accountId);
 
-    @Transactional
     SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId);
 
     SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId, String paymentMethodId);

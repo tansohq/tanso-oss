@@ -36,6 +36,13 @@ public interface CustomerRepository extends JpaRepository<Customer, UUID> {
     @Query("SELECT c FROM Customer c WHERE c.externalClientCustomerId = :referenceId AND c.account.id = :accountId")
     Optional<Customer> getCustomerByReferenceIdAndAccountId(String referenceId, UUID accountId);
 
+    // Row lock for a Stripe-billed subscribe: two concurrent saved-card subscribes for one customer must run one after
+    // the other, or both find no pending charge, each open one under its own Stripe idempotency key, and Stripe
+    // creates and charges two subscriptions.
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM Customer c WHERE c.id = :id AND c.account.id = :accountId")
+    Optional<Customer> findByIdAndAccountIdForUpdate(UUID id, UUID accountId);
+
     @Query("SELECT COUNT(c) > 0 FROM Customer c WHERE c.id = :id AND c.account.id = :accountId")
     boolean existsByIdAndAccountId(UUID id, UUID accountId);
 

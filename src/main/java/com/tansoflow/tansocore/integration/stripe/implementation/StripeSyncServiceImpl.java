@@ -674,52 +674,76 @@ public class StripeSyncServiceImpl implements StripeSyncService {
      * a declined or SCA-challenged charge throws instead of leaving a dangling
      * incomplete subscription; the caller maps that to 402.
      */
+    /** The Stripe ids a direct subscription needs, read in a short transaction that ends before any charge. */
+    private record DirectSubscriptionTarget(String stripeCustomerId, List<String> stripePriceIds) {
+    }
+
+    // Not @Transactional: the create below charges the card, and money must not move inside a transaction that can
+    // still roll back. The lookups (and the lazy Stripe customer and price set-up, which charge nothing) run in their
+    // own short transaction first.
     @Override
     public com.stripe.model.Subscription createDirectSubscription(
-            UUID accountId, UUID customerId, UUID planId, String paymentMethodId) throws StripeException {
+            UUID accountId, UUID customerId, UUID planId, String paymentMethodId, UUID pendingChargeId) throws StripeException {
         StripeClient stripeClient = stripeClientFactory.forAccount(accountId);
 
-        Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
-        StripeCustomer stripeCustomer = stripeCustomerRepository.findByCustomer(customer);
-        if (stripeCustomer == null) {
-            stripeCustomer = createStripeCustomer(accountId, customerId);
-        }
+        DirectSubscriptionTarget target = transactionTemplate.execute(status -> {
+            try {
+                Customer customer = customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString());
+                StripeCustomer stripeCustomer = stripeCustomerRepository.findByCustomer(customer);
+                if (stripeCustomer == null) {
+                    stripeCustomer = createStripeCustomer(accountId, customerId);
+                }
 
-        Plan plan = planService.retrievePlan(UUID.fromString(accountId.toString()), planId);
-        List<StripePrice> stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
-        if (stripePrices.isEmpty()) {
-            log.info("No StripePrice for plan {}, creating lazily for direct subscription", plan.getId());
-            createStripeProductWithPrices(planId, accountId);
-            stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
-            if (stripePrices.isEmpty()) {
-                throw new IllegalStateException("Failed to create StripePrice for plan " + planId);
+                Plan plan = planService.retrievePlan(UUID.fromString(accountId.toString()), planId);
+                List<StripePrice> stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+                if (stripePrices.isEmpty()) {
+                    log.info("No StripePrice for plan {}, creating lazily for direct subscription", plan.getId());
+                    createStripeProductWithPrices(planId, accountId);
+                    stripePrices = stripePriceRepository.findAllByPlanAndAccount(plan, customer.getAccount());
+                    if (stripePrices.isEmpty()) {
+                        throw new IllegalStateException("Failed to create StripePrice for plan " + planId);
+                    }
+                }
+                return new DirectSubscriptionTarget(stripeCustomer.getStripeCustomerExternalId(),
+                        stripePrices.stream().map(StripePrice::getStripePriceExternalId).toList());
+            } catch (StripeException e) {
+                throw new IllegalStateException("Could not set up Stripe for the subscription of customer " + customerId
+                        + " to plan " + planId + ": " + e.getMessage(), e);
             }
-        }
+        });
 
         com.stripe.param.SubscriptionCreateParams.Builder builder =
                 com.stripe.param.SubscriptionCreateParams.builder()
-                        .setCustomer(stripeCustomer.getStripeCustomerExternalId())
+                        .setCustomer(target.stripeCustomerId())
                         .setDefaultPaymentMethod(paymentMethodId)
                         .setPaymentBehavior(com.stripe.param.SubscriptionCreateParams.PaymentBehavior.ERROR_IF_INCOMPLETE)
                         .setOffSession(true)
                         .putMetadata("tanso_account_id", accountId.toString())
                         .putMetadata("tanso_customer_id", customerId.toString())
-                        .putMetadata("tanso_plan_id", planId.toString());
+                        .putMetadata("tanso_plan_id", planId.toString())
+                        // customer.subscription.created uses it to record the spend when the caller could not.
+                        .putMetadata(com.tansoflow.tansocore.entity.CheckoutSession.DIRECT_CHARGE_METADATA_KEY,
+                                pendingChargeId.toString());
 
-        for (StripePrice mapped : stripePrices) {
-            Price price = stripeClient.v1().prices().retrieve(mapped.getStripePriceExternalId());
+        for (String stripePriceId : target.stripePriceIds()) {
+            Price price = stripeClient.v1().prices().retrieve(stripePriceId);
             boolean metered = price.getRecurring() != null
                     && "metered".equals(price.getRecurring().getUsageType());
             com.stripe.param.SubscriptionCreateParams.Item.Builder item =
                     com.stripe.param.SubscriptionCreateParams.Item.builder()
-                            .setPrice(mapped.getStripePriceExternalId());
+                            .setPrice(stripePriceId);
             if (!metered) {
                 item.setQuantity(1L);
             }
             builder.addItem(item.build());
         }
 
-        return stripeClient.v1().subscriptions().create(builder.build());
+        // One key per pending charge: a retry after a lost response, or after Tanso failed to record the result,
+        // gets Stripe's first subscription back (for 24 hours) instead of a second one and a second charge.
+        com.stripe.net.RequestOptions requestOptions = com.stripe.net.RequestOptions.builder()
+                .setIdempotencyKey("tanso-subscribe-" + pendingChargeId)
+                .build();
+        return stripeClient.v1().subscriptions().create(builder.build(), requestOptions);
     }
 
     // ── STRIPE_INTEGRATION Methods ─────────────────────────────────────────────

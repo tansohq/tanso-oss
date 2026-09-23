@@ -67,7 +67,14 @@ public interface StripeSyncService {
 
     StripePaymentLinkDto createSubscriptionCheckoutSession(UUID accountId, UUID customerId, UUID planId) throws StripeException;
 
-    com.stripe.model.Subscription createDirectSubscription(UUID accountId, UUID customerId, UUID planId, String paymentMethodId) throws StripeException;
+    /**
+     * Creates the Stripe subscription with a saved card, charged off-session. The Stripe calls run outside any
+     * transaction; callers must not hold one either. The create carries an idempotency key made from
+     * pendingChargeId (the checkout_sessions row the caller committed first), and the subscription carries that id
+     * in its metadata so customer.subscription.created can finish the job if the caller cannot.
+     */
+    com.stripe.model.Subscription createDirectSubscription(UUID accountId, UUID customerId, UUID planId, String paymentMethodId,
+                                                           UUID pendingChargeId) throws StripeException;
 
     // STRIPE_INTEGRATION methods
     void createStripeProductWithPrices(UUID planId, UUID accountId) throws StripeException;
