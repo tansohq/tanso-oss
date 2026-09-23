@@ -23,6 +23,16 @@ tags; this file starts where the changelog does.
   endpoints (`complete_checkout`, `nominate_owner`, no payment processor)
   answered `detail: null`, so an agent had nothing to quote to the operator.
   They now carry `errorId=<uuid>`, and the id is logged.
+- **Tanso records a Stripe invoice at Stripe's amount.** On `STRIPE_DRIVEN`,
+  and for non-accumulate plans on `STRIPE_INTEGRATION`, the webhook copy of a
+  Stripe invoice went through `createNewInvoice`. On a plan with a
+  usage-priced feature, that reset the amount to the subscription's current plan
+  price plus Tanso's usage. A $30.00 upgrade proration was stored as `0.00` when
+  the plan had not moved yet, which also left the customer unclaimed, and as
+  `60.00` (the new plan's full price) when it had. On `STRIPE_INTEGRATION`, a
+  $29.99 proration was stored as `30.00`. The copy now takes Stripe's
+  `amount_due` and Stripe's invoice lines as its items. Accumulate-mode invoices,
+  where Tanso computes the charge itself, are unchanged.
 - **A Stripe subscription gets every price of its plan.** When a subscription
   activated on `STRIPE_DRIVEN` or `STRIPE_INTEGRATION` (an in-arrears plan, or
   an in-advance plan activated after its first invoice), `createStripeSubscription`

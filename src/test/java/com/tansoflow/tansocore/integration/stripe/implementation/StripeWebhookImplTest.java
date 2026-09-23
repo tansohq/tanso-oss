@@ -65,6 +65,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
@@ -267,7 +268,7 @@ class StripeWebhookImplTest {
         when(subscriptionService.getSubscriptionById(subscription.getId().toString(), accountId))
                 .thenReturn(subscription);
         when(invoiceService.planHasAccumulateModeFeatures(plan)).thenReturn(false);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
 
         stripeWebhook.handleFullSyncInvoiceCreated(stripeInvoice, accountId);
@@ -397,7 +398,7 @@ class StripeWebhookImplTest {
         when(subscriptionService.getSubscriptionById(subscription.getId().toString(), accountId))
                 .thenReturn(subscription);
         when(invoiceService.planHasAccumulateModeFeatures(plan)).thenReturn(false);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(tansoInvoiceId.toString()));
         when(stripeSyncService.retrieveStripeInvoiceLinkedData("inv_004")).thenReturn(stripeInvoiceEntity);
 
@@ -709,13 +710,13 @@ class StripeWebhookImplTest {
         when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
                 .thenReturn(bridge);
         when(stripeSyncService.stripeInvoiceLinked("inv_sd_mirror_001")).thenReturn(false);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
 
         stripeWebhook.handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
 
-        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("50.00")), eq(InvoiceStatus.DUE),
-                any(Instant.class), any(Instant.class));
+        verify(invoiceService).createInvoiceFromStripe(eq(subscription), any(), eq(new BigDecimal("50.00")), eq(InvoiceStatus.DUE),
+                any(Instant.class), any(Instant.class), anyList());
         verify(stripeSyncService).saveStripeInvoice(eq("inv_sd_mirror_001"), any(String.class), eq(accountId));
     }
 
@@ -737,15 +738,50 @@ class StripeWebhookImplTest {
         when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
                 .thenReturn(bridge);
         when(stripeSyncService.stripeInvoiceLinked("inv_sd_mirror_paid")).thenReturn(false);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(tansoInvoiceId.toString()));
         when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(tansoInvoiceId.toString(), accountId)).thenReturn(tansoInvoice);
 
         stripeWebhook.handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
 
-        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
-                any(Instant.class), any(Instant.class));
+        verify(invoiceService).createInvoiceFromStripe(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
+                any(Instant.class), any(Instant.class), anyList());
         verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
+    }
+
+    // Stripe computed the invoice, so Tanso records its amount and lines. The mirror used to go through
+    // createNewInvoice, which reset the amount to the subscription's current plan price plus Tanso's usage: a $30.00
+    // upgrade proration was stored as 0.00 before the plan moved, or 60.00 (the new plan's full price) after.
+    @Test
+    void handleStripeDrivenInvoiceCreated_RecordsStripesAmountAndLinesWithoutRecalculating() {
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("inv_sd_proration", "sub_sd_030");
+        stripeInvoice.setAmountDue(3000L);
+        stripeInvoice.setStatus("open");
+        InvoiceLineItem unused = new InvoiceLineItem();
+        unused.setAmount(-3000L);
+        unused.setDescription("Unused time on Paid");
+        InvoiceLineItem remaining = new InvoiceLineItem();
+        remaining.setAmount(6000L);
+        remaining.setDescription("Remaining time on Pro");
+        InvoiceLineItemCollection lines = new InvoiceLineItemCollection();
+        lines.setData(List.of(unused, remaining));
+        stripeInvoice.setLines(lines);
+
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked("inv_sd_proration")).thenReturn(false);
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
+                .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
+
+        stripeWebhook.handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
+
+        verify(invoiceService).createInvoiceFromStripe(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
+                any(Instant.class), any(Instant.class), eq(List.of(
+                        new InvoiceService.SyncLineItem(new BigDecimal("-30.00"), "Unused time on Paid"),
+                        new InvoiceService.SyncLineItem(new BigDecimal("60.00"), "Remaining time on Pro"))));
+        verify(invoiceService, never()).createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class));
     }
 
     @Test
@@ -1254,7 +1290,7 @@ class StripeWebhookImplTest {
         when(stripeSyncService.stripeInvoiceLinked("in_proration")).thenReturn(false);
         when(subscriptionService.getSubscriptionById(subscription.getId().toString(), accountId))
                 .thenReturn(subscription);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
 
         stripeWebhook.handleFullSyncInvoiceCreated(proration, accountId);
@@ -1263,8 +1299,8 @@ class StripeWebhookImplTest {
         verify(subscriptionRepository, never()).save(any());
         verify(invoiceService, never()).planHasAccumulateModeFeatures(any());
         verify(stripeSyncService, never()).disableAutoAdvanceOnStripeInvoice(any(), any());
-        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("74.50")), eq(InvoiceStatus.DUE),
-                eq(Instant.parse("2025-01-01T00:00:00Z")), eq(Instant.parse("2025-02-01T00:00:00Z")));
+        verify(invoiceService).createInvoiceFromStripe(eq(subscription), any(), eq(new BigDecimal("74.50")), eq(InvoiceStatus.DUE),
+                eq(Instant.parse("2025-01-01T00:00:00Z")), eq(Instant.parse("2025-02-01T00:00:00Z")), anyList());
     }
 
     // ── Spend mandate completion records the owner email ─────────────────────
@@ -1332,7 +1368,7 @@ class StripeWebhookImplTest {
         when(stripeSyncService.stripeInvoiceLinked("inv_sd_race_001"))
                 .thenReturn(false)
                 .thenReturn(false);
-        when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
                 .thenReturn(createInvoiceDto(tansoInvoiceId.toString()));
         when(stripeSyncService.retrieveStripeInvoiceLinkedData("inv_sd_race_001")).thenReturn(stripeInvoiceEntity);
         when(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(tansoInvoiceId.toString(), accountId)).thenReturn(tansoInvoice);
@@ -1341,8 +1377,8 @@ class StripeWebhookImplTest {
 
         // The mirror is created DUE and marked paid in this transaction. markInvoiceAsPaid(String) opens a new one,
         // which could not see the mirror yet and threw "Invoice not found", failing the webhook with 400.
-        verify(invoiceService).createNewInvoice(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
-                any(Instant.class), any(Instant.class));
+        verify(invoiceService).createInvoiceFromStripe(eq(subscription), any(), eq(new BigDecimal("30.00")), eq(InvoiceStatus.DUE),
+                any(Instant.class), any(Instant.class), anyList());
         verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
         verify(invoiceService, never()).markInvoiceAsPaid(any(String.class));
         verify(creditService).processCreditGrantsForSubscription(subscription);
@@ -1578,6 +1614,7 @@ class StripeWebhookImplTest {
 
         InvoiceLineItem lineItem = new InvoiceLineItem();
         lineItem.setPeriod(period);
+        lineItem.setAmount(amountDue);
 
         InvoiceLineItemCollection lineItems = new InvoiceLineItemCollection();
         lineItems.setData(List.of(lineItem));
