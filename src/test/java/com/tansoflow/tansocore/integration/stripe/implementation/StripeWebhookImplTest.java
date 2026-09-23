@@ -366,6 +366,8 @@ class StripeWebhookImplTest {
         verify(invoiceService).createNewInvoice(
                 eq(subscription), any(), eq(new BigDecimal("35.00")), eq(InvoiceStatus.DUE),
                 any(Instant.class), any(Instant.class));
+        // A copy of Stripe's invoice: the invoice jobs must never recalculate it, even after Stripe is disconnected.
+        verify(invoiceService).markStripeOrigin(tansoInvoiceId.toString(), accountId);
         verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
     }
 
@@ -483,11 +485,13 @@ class StripeWebhookImplTest {
         when(creditService.applyCreditOffset(eq(creditPool.getId()), any(BigDecimal.class), eq(subscription.getId()), any(UUID.class), any(String.class)))
                 .thenReturn(new BigDecimal("10.00"));
 
+        String mirrorId = UUID.randomUUID().toString();
         when(invoiceService.createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class)))
-                .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
+                .thenReturn(createInvoiceDto(mirrorId));
 
         stripeWebhook.handleFullSyncInvoiceCreated(stripeInvoice, accountId);
 
+        verify(invoiceService).markStripeOrigin(mirrorId, accountId);
         // Verify all three line items: base price, usage charge (net of credit), credit offset
         verify(stripeSyncService).addLineItemToDraftInvoice(
                 eq("inv_base_02"), any(UUID.class), eq(new BigDecimal("50.00")), any(String.class),

@@ -95,6 +95,12 @@ public interface InvoiceService {
                                List<SyncLineItem> lineItems);
 
     /**
+     * Marks an invoice as a copy of one Stripe raised (InvoiceSource.STRIPE), so Tanso's jobs never recalculate it.
+     * For copies created through createNewInvoice, such as the accumulate-mode mirror.
+     */
+    void markStripeOrigin(String invoiceId, String accountId);
+
+    /**
      * Records an invoice Stripe raised as Stripe computed it: its amount and its lines. Unlike createNewInvoice,
      * nothing is recalculated from the plan or from Tanso's usage.
      */
