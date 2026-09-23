@@ -60,6 +60,13 @@ public interface StripeSyncService {
 
     boolean stripeInvoiceLinked(String stripeInvoiceId);
 
+    /**
+     * Holds a lock on one Stripe invoice until the caller's transaction ends. Stripe sends invoice.created,
+     * invoice.paid and invoice.payment_succeeded at once; each webhook checked for a Tanso copy, found none and
+     * made its own. Taken before that check, the lock makes a concurrent delivery wait and then find the copy.
+     */
+    void lockStripeInvoice(String stripeInvoiceId);
+
     /** Pushes a changed email to the mirrored Stripe customer, if one exists. No-op otherwise. */
     void syncCustomerEmail(UUID accountId, UUID customerId, String email) throws StripeException;
 

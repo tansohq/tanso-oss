@@ -784,6 +784,45 @@ class StripeWebhookImplTest {
         verify(invoiceService, never()).createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class));
     }
 
+    // invoice.created, invoice.paid and invoice.payment_succeeded arrive together. Each checked for a Tanso copy,
+    // found none and inserted its own, so one Stripe invoice got several copies. The lock is taken before the check.
+    @Test
+    void handleStripeDrivenInvoiceCreated_LocksTheStripeInvoiceBeforeLookingForACopy() {
+        Invoice stripeInvoice = createStripeInvoiceWithSubscription("inv_sd_lock", "sub_sd_030");
+        StripeSubscription bridge = new StripeSubscription();
+        bridge.setSubscription(subscription);
+        when(stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId("sub_sd_030"))
+                .thenReturn(bridge);
+        when(stripeSyncService.stripeInvoiceLinked("inv_sd_lock")).thenReturn(true);
+
+        stripeWebhook.handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(stripeSyncService);
+        order.verify(stripeSyncService).lockStripeInvoice("inv_sd_lock");
+        order.verify(stripeSyncService).stripeInvoiceLinked("inv_sd_lock");
+        verify(invoiceService, never()).createNewInvoice(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class));
+    }
+
+    @Test
+    void handleFullSyncInvoiceCreated_LocksTheStripeInvoiceBeforeLookingForACopy() {
+        Invoice stripeInvoice = createStripeInvoiceWithPeriod("inv_fs_lock", 5000L,
+                Instant.parse("2025-02-01T00:00:00Z").getEpochSecond(),
+                Instant.parse("2025-03-01T00:00:00Z").getEpochSecond());
+        stripeInvoice.setMetadata(Map.of("tanso_subscription_id", subscription.getId().toString()));
+        when(subscriptionService.getSubscriptionById(subscription.getId().toString(), accountId)).thenReturn(subscription);
+        when(stripeSyncService.stripeInvoiceLinked("inv_fs_lock")).thenReturn(false);
+        when(invoiceService.planHasAccumulateModeFeatures(plan)).thenReturn(false);
+        when(invoiceService.createInvoiceFromStripe(any(Subscription.class), any(), any(BigDecimal.class), any(InvoiceStatus.class), any(Instant.class), any(Instant.class), anyList()))
+                .thenReturn(createInvoiceDto(UUID.randomUUID().toString()));
+
+        stripeWebhook.handleFullSyncInvoiceCreated(stripeInvoice, accountId);
+
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(stripeSyncService);
+        order.verify(stripeSyncService).lockStripeInvoice("inv_fs_lock");
+        order.verify(stripeSyncService).stripeInvoiceLinked("inv_fs_lock");
+        order.verify(stripeSyncService).saveStripeInvoice(eq("inv_fs_lock"), any(String.class), eq(accountId));
+    }
+
     @Test
     void handleStripeDrivenInvoiceCreated_AlreadyLinked_Skips() {
         Invoice stripeInvoice = createStripeInvoiceWithSubscription("inv_sd_mirror_002", "sub_sd_030");
