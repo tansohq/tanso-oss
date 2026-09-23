@@ -631,11 +631,12 @@ public class StripeWebhookImpl implements StripeWebhook {
         if (!upgradeProration && invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())) {
             handleAccumulateModeInvoiceCreated(stripeInvoice, subscription, accountId, periodStart, periodEnd);
         } else {
-            // Non-accumulate: mirror Stripe's amountDue as-is (existing behavior)
+            // Non-accumulate: mirror Stripe's amountDue and lines as they are. createNewInvoice recalculated the
+            // amount from the plan, so a $29.99 proration was stored as 30.00.
             BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountDue()).movePointLeft(2);
 
-            var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount, InvoiceStatus.DUE,
-                    periodStart, periodEnd);
+            var invoiceDto = invoiceService.createInvoiceFromStripe(subscription, LocalDate.now(ZoneOffset.UTC), amount,
+                    InvoiceStatus.DUE, periodStart, periodEnd, stripeLines(stripeInvoice));
             stripeSyncService.saveStripeInvoice(stripeInvoice.getId(), invoiceDto.getId(), accountId);
 
             log.info("FULL_SYNC: Mirrored Stripe invoice {} to Tanso invoice {}", stripeInvoice.getId(), invoiceDto.getId());
@@ -648,6 +649,11 @@ public class StripeWebhookImpl implements StripeWebhook {
 
         BigDecimal amount = BigDecimal.valueOf(stripeInvoice.getAmountDue()).movePointLeft(2);
 
+        invoiceService.syncInvoiceFromStripe(tansoInvoice, amount, periodStart, periodEnd, stripeLines(stripeInvoice));
+        log.info("FULL_SYNC: Updated linked Tanso invoice {} from Stripe invoice {}", tansoInvoice.getId(), stripeInvoice.getId());
+    }
+
+    private static List<InvoiceService.SyncLineItem> stripeLines(Invoice stripeInvoice) {
         List<InvoiceService.SyncLineItem> lineItems = new ArrayList<>();
         if (stripeInvoice.getLines() != null && stripeInvoice.getLines().getData() != null) {
             for (var line : stripeInvoice.getLines().getData()) {
@@ -656,9 +662,7 @@ public class StripeWebhookImpl implements StripeWebhook {
                 lineItems.add(new InvoiceService.SyncLineItem(lineAmount, description));
             }
         }
-
-        invoiceService.syncInvoiceFromStripe(tansoInvoice, amount, periodStart, periodEnd, lineItems);
-        log.info("FULL_SYNC: Updated linked Tanso invoice {} from Stripe invoice {}", tansoInvoice.getId(), stripeInvoice.getId());
+        return lineItems;
     }
 
     private void handleAccumulateModeInvoiceCreated(Invoice stripeInvoice, Subscription subscription,
@@ -781,7 +785,8 @@ public class StripeWebhookImpl implements StripeWebhook {
     protected void handleFullSyncInvoicePaid(Invoice stripeInvoice, String accountId) {
         // Until commit: a concurrent delivery for this Stripe invoice waits, then finds the copy made here.
         stripeSyncService.lockStripeInvoice(stripeInvoice.getId());
-        if (!stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId())) {
+        boolean mirroredNow = !stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId());
+        if (mirroredNow) {
             // If the invoice is already paid/finalized (e.g. invoice.paid arrived before invoice.created),
             // and this is an accumulate-mode plan, skip draft manipulation — create the mirror directly
             // using Stripe's amountPaid to avoid StripeException on an already-finalized invoice.
@@ -804,8 +809,14 @@ public class StripeWebhookImpl implements StripeWebhook {
 
         String invoiceId = stripeInvoiceEntity.getInvoice().getId().toString();
         // markInvoiceAsPaid handles: sets PAID status, activates IN_ADVANCE subscriptions,
-        // processes entitlements, and grants credits.
-        invoiceService.markInvoiceAsPaid(invoiceId);
+        // processes entitlements, and grants credits. A copy made above is not committed yet, and
+        // markInvoiceAsPaid(String) locks the invoice in a new transaction that cannot see it: it threw "Invoice not
+        // found" and the webhook answered 400. That copy is marked paid in this transaction instead.
+        if (mirroredNow) {
+            invoiceService.markInvoiceAsPaid(stripeInvoiceEntity.getInvoice());
+        } else {
+            invoiceService.markInvoiceAsPaid(invoiceId);
+        }
 
         // A charge-first upgrade completes only on the invoice Stripe raised for it. Matching by subscription would
         // let any paid invoice, such as a renewal, move the plan while the proration is still unpaid.
@@ -1230,8 +1241,10 @@ public class StripeWebhookImpl implements StripeWebhook {
         // that, and invoice.paid then found it PAID and did nothing.
         boolean alreadyPaid = tansoStatus == InvoiceStatus.PAID;
 
-        var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount,
-                alreadyPaid ? InvoiceStatus.DUE : tansoStatus, periodStart, periodEnd);
+        // Stripe computed this invoice, so its amount and lines are recorded as they are. createNewInvoice would
+        // recalculate them from the subscription's current plan and Tanso's usage.
+        var invoiceDto = invoiceService.createInvoiceFromStripe(subscription, LocalDate.now(ZoneOffset.UTC), amount,
+                alreadyPaid ? InvoiceStatus.DUE : tansoStatus, periodStart, periodEnd, stripeLines(stripeInvoice));
         stripeSyncService.saveStripeInvoice(stripeInvoice.getId(), invoiceDto.getId(), accountId);
         if (alreadyPaid) {
             // The entity form joins this transaction; markInvoiceAsPaid(String) runs in a new one and cannot see the

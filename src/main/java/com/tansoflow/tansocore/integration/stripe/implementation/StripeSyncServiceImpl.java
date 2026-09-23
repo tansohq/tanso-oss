@@ -923,76 +923,27 @@ public class StripeSyncServiceImpl implements StripeSyncService {
             stripeCustomer = createStripeCustomer(accountId, subscription.getCustomer().getId());
         }
 
-        // Get Stripe price for the plan (lazily create if the plan predates STRIPE_INTEGRATION setup)
-        StripePrice stripePrice = stripePriceRepository
-                .findFirstByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount())
-                .orElse(null);
-        if (stripePrice == null) {
-            log.info("No StripePrice for plan {}, creating lazily", subscription.getPlan().getId());
-            createStripeProductWithPrices(subscription.getPlan().getId(), accountId);
-            stripePrice = stripePriceRepository
-                    .findFirstByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount())
-                    .orElseThrow(() -> new IllegalStateException(
-                            "Failed to create StripePrice for plan " + subscription.getPlan().getId()));
-        }
-
-        SubscriptionCreateParams.Builder subParamsBuilder = SubscriptionCreateParams.builder()
-                .setCustomer(stripeCustomer.getStripeCustomerExternalId())
-                .addItem(
-                        SubscriptionCreateParams.Item.builder()
-                                .setPrice(stripePrice.getStripePriceExternalId())
-                                .build()
-                )
-                .putMetadata("tanso_account_id", accountId.toString())
-                .putMetadata("tanso_subscription_id", subscriptionId.toString())
-                .putMetadata("tanso_customer_id", subscription.getCustomer().getId().toString())
-                .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.NONE);
-
-        // For accumulate-mode plans, use send_invoice so Stripe never auto-charges
-        // tanso-core will calculate the correct amount and pay the invoice programmatically
-        if (invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())) {
-            subParamsBuilder
-                    .setCollectionMethod(SubscriptionCreateParams.CollectionMethod.SEND_INVOICE)
-                    .setDaysUntilDue(1L);
-        }
-
-        // For IN_ADVANCE plans that haven't been paid yet: create the subscription + invoice
-        // but leave it incomplete until the customer pays (prevents auto-charging without consent)
-        if (BillingTiming.IN_ADVANCE.name().equals(subscription.getPlan().getBillingTiming())
-                && !subscription.getIsActive()) {
-            subParamsBuilder.setPaymentBehavior(
-                    SubscriptionCreateParams.PaymentBehavior.DEFAULT_INCOMPLETE);
-        }
-
-        SubscriptionCreateParams params = subParamsBuilder.build();
+        // Every price of the plan, newest of each usage type (lazily created if the plan predates the Stripe
+        // setup). A plan with a usage-priced feature has a metered price and, when it costs money, a licensed base
+        // price. Only the newest one used to go on the subscription, which is the base price, so Stripe never
+        // billed the plan's usage.
+        Map<String, String> planPrices = newestPriceByUsageType(stripeClient,
+                stripePriceIdsFor(subscription.getPlan(), subscription.getAccount(), accountId));
 
         com.stripe.model.Subscription stripeSubscription;
         try {
-            stripeSubscription = stripeClient.v1().subscriptions().create(params);
+            stripeSubscription = stripeClient.v1().subscriptions()
+                    .create(stripeSubscriptionParams(subscription, stripeCustomer, planPrices, accountId));
         } catch (InvalidRequestException e) {
             if ("resource_missing".equals(e.getCode()) && e.getMessage() != null && e.getMessage().contains("price")) {
-                // Stale StripePrice — delete it, recreate, and retry
-                log.warn("Stale StripePrice {} for plan {}, recreating",
-                        stripePrice.getStripePriceExternalId(), subscription.getPlan().getId());
-                stripePriceRepository.delete(stripePrice);
-                createStripeProductWithPrices(subscription.getPlan().getId(), accountId);
-                StripePrice freshPrice = stripePriceRepository
-                        .findFirstByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount())
-                        .orElseThrow(() -> new IllegalStateException(
-                                "Failed to recreate StripePrice for plan " + subscription.getPlan().getId()));
-
-                // Rebuild params with the fresh price
-                SubscriptionCreateParams retryParams = SubscriptionCreateParams.builder()
-                        .setCustomer(stripeCustomer.getStripeCustomerExternalId())
-                        .addItem(SubscriptionCreateParams.Item.builder()
-                                .setPrice(freshPrice.getStripePriceExternalId())
-                                .build())
-                        .putMetadata("tanso_account_id", accountId.toString())
-                        .putMetadata("tanso_subscription_id", subscriptionId.toString())
-                        .putMetadata("tanso_customer_id", subscription.getCustomer().getId().toString())
-                        .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.NONE)
-                        .build();
-                stripeSubscription = stripeClient.v1().subscriptions().create(retryParams);
+                // Stale StripePrice rows (the prices are gone from this Stripe account): delete, recreate, retry
+                log.warn("Stale StripePrice {} for plan {}, recreating", planPrices.values(), subscription.getPlan().getId());
+                stripePriceRepository.deleteAll(stripePriceRepository
+                        .findAllByPlanAndAccountOrderByCreatedAtDesc(subscription.getPlan(), subscription.getAccount()));
+                Map<String, String> freshPrices = newestPriceByUsageType(stripeClient,
+                        stripePriceIdsFor(subscription.getPlan(), subscription.getAccount(), accountId));
+                stripeSubscription = stripeClient.v1().subscriptions()
+                        .create(stripeSubscriptionParams(subscription, stripeCustomer, freshPrices, accountId));
             } else {
                 throw e;
             }
@@ -1022,6 +973,41 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         log.info("Created Stripe Subscription {} for Tanso subscription {} in account {}",
                 stripeSubscription.getId(), subscriptionId, accountId);
+    }
+
+    /** One item per plan price; a metered item takes no quantity. */
+    private SubscriptionCreateParams stripeSubscriptionParams(Subscription subscription, StripeCustomer stripeCustomer,
+                                                              Map<String, String> planPriceByUsageType, UUID accountId) {
+        SubscriptionCreateParams.Builder subParamsBuilder = SubscriptionCreateParams.builder()
+                .setCustomer(stripeCustomer.getStripeCustomerExternalId())
+                .putMetadata("tanso_account_id", accountId.toString())
+                .putMetadata("tanso_subscription_id", subscription.getId().toString())
+                .putMetadata("tanso_customer_id", subscription.getCustomer().getId().toString())
+                .setProrationBehavior(SubscriptionCreateParams.ProrationBehavior.NONE);
+        planPriceByUsageType.forEach((usageType, priceId) -> {
+            SubscriptionCreateParams.Item.Builder item = SubscriptionCreateParams.Item.builder().setPrice(priceId);
+            if (!"metered".equals(usageType)) {
+                item.setQuantity(1L);
+            }
+            subParamsBuilder.addItem(item.build());
+        });
+
+        // For accumulate-mode plans, use send_invoice so Stripe never auto-charges
+        // tanso-core will calculate the correct amount and pay the invoice programmatically
+        if (invoiceService.planHasAccumulateModeFeatures(subscription.getPlan())) {
+            subParamsBuilder
+                    .setCollectionMethod(SubscriptionCreateParams.CollectionMethod.SEND_INVOICE)
+                    .setDaysUntilDue(1L);
+        }
+
+        // For IN_ADVANCE plans that haven't been paid yet: create the subscription + invoice
+        // but leave it incomplete until the customer pays (prevents auto-charging without consent)
+        if (BillingTiming.IN_ADVANCE.name().equals(subscription.getPlan().getBillingTiming())
+                && !subscription.getIsActive()) {
+            subParamsBuilder.setPaymentBehavior(
+                    SubscriptionCreateParams.PaymentBehavior.DEFAULT_INCOMPLETE);
+        }
+        return subParamsBuilder.build();
     }
 
     @Override

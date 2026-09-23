@@ -7,6 +7,13 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **`invoice.paid` no longer fails on `STRIPE_INTEGRATION` when it arrives
+  before `invoice.created`.** The webhook made the Tanso copy, then marked it
+  paid through `markInvoiceAsPaid(String)`. That method runs in a new
+  transaction that could not see the uncommitted copy, so it threw
+  `Invoice not found` and the webhook answered 400. This is the same failure
+  0.11.x fixed for `STRIPE_DRIVEN`. A copy made in the same call is now marked
+  paid in the webhook's own transaction.
 - **`limits.spend_cap` is written out when it is null.** The runbook says a
   null `spend_cap` means no per-charge limit and that null fields are never
   omitted, but the signup and status bodies dropped the field when the operator
@@ -26,6 +33,25 @@ tags; this file starts where the changelog does.
   duplicates: per Stripe invoice it keeps the link to a `PAID` Tanso invoice,
   otherwise the oldest link, and voids the other copies. It then makes
   `stripe_invoices.stripe_invoice_external_id` unique.
+- **Tanso records a Stripe invoice at Stripe's amount.** On `STRIPE_DRIVEN`,
+  and for non-accumulate plans on `STRIPE_INTEGRATION`, the webhook copy of a
+  Stripe invoice went through `createNewInvoice`. On a plan with a
+  usage-priced feature, that reset the amount to the subscription's current plan
+  price plus Tanso's usage. A $30.00 upgrade proration was stored as `0.00` when
+  the plan had not moved yet, which also left the customer unclaimed, and as
+  `60.00` (the new plan's full price) when it had. On `STRIPE_INTEGRATION`, a
+  $29.99 proration was stored as `30.00`. The copy now takes Stripe's
+  `amount_due` and Stripe's invoice lines as its items. Accumulate-mode invoices,
+  where Tanso computes the charge itself, are unchanged.
+- **A Stripe subscription gets every price of its plan.** When a subscription
+  activated on `STRIPE_DRIVEN` or `STRIPE_INTEGRATION` (an in-arrears plan, or
+  an in-advance plan activated after its first invoice), `createStripeSubscription`
+  put only the plan's newest Stripe price on it. For a paid plan with a
+  usage-priced feature, that is the licensed base price, so Stripe billed the
+  base fee and never the usage. The subscription now gets the newest price of
+  each usage type, with no quantity on the metered item. Retrying after a stale
+  price also keeps `send_invoice` for accumulate-mode plans and
+  `default_incomplete` for unpaid in-advance plans, which the retry used to drop.
 - **An agent customer on `STRIPE_DRIVEN` is claimed when a saved card pays.**
   Stripe charges a saved card while it creates the invoice, so `invoice.created`
   already reports it paid. Tanso mirrored it straight to `PAID`, which skipped

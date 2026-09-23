@@ -191,6 +191,49 @@ class InvoiceServiceImplTest {
         verify(invoiceItemRepository, never()).save(any(InvoiceItem.class));
     }
 
+    // An invoice Stripe computed is stored as Stripe computed it. createNewInvoice resets the amount to the plan price
+    // plus Tanso's usage, which turned a $30.00 upgrade proration into the new plan's 60.00.
+    @Test
+    void createInvoiceFromStripe_KeepsStripesAmountAndLines() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        Plan plan = new Plan();
+        plan.setId(UUID.randomUUID());
+        plan.setPriceAmount(new BigDecimal("60.00"));
+        plan.setName("Pro");
+        Subscription subscription = new Subscription();
+        subscription.setId(UUID.randomUUID());
+        subscription.setCustomer(customer);
+        subscription.setPlan(plan);
+        subscription.setAccount(account);
+        Instant start = Instant.now().minus(30, java.time.temporal.ChronoUnit.DAYS);
+        Instant end = Instant.now();
+        when(invoiceRepository.saveAndFlush(any(Invoice.class))).thenAnswer(i -> {
+            Invoice inv = i.getArgument(0);
+            inv.setId(UUID.randomUUID());
+            return inv;
+        });
+
+        invoiceService.createInvoiceFromStripe(subscription, LocalDate.now(), new BigDecimal("30.00"), InvoiceStatus.DUE,
+                start, end, List.of(
+                        new com.tansoflow.tansocore.service.internal.monetization.InvoiceService.SyncLineItem(new BigDecimal("-30.00"), "Unused time on Paid"),
+                        new com.tansoflow.tansocore.service.internal.monetization.InvoiceService.SyncLineItem(new BigDecimal("60.00"), "Remaining time on Pro")));
+
+        org.mockito.ArgumentCaptor<Invoice> saved = org.mockito.ArgumentCaptor.forClass(Invoice.class);
+        verify(invoiceRepository).saveAndFlush(saved.capture());
+        assertEquals(new BigDecimal("30.00"), saved.getValue().getAmount());
+        assertEquals(start, saved.getValue().getInvoicePeriodStart());
+        org.mockito.ArgumentCaptor<InvoiceItem> items = org.mockito.ArgumentCaptor.forClass(InvoiceItem.class);
+        verify(invoiceItemRepository, org.mockito.Mockito.times(2)).save(items.capture());
+        assertEquals(List.of(new BigDecimal("-30.00"), new BigDecimal("60.00")),
+                items.getAllValues().stream().map(InvoiceItem::getChargeAmount).toList());
+        verify(planFeatureRuleRepository, never()).getPlanFeatureRuleByPlanIn(any());
+        verify(eventRepository, never()).findEventsForBillingBySubscription(any(), any(), any(), any(), any());
+    }
+
     @Test
     void testCreateNewInvoice_CreatesBasePriceItem() {
         // Setup

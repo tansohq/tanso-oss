@@ -842,6 +842,44 @@ public class InvoiceServiceImpl implements InvoiceService {
                 tansoInvoice.getId(), lineItems.size(), amount);
     }
 
+    // Stripe is the source of truth for an invoice it raised. createNewInvoice resets the amount to the
+    // subscription's current plan price plus Tanso's usage for the period, which stored a $30.00 upgrade
+    // proration as 0.00 (the plan had not moved yet) or as 60.00 (the full price of the plan it moved to).
+    @Override
+    @Transactional
+    public InvoiceDto createInvoiceFromStripe(Subscription subscription, LocalDate dueDate, BigDecimal amount,
+                                              InvoiceStatus status, Instant periodStart, Instant periodEnd,
+                                              List<SyncLineItem> lineItems) {
+        Invoice invoice = new Invoice();
+        invoice.setSubscription(subscription);
+        invoice.setAccount(subscription.getCustomer().getAccount());
+        invoice.setStatus(status.name());
+        invoice.setAmount(amount);
+        invoice.setCurrency(subscription.getPlan().getCurrency() != null ? subscription.getPlan().getCurrency() : "USD");
+        invoice.setDueDate(dueDate.atStartOfDay(ZoneOffset.UTC).toInstant());
+        invoice.setType(InvoiceType.REGULAR.name());
+        invoice.setInvoicePeriodStart(periodStart);
+        invoice.setInvoicePeriodEnd(periodEnd);
+        Invoice saved = invoiceRepository.saveAndFlush(invoice);
+
+        for (SyncLineItem lineItem : lineItems) {
+            InvoiceItem item = new InvoiceItem();
+            item.setInvoice(saved);
+            item.setAccount(saved.getAccount());
+            item.setChargeAmount(lineItem.chargeAmount());
+            item.setDescription(lineItem.description());
+            invoiceItemRepository.save(item);
+        }
+
+        log.info("Recorded Stripe-computed invoice {} for subscription {}: amount={}, {} line items",
+                saved.getId(), subscription.getId(), amount, lineItems.size());
+
+        eventPublisher.publishEvent(
+                new InvoiceCreatedEvent(saved.getAccount().getId(), saved.getId(), saved.getType()));
+
+        return invoiceMapper.invoiceEntityToInvoiceDto(saved);
+    }
+
     /**
      * Processes the collection of due invoices by checking their due dates and
      * updating their statuses if they are overdue. If an invoice is past due,
