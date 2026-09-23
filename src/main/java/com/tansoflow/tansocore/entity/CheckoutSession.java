@@ -48,10 +48,18 @@ public class CheckoutSession {
     public static final String PURPOSE_CREDIT_TOPUP = "CREDIT_TOPUP";
     public static final String PURPOSE_INVOICE = "INVOICE";
     public static final String PURPOSE_SPEND_MANDATE = "SPEND_MANDATE";
+    // Not a hosted page: a paid subscribe charged to a saved card. The row is committed before Stripe is called,
+    // so its id keys the Stripe call and lets customer.subscription.created record the spend if the caller could not.
+    public static final String PURPOSE_DIRECT_SUBSCRIPTION = "DIRECT_SUBSCRIPTION";
 
     public static final String STATUS_PENDING = "PENDING";
     public static final String STATUS_COMPLETED = "COMPLETED";
     public static final String STATUS_EXPIRED = "EXPIRED";
+    // Stripe refused the charge; the next attempt starts a new row.
+    public static final String STATUS_FAILED = "FAILED";
+
+    /** Stripe subscription metadata naming the DIRECT_SUBSCRIPTION row the subscription was charged for. */
+    public static final String DIRECT_CHARGE_METADATA_KEY = "tanso_direct_charge_id";
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

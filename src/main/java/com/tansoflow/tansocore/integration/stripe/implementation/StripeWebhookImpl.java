@@ -1039,6 +1039,13 @@ public class StripeWebhookImpl implements StripeWebhook {
      */
     @Transactional
     protected void handleStripeIntegrationSubscriptionCreated(com.stripe.model.Subscription stripeSub, String accountId) {
+        // A saved-card subscribe names its pending charge in the metadata. Locked first, so the subscribe call and
+        // this webhook, whichever comes second, find the subscription already created and the spend recorded.
+        String directChargeId = stripeSub.getMetadata() == null ? null
+                : stripeSub.getMetadata().get(com.tansoflow.tansocore.entity.CheckoutSession.DIRECT_CHARGE_METADATA_KEY);
+        com.tansoflow.tansocore.entity.CheckoutSession directCharge = directChargeId == null ? null
+                : checkoutSessionRepository.findByIdForUpdate(UUID.fromString(directChargeId)).orElse(null);
+
         // Idempotency: skip if bridge already exists (IN_ARREARS subs are created by orchestrator first)
         if (stripeSubscriptionRepository.existsStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId())) {
             log.info("STRIPE_INTEGRATION: Subscription {} already mapped, skipping", stripeSub.getId());
@@ -1092,6 +1099,19 @@ public class StripeWebhookImpl implements StripeWebhook {
         if (tansoSub.getIsActive()) {
             entitlementService.processEntitlementsForSubscription(tansoSub);
             creditService.processCreditGrantsForSubscription(tansoSub);
+        }
+
+        if (directCharge != null && com.tansoflow.tansocore.entity.CheckoutSession.STATUS_PENDING.equals(directCharge.getStatus())) {
+            // The saved card was charged with nobody on a payment page. Same idempotency key as before this ran here,
+            // so a spend already recorded for this Stripe subscription is not recorded twice.
+            keyBudgetService.recordSpend(directCharge.getAccountId(), directCharge.getApiKeyId(),
+                    com.tansoflow.tansocore.model.apikey.type.SpendKind.MONEY,
+                    com.tansoflow.tansocore.model.apikey.type.SpendChannel.OFF_SESSION, directCharge.getAmount(),
+                    stripeSub.getId(), "stripe_sub:" + stripeSub.getId());
+            directCharge.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_COMPLETED);
+            directCharge.setSubscriptionId(tansoSub.getId());
+            directCharge.setCompletedAt(Instant.now());
+            checkoutSessionRepository.save(directCharge);
         }
 
         log.info("STRIPE_INTEGRATION: Created Tanso subscription {} from Stripe subscription {} (checkout-first flow)",
@@ -1309,8 +1329,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             log.info("Marked Tanso invoice {} as VOID from Stripe invoice {}", linked.getInvoice().getId(), stripeInvoice.getId());
         }
 
-        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = subscriptionScheduledChangeRepository
-                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = pendingUpgradeWaitingOn(stripeInvoice);
         if (pending == null) {
             return;
         }
@@ -1333,14 +1352,41 @@ public class StripeWebhookImpl implements StripeWebhook {
                     linked.getInvoice().getId(), stripeInvoice.getId());
         }
 
-        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = subscriptionScheduledChangeRepository
-                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = pendingUpgradeWaitingOn(stripeInvoice);
         if (pending == null) {
             return;
         }
         Subscription subscription = pending.getSubscription();
         stripeSyncService.cancelUnpaidUpgrade(stripeInvoice.getId(), subscription.getId(), subscription.getAccount().getId());
         cancelUpgradeWaitingOn(pending, stripeInvoice.getId(), "marked uncollectible");
+    }
+
+    /**
+     * The PENDING upgrade a Stripe invoice was raised for. Matched by the recorded invoice id; failing that, the
+     * same fallback as invoice.paid: the upgrade call commits its change before Stripe raises the invoice and records
+     * the id afterwards, so a charge-first change with no id yet is the one an upgrade invoice for its subscription
+     * belongs to.
+     */
+    private com.tansoflow.tansocore.entity.SubscriptionScheduledChange pendingUpgradeWaitingOn(Invoice stripeInvoice) {
+        com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending = subscriptionScheduledChangeRepository
+                .findPendingUpgradeByStripeInvoiceId(stripeInvoice.getId()).orElse(null);
+        if (pending != null || !isUpgradeInvoice(stripeInvoice)) {
+            return pending;
+        }
+        String stripeSubId = extractStripeSubscriptionId(stripeInvoice);
+        StripeSubscription bridge = stripeSubId == null ? null
+                : stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId(stripeSubId);
+        if (bridge == null) {
+            return null;
+        }
+        pending = subscriptionScheduledChangeRepository
+                .findPendingUpgradeWithoutStripeInvoiceBySubscription(bridge.getSubscription())
+                .filter(com.tansoflow.tansocore.entity.SubscriptionScheduledChange::isStripeChargeFirst)
+                .orElse(null);
+        if (pending != null) {
+            pending.setStripeInvoiceId(stripeInvoice.getId());
+        }
+        return pending;
     }
 
     private void cancelUpgradeWaitingOn(com.tansoflow.tansocore.entity.SubscriptionScheduledChange pending,

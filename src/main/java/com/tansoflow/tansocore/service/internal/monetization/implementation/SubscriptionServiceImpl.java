@@ -74,6 +74,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -116,16 +117,103 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     private final org.springframework.beans.factory.ObjectProvider<com.tansoflow.tansocore.integration.stripe.StripeWebhook> stripeWebhookProvider;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
-    @Transactional
+    // Not @Transactional, like the other subscribe entry points: a saved-card subscribe charges the card, and money
+    // must not move inside a transaction that can still roll back. The decision commits in its own transaction.
     @Override
     public SubscribedCustomerResponse clientSubscribeCustomer(ClientSubscriptionRequest request, String accountId) {
-        Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(request.getCustomerReferenceId(), accountId);
-        String planIdentifier = request.getPlanId() != null && !request.getPlanId().isBlank()
-                ? request.getPlanId()
-                : request.getPlanKey();
-        Plan plan = planService.retrievePlanByIdOrKey(customer.getAccount(), planIdentifier);
+        SubscribeDecision decision = transactionTemplate.execute(status -> {
+            Customer customer = customerService.retrieveCustomerByExternalClientCustomerIdAndAccount(request.getCustomerReferenceId(), accountId);
+            String planIdentifier = request.getPlanId() != null && !request.getPlanId().isBlank()
+                    ? request.getPlanId()
+                    : request.getPlanKey();
+            Plan plan = planService.retrievePlanByIdOrKey(customer.getAccount(), planIdentifier);
+            return decideSubscribe(customer, plan, accountId, request.getPaymentMethodId());
+        });
+        return finishSubscribe(decision);
+    }
 
-        return subscribe(customer, plan, accountId, request.getPaymentMethodId());
+    /** A saved-card subscribe committed as a PENDING direct charge and waiting for Stripe. Ids only. */
+    private record DirectChargeToMake(UUID pendingChargeId, UUID accountId, UUID customerId, UUID planId,
+                                      String paymentMethodId) {
+    }
+
+    /** What the transactional part of a subscribe decided: the finished response, or a saved-card charge to make. */
+    private record SubscribeDecision(SubscribedCustomerResponse response, DirectChargeToMake directCharge) {
+        static SubscribeDecision done(SubscribedCustomerResponse response) {
+            return new SubscribeDecision(response, null);
+        }
+
+        static SubscribeDecision charge(DirectChargeToMake directCharge) {
+            return new SubscribeDecision(null, directCharge);
+        }
+    }
+
+    private SubscribedCustomerResponse finishSubscribe(SubscribeDecision decision) {
+        if (decision.directCharge() == null) {
+            return decision.response();
+        }
+        // Every entry point commits the decision itself; only a caller holding its own transaction around subscribe
+        // gets here with one open, and charging then would put the money back inside it.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            throw new IllegalStateException("A saved-card subscribe cannot run inside the caller's transaction: customer "
+                    + decision.directCharge().customerId() + ", plan " + decision.directCharge().planId());
+        }
+        return chargeDirectThenApply(decision.directCharge());
+    }
+
+    /**
+     * Stripe creates and charges the subscription with no transaction open, keyed on the committed PENDING row.
+     * Recording it runs in a transaction of its own; if that fails, customer.subscription.created creates the Tanso
+     * subscription from the same Stripe subscription and records the spend from the row.
+     */
+    private SubscribedCustomerResponse chargeDirectThenApply(DirectChargeToMake toMake) {
+        com.stripe.model.Subscription stripeSub;
+        try {
+            stripeSub = stripeSyncService.createDirectSubscription(toMake.accountId(), toMake.customerId(),
+                    toMake.planId(), toMake.paymentMethodId(), toMake.pendingChargeId());
+        } catch (com.stripe.exception.ApiConnectionException e) {
+            // No answer from Stripe, so it may have charged. The row stays PENDING: a retry reuses it and its
+            // idempotency key, and gets Stripe's first answer.
+            log.error("No answer from Stripe for the direct subscription of customer {} to plan {}; pending charge {} stays PENDING",
+                    toMake.customerId(), toMake.planId(), toMake.pendingChargeId(), e);
+            throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Direct Stripe subscription failed for customer {} plan {}; marking pending charge {} FAILED",
+                    toMake.customerId(), toMake.planId(), toMake.pendingChargeId(), e);
+            markDirectChargeFailed(toMake.pendingChargeId());
+            throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
+        }
+
+        try {
+            return transactionTemplate.execute(status -> applyDirectSubscription(toMake, stripeSub));
+        } catch (RuntimeException e) {
+            log.error("Stripe created and charged subscription {} for customer {} plan {}, but recording it failed; "
+                            + "customer.subscription.created will create it and record pending charge {}",
+                    stripeSub.getId(), toMake.customerId(), toMake.planId(), toMake.pendingChargeId(), e);
+            throw e;
+        }
+    }
+
+    private SubscribedCustomerResponse applyDirectSubscription(DirectChargeToMake toMake, com.stripe.model.Subscription stripeSub) {
+        // The same handler customer.subscription.created runs: it creates the Tanso subscription once, and records
+        // the spend and completes the pending row named in the Stripe metadata.
+        stripeWebhookProvider.getObject().materializeStripeSubscription(stripeSub, toMake.accountId().toString());
+        SubscribedCustomerResponse response = new SubscribedCustomerResponse();
+        var bridge = stripeSubscriptionRepository.findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
+        if (bridge != null) {
+            response.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(bridge.getSubscription()));
+        }
+        return response;
+    }
+
+    /** A charge Stripe refused must not be reused: its key would replay the refusal for a day. */
+    private void markDirectChargeFailed(UUID pendingChargeId) {
+        transactionTemplate.executeWithoutResult(status -> checkoutSessionRepository.findByIdForUpdate(pendingChargeId)
+                .filter(row -> com.tansoflow.tansocore.entity.CheckoutSession.STATUS_PENDING.equals(row.getStatus()))
+                .ifPresent(row -> {
+                    row.setStatus(com.tansoflow.tansocore.entity.CheckoutSession.STATUS_FAILED);
+                    checkoutSessionRepository.save(row);
+                }));
     }
 
     /**
@@ -149,24 +237,30 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         return null;
     }
 
-    @Transactional
     @Override
     public SubscribedCustomerResponse subscribeCustomer(SubscriptionRequest request, String accountId) {
-        Customer customer = customerService.validateAndRetrieveCustomer(request.getCustomerId(), accountId);
-        Plan plan = planService.retrievePlan(customer.getAccount(), UUID.fromString(request.getPlanId()));
-
-        return subscribe(customer, plan, accountId);
+        SubscribeDecision decision = transactionTemplate.execute(status -> {
+            Customer customer = customerService.validateAndRetrieveCustomer(request.getCustomerId(), accountId);
+            Plan plan = planService.retrievePlan(customer.getAccount(), UUID.fromString(request.getPlanId()));
+            return decideSubscribe(customer, plan, accountId, null);
+        });
+        return finishSubscribe(decision);
     }
 
-    @Transactional
     @Override
     public SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId) {
         return subscribe(customer, plan, accountId, null);
     }
 
-    @Transactional
+    // Joins the caller's transaction when there is one (agent signup subscribes a free plan inside its own).
     @Override
     public SubscribedCustomerResponse subscribe(Customer customer, Plan plan, String accountId, String paymentMethodId) {
+        SubscribeDecision decision = transactionTemplate.execute(status ->
+                decideSubscribe(customer, plan, accountId, paymentMethodId));
+        return finishSubscribe(decision);
+    }
+
+    private SubscribeDecision decideSubscribe(Customer customer, Plan plan, String accountId, String paymentMethodId) {
         if (!PlanStatus.ACTIVE.name().equals(plan.getStatus())) {
             throw new IllegalArgumentException("Cannot subscribe to plan: status is " + plan.getStatus() + ", only ACTIVE plans accept subscriptions");
         }
@@ -180,7 +274,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             if (active != null) {
                 SubscribedCustomerResponse existing = new SubscribedCustomerResponse();
                 existing.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(active));
-                return existing;
+                return SubscribeDecision.done(existing);
             }
         }
 
@@ -237,7 +331,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                 SubscribedCustomerResponse existing = new SubscribedCustomerResponse();
                 existing.setSubscription(subscriptionMapper.subscriptionEntityToSubscriptionDto(pending));
                 existing.setInvoice(invoiceMapper.invoiceEntityToInvoiceDto(due));
-                return existing;
+                return SubscribeDecision.done(existing);
             }
         }
 
@@ -250,28 +344,28 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             // Programmatic path: a supplied or saved payment method charges off-session,
             // creating the Stripe subscription directly — no browser.
             if (effectivePaymentMethod != null) {
-                // Charged off-session with no human looking, so bounded by the principal's mandate. Outside
-                // the try below so the 403 reaches the caller instead of being wrapped as a payment failure.
+                // Charged off-session with no human looking, so bounded by the principal's mandate.
                 keyBudgetService.assertWithinMandate(customer.getId(), plan.getPriceAmount());
-                try {
-                    com.stripe.model.Subscription stripeSub = stripeSyncService.createDirectSubscription(
-                            UUID.fromString(accountId), customer.getId(), plan.getId(), effectivePaymentMethod);
-                    stripeWebhookProvider.getObject().materializeStripeSubscription(stripeSub, accountId);
-                    var bridge = stripeSubscriptionRepository
-                            .findStripeSubscriptionByStripeSubscriptionExternalId(stripeSub.getId());
-                    if (bridge != null) {
-                        response.setSubscription(subscriptionMapper
-                                .subscriptionEntityToSubscriptionDto(bridge.getSubscription()));
-                    }
-                    keyBudgetService.recordSpend(UUID.fromString(accountId), AuthContext.currentApiKeyId(),
-                            SpendKind.MONEY, SpendChannel.OFF_SESSION, plan.getPriceAmount(), stripeSub.getId(),
-                            "stripe_sub:" + stripeSub.getId());
-                    return response;
-                } catch (Exception e) {
-                    log.error("Direct Stripe subscription failed for customer {} plan {}: {}",
-                            customer.getId(), plan.getId(), e.getMessage(), e);
-                    throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
+                // Committed before Stripe is called. Its id keys the Stripe call, so a retry of the same subscribe
+                // reuses it and cannot charge twice, and customer.subscription.created finds it by Stripe metadata.
+                com.tansoflow.tansocore.entity.CheckoutSession pendingCharge = checkoutSessionRepository
+                        .findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(customer.getId(), plan.getId(),
+                                com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_DIRECT_SUBSCRIPTION,
+                                com.tansoflow.tansocore.entity.CheckoutSession.STATUS_PENDING)
+                        .orElse(null);
+                if (pendingCharge == null) {
+                    pendingCharge = new com.tansoflow.tansocore.entity.CheckoutSession();
+                    pendingCharge.setAccountId(UUID.fromString(accountId));
+                    pendingCharge.setCustomerId(customer.getId());
+                    pendingCharge.setPurpose(com.tansoflow.tansocore.entity.CheckoutSession.PURPOSE_DIRECT_SUBSCRIPTION);
+                    pendingCharge.setPlanId(plan.getId());
+                    // The webhook that may have to record this spend has no security context.
+                    pendingCharge.setApiKeyId(AuthContext.currentApiKeyId());
+                    pendingCharge.setAmount(plan.getPriceAmount());
+                    checkoutSessionRepository.save(pendingCharge);
                 }
+                return SubscribeDecision.charge(new DirectChargeToMake(pendingCharge.getId(), UUID.fromString(accountId),
+                        customer.getId(), plan.getId(), effectivePaymentMethod));
             }
             try {
                 var checkoutDto = stripeSyncService.createSubscriptionCheckoutSession(
@@ -292,7 +386,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
                 response.setCheckoutUrl(checkoutDto.getPaymentLink());
                 response.setCheckoutSessionId(session.getId().toString());
-                return response;
+                return SubscribeDecision.done(response);
             } catch (Exception e) {
                 log.error("Failed to create Stripe checkout session for customer {} plan {}: {}",
                         customer.getId(), plan.getId(), e.getMessage(), e);
@@ -366,7 +460,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
                     subscription.getAccount().getId(), subscription.getId()));
         }
 
-        return response;
+        return SubscribeDecision.done(response);
     }
 
     @Override

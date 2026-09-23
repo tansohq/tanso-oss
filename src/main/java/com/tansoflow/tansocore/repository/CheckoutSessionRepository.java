@@ -18,7 +18,10 @@
 package com.tansoflow.tansocore.repository;
 
 import com.tansoflow.tansocore.entity.CheckoutSession;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -32,4 +35,14 @@ public interface CheckoutSessionRepository extends JpaRepository<CheckoutSession
     Optional<CheckoutSession> findByStripeSessionId(String stripeSessionId);
 
     Optional<CheckoutSession> findFirstByCustomerIdAndPurposeOrderByCreatedAtDesc(UUID customerId, String purpose);
+
+    // A direct subscription charge still waiting to be recorded, so a retry reuses its Stripe idempotency key.
+    Optional<CheckoutSession> findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+            UUID customerId, UUID planId, String purpose, String status);
+
+    // Locked so the subscribe call recording a direct charge and customer.subscription.created recovering it
+    // cannot both create the Tanso subscription or both record the spend.
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT cs FROM CheckoutSession cs WHERE cs.id = :id")
+    Optional<CheckoutSession> findByIdForUpdate(UUID id);
 }

@@ -92,6 +92,28 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **A paid subscribe with a saved card can no longer be lost to a failed
+  database commit.** On STRIPE_INTEGRATION, subscribing with a saved card
+  created and charged the Stripe subscription inside the database transaction.
+  A commit that failed after Stripe charged lost the spend record against the
+  key, and a retry could create and charge a second Stripe subscription. Tanso
+  now commits a pending charge first (a `checkout_sessions` row with purpose
+  `DIRECT_SUBSCRIPTION`), calls Stripe with no transaction open and an
+  idempotency key made from that row's id, then records the subscription in a
+  separate transaction. If that last step fails,
+  `customer.subscription.created` creates the subscription and records the
+  spend from the pending row. A retry reuses the row, so Stripe returns the
+  subscription it already created. A card Stripe declines marks the row
+  FAILED, so the next attempt starts fresh. Callers and responses are
+  unchanged.
+- **A voided or written-off upgrade invoice now ends the upgrade even when
+  its id was never recorded.** `invoice.voided` and
+  `invoice.marked_uncollectible` matched a waiting upgrade only by the
+  recorded Stripe invoice id. If recording failed after Stripe raised the
+  invoice, the upgrade stayed pending and Stripe kept the new price. They now
+  use the same fallback as `invoice.paid`: an upgrade invoice
+  (`billing_reason: subscription_update`) for the subscription ends its
+  pending charge-first upgrade.
 - **A charged upgrade can no longer be lost to a failed database commit.**
   Charge-first upgrades called Stripe inside the database transaction, so a
   commit that failed after Stripe charged left the customer paying with no
