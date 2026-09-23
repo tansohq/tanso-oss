@@ -34,4 +34,6 @@ public interface StripePriceRepository extends JpaRepository<StripePrice, UUID> 
     Optional<StripePrice> findFirstByPlanAndAccountOrderByCreatedAtDesc(Plan plan, Account account);
 
     List<StripePrice> findAllByPlanAndAccount(Plan plan, Account account);
+
+    List<StripePrice> findAllByPlanAndAccountOrderByCreatedAtDesc(Plan plan, Account account);
 }
