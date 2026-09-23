@@ -23,6 +23,15 @@ tags; this file starts where the changelog does.
   endpoints (`complete_checkout`, `nominate_owner`, no payment processor)
   answered `detail: null`, so an agent had nothing to quote to the operator.
   They now carry `errorId=<uuid>`, and the id is logged.
+- **A Stripe subscription gets every price of its plan.** When a subscription
+  activated on `STRIPE_DRIVEN` or `STRIPE_INTEGRATION` (an in-arrears plan, or
+  an in-advance plan activated after its first invoice), `createStripeSubscription`
+  put only the plan's newest Stripe price on it. For a paid plan with a
+  usage-priced feature, that is the licensed base price, so Stripe billed the
+  base fee and never the usage. The subscription now gets the newest price of
+  each usage type, with no quantity on the metered item. Retrying after a stale
+  price also keeps `send_invoice` for accumulate-mode plans and
+  `default_incomplete` for unpaid in-advance plans, which the retry used to drop.
 - **An agent customer on `STRIPE_DRIVEN` is claimed when a saved card pays.**
   Stripe charges a saved card while it creates the invoice, so `invoice.created`
   already reports it paid. Tanso mirrored it straight to `PAID`, which skipped
