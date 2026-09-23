@@ -5,6 +5,33 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+## 0.11.0 — 2026-09-22
+
+The release where money moves safely. A review of 0.10.0 found places where an
+agent could reach a paid plan before anyone paid, a customer could be charged
+twice or granted credits twice, a Stripe charge could land while Tanso rolled
+back, and Stripe never delivered some of the events Tanso waits for. This
+release fixes those, stores the human's spend approval once per customer under
+an operator ceiling, and makes upgrades charge the prorated amount when they
+happen.
+
+### Upgrading from 0.10.0
+
+- **Set `agentMaxMandateAmount` if you use spend mandates.** Mandates answer
+  `unavailable` until the account has a ceiling, and turning them on without
+  one is refused.
+- **Tanso edits your Stripe webhook destination on startup.** It adds the
+  events it handles that are missing. It never removes any. Turn it off with
+  `app.stripe-event-destination-sync-enabled=false`.
+- **Upgrades on Stripe-billed accounts charge immediately.** On
+  `STRIPE_INTEGRATION` this applies to every caller, and a tenant-key upgrade
+  that waits on payment now answers `202` with `status: "payment_pending"`
+  instead of `200`.
+- **Check your proxy.** The per-IP signup cap reads the leftmost
+  `X-Forwarded-For` entry; the proxy must overwrite that header.
+- **Instance telemetry is gone.** `TANSO_TELEMETRY_ENABLED` is ignored and the
+  `instance_telemetry` table is dropped.
+
 ### Added
 
 - **The events behind a usage total can be read back.**
