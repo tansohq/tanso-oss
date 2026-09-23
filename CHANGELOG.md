@@ -5,6 +5,13 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+### Fixed
+
+- **`limits.spend_cap` is written out when it is null.** The runbook says a
+  null `spend_cap` means no per-charge limit and that null fields are never
+  omitted, but the signup and status bodies dropped the field when the operator
+  had set no `agentMaxTopupAmount`. It now comes back as `"spend_cap": null`.
+
 ## 0.11.0 — 2026-09-22
 
 The release where money moves safely. A review of 0.10.0 found places where an
