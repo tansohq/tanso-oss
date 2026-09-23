@@ -365,7 +365,7 @@ class StripeWebhookImplTest {
         verify(invoiceService).createNewInvoice(
                 eq(subscription), any(), eq(new BigDecimal("35.00")), eq(InvoiceStatus.DUE),
                 any(Instant.class), any(Instant.class));
-        verify(invoiceService).markInvoiceAsPaid(tansoInvoiceId.toString());
+        verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
     }
 
     @Test
@@ -403,8 +403,11 @@ class StripeWebhookImplTest {
 
         stripeWebhook.handleFullSyncInvoicePaid(stripeInvoice, accountId);
 
-        // For non-accumulate mode, should fall through to handleFullSyncInvoiceCreated as before
-        verify(invoiceService).markInvoiceAsPaid(tansoInvoiceId.toString());
+        // For non-accumulate mode, should fall through to handleFullSyncInvoiceCreated as before. The copy it made
+        // is not committed yet, so it is marked paid in this transaction: markInvoiceAsPaid(String) opens a new one,
+        // could not see the copy, threw "Invoice not found" and failed the webhook with 400.
+        verify(invoiceService).markInvoiceAsPaid(tansoInvoice);
+        verify(invoiceService, never()).markInvoiceAsPaid(any(String.class));
     }
 
     // ── Accumulate mode base price tests ────────────────────────────────────────

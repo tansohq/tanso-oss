@@ -7,6 +7,13 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **`invoice.paid` no longer fails on `STRIPE_INTEGRATION` when it arrives
+  before `invoice.created`.** The webhook made the Tanso copy, then marked it
+  paid through `markInvoiceAsPaid(String)`. That method runs in a new
+  transaction that could not see the uncommitted copy, so it threw
+  `Invoice not found` and the webhook answered 400. This is the same failure
+  0.11.x fixed for `STRIPE_DRIVEN`. A copy made in the same call is now marked
+  paid in the webhook's own transaction.
 - **`limits.spend_cap` is written out when it is null.** The runbook says a
   null `spend_cap` means no per-charge limit and that null fields are never
   omitted, but the signup and status bodies dropped the field when the operator
