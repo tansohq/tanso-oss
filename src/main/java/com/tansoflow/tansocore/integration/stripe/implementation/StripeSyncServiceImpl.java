@@ -1036,18 +1036,13 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         // The plan to price against comes from the caller, not subscription.getPlan(): a STRIPE_INTEGRATION upgrade
         // leaves the Tanso subscription on its old plan until payment, and reading it here re-sent the old price.
         Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
-        StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
+        List<String> planPriceIds = stripePriceIdsFor(plan, subscription.getAccount(), accountId);
 
-        // Retrieve the current Stripe subscription to get the existing item ID
         com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
                 .retrieve(stripeSub.getStripeSubscriptionExternalId());
-        String existingItemId = currentStripeSub.getItems().getData().getFirst().getId();
 
         SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
-                .addItem(SubscriptionUpdateParams.Item.builder()
-                        .setId(existingItemId)
-                        .setPrice(stripePrice.getStripePriceExternalId())
-                        .build())
+                .addAllItem(itemsMovingTo(currentStripeSub, newestPriceByUsageType(stripeClient, planPriceIds)))
                 .setProrationBehavior(prorate
                         ? SubscriptionUpdateParams.ProrationBehavior.CREATE_PRORATIONS
                         : SubscriptionUpdateParams.ProrationBehavior.NONE)
@@ -1055,13 +1050,12 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         stripeClient.v1().subscriptions().update(stripeSub.getStripeSubscriptionExternalId(), params);
 
-        log.info("Updated Stripe subscription {} to new price {} for plan {} (prorate={})",
-                stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(),
-                plan.getId(), prorate);
+        log.info("Updated Stripe subscription {} to the prices {} of plan {} (prorate={})",
+                stripeSub.getStripeSubscriptionExternalId(), planPriceIds, plan.getId(), prorate);
     }
 
     /** The Stripe ids a charge-first upgrade needs, read in a short transaction that ends before any charge. */
-    private record UpgradeChargeTarget(String stripeSubscriptionId, String stripePriceId) {
+    private record UpgradeChargeTarget(String stripeSubscriptionId, List<String> stripePriceIds) {
     }
 
     // Not @Transactional: the update below can charge a card, and money must not move inside a transaction that can
@@ -1085,8 +1079,8 @@ public class StripeSyncServiceImpl implements StripeSyncService {
             }
             Plan plan = planService.retrievePlan(subscription.getAccount(), planId);
             try {
-                StripePrice stripePrice = latestStripePriceFor(plan, subscription.getAccount(), accountId);
-                return new UpgradeChargeTarget(linked.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId());
+                return new UpgradeChargeTarget(linked.getStripeSubscriptionExternalId(),
+                        stripePriceIdsFor(plan, subscription.getAccount(), accountId));
             } catch (StripeException e) {
                 throw new IllegalStateException("Could not set up the Stripe price of plan " + planId
                         + " for the upgrade of subscription " + subscriptionId + ": " + e.getMessage(), e);
@@ -1095,7 +1089,7 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         com.stripe.model.Subscription currentStripeSub = stripeClient.v1().subscriptions()
                 .retrieve(target.stripeSubscriptionId());
-        String existingItemId = currentStripeSub.getItems().getData().getFirst().getId();
+        Map<String, String> newPrices = newestPriceByUsageType(stripeClient, target.stripePriceIds());
         // Accumulate-mode plans create send_invoice subscriptions. Stripe only supports pending updates on
         // charge_automatically subscriptions (docs.stripe.com/billing/subscriptions/pending-updates).
         boolean sendInvoice = "send_invoice".equals(currentStripeSub.getCollectionMethod());
@@ -1104,11 +1098,11 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         // pending_if_incomplete makes Stripe apply the new price only if that charge succeeds; otherwise the
         // subscription keeps its old price and carries a pending_update until the invoice is paid or expires.
         // On send_invoice Stripe moves the price and sends the invoice; Tanso still waits for it to be paid.
+        // A plan with a usage-priced feature has a metered price and, when it costs money, a licensed base price;
+        // each existing item moves to the new plan's price of its own usage type. Swapping only the first item
+        // asked Stripe to turn a metered item into a licensed one, which it refuses, so the upgrade failed.
         SubscriptionUpdateParams.Builder paramsBuilder = SubscriptionUpdateParams.builder()
-                .addItem(SubscriptionUpdateParams.Item.builder()
-                        .setId(existingItemId)
-                        .setPrice(target.stripePriceId())
-                        .build())
+                .addAllItem(itemsMovingTo(currentStripeSub, newPrices))
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.ALWAYS_INVOICE)
                 .addExpand("latest_invoice");
         if (!sendInvoice) {
@@ -1120,10 +1114,19 @@ public class StripeSyncServiceImpl implements StripeSyncService {
         com.stripe.net.RequestOptions requestOptions = com.stripe.net.RequestOptions.builder()
                 .setIdempotencyKey(upgradeIdempotencyKey(scheduledChangeId))
                 .build();
-        com.stripe.model.Subscription updated = stripeClient.v1().subscriptions()
-                .update(target.stripeSubscriptionId(), paramsBuilder.build(), requestOptions);
-
-        com.stripe.model.Invoice invoice = updated.getLatestInvoiceObject();
+        com.stripe.model.Subscription updated;
+        com.stripe.model.Invoice invoice;
+        if (currentStripeSub.getPendingUpdate() == null && onPrices(currentStripeSub, newPrices.values())) {
+            // Already on the new prices: an earlier call for this change went through and its reply was lost. The
+            // items differ from that call's now, so repeating it under the same key would be refused as a different
+            // request. Its invoice is the subscription's latest.
+            updated = currentStripeSub;
+            invoice = stripeClient.v1().invoices().retrieve(currentStripeSub.getLatestInvoice());
+        } else {
+            updated = stripeClient.v1().subscriptions()
+                    .update(target.stripeSubscriptionId(), paramsBuilder.build(), requestOptions);
+            invoice = updated.getLatestInvoiceObject();
+        }
         if (invoice == null) {
             throw new IllegalStateException("Stripe returned no invoice for the upgrade of subscription "
                     + target.stripeSubscriptionId());
@@ -1146,8 +1149,8 @@ public class StripeSyncServiceImpl implements StripeSyncService {
                 ? BigDecimal.valueOf(invoice.getAmountPaid()).movePointLeft(2)
                 : BigDecimal.ZERO;
 
-        log.info("Charge-first upgrade of Stripe subscription {} to price {} for plan {} (scheduled change {}): invoice {} applied={} sendInvoice={}",
-                target.stripeSubscriptionId(), target.stripePriceId(), planId, scheduledChangeId,
+        log.info("Charge-first upgrade of Stripe subscription {} to prices {} for plan {} (scheduled change {}): invoice {} applied={} sendInvoice={}",
+                target.stripeSubscriptionId(), newPrices.values(), planId, scheduledChangeId,
                 invoice.getId(), applied, sendInvoice);
         return new StripeUpgradeCharge(invoice.getId(), invoice.getHostedInvoiceUrl(), amountPaid, applied);
     }
@@ -1192,33 +1195,82 @@ public class StripeSyncServiceImpl implements StripeSyncService {
 
         // send_invoice: Stripe moved to the new price when it raised the invoice. Left there, the next renewal would
         // bill a plan Tanso never granted.
-        StripePrice stripePrice = latestStripePriceFor(subscription.getPlan(), subscription.getAccount(), accountId);
+        List<String> planPriceIds = stripePriceIdsFor(subscription.getPlan(), subscription.getAccount(), accountId);
         SubscriptionUpdateParams params = SubscriptionUpdateParams.builder()
-                .addItem(SubscriptionUpdateParams.Item.builder()
-                        .setId(currentStripeSub.getItems().getData().getFirst().getId())
-                        .setPrice(stripePrice.getStripePriceExternalId())
-                        .build())
+                .addAllItem(itemsMovingTo(currentStripeSub, newestPriceByUsageType(stripeClient, planPriceIds)))
                 .setProrationBehavior(SubscriptionUpdateParams.ProrationBehavior.NONE)
                 .build();
         stripeClient.v1().subscriptions().update(stripeSub.getStripeSubscriptionExternalId(), params);
-        log.info("Restored Stripe subscription {} to price {} of plan {} after dropping an unpaid upgrade",
-                stripeSub.getStripeSubscriptionExternalId(), stripePrice.getStripePriceExternalId(),
-                subscription.getPlan().getId());
+        log.info("Restored Stripe subscription {} to the prices {} of plan {} after dropping an unpaid upgrade",
+                stripeSub.getStripeSubscriptionExternalId(), planPriceIds, subscription.getPlan().getId());
     }
 
-    /** The newest Stripe price for a plan, creating the product and prices first if the plan was never synced. */
-    private StripePrice latestStripePriceFor(Plan plan, Account account, UUID accountId) throws StripeException {
-        StripePrice stripePrice = stripePriceRepository
-                .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, account)
-                .orElse(null);
-        if (stripePrice != null) {
-            return stripePrice;
+    /** A plan's Stripe price ids, newest first, creating the product and prices first if the plan was never synced. */
+    private List<String> stripePriceIdsFor(Plan plan, Account account, UUID accountId) throws StripeException {
+        List<StripePrice> prices = stripePriceRepository.findAllByPlanAndAccountOrderByCreatedAtDesc(plan, account);
+        if (prices.isEmpty()) {
+            log.info("No StripePrice for plan {}, creating lazily", plan.getId());
+            createStripeProductWithPrices(plan.getId(), accountId);
+            prices = stripePriceRepository.findAllByPlanAndAccountOrderByCreatedAtDesc(plan, account);
+            if (prices.isEmpty()) {
+                throw new IllegalStateException("Failed to create StripePrice for plan " + plan.getId());
+            }
         }
-        log.info("No StripePrice for plan {}, creating lazily", plan.getId());
-        createStripeProductWithPrices(plan.getId(), accountId);
-        return stripePriceRepository
-                .findFirstByPlanAndAccountOrderByCreatedAtDesc(plan, account)
-                .orElseThrow(() -> new IllegalStateException("Failed to create StripePrice for plan " + plan.getId()));
+        return prices.stream().map(StripePrice::getStripePriceExternalId).toList();
+    }
+
+    /** The newest price of each usage type ("metered", "licensed") among a plan's prices, given newest first. */
+    private Map<String, String> newestPriceByUsageType(StripeClient stripeClient, List<String> priceIdsNewestFirst)
+            throws StripeException {
+        Map<String, String> byUsageType = new java.util.LinkedHashMap<>();
+        for (String priceId : priceIdsNewestFirst) {
+            byUsageType.putIfAbsent(usageTypeOf(stripeClient.v1().prices().retrieve(priceId)), priceId);
+        }
+        return byUsageType;
+    }
+
+    /**
+     * The item changes that put a Stripe subscription on a plan's prices: each existing item moves to the new price
+     * of its usage type, an item whose type the plan does not have is removed, and a price with no item to move
+     * is added. Stripe does not let an item change between metered and licensed.
+     */
+    private static List<SubscriptionUpdateParams.Item> itemsMovingTo(com.stripe.model.Subscription current,
+                                                             Map<String, String> newPriceByUsageType) {
+        Map<String, String> unplaced = new java.util.LinkedHashMap<>(newPriceByUsageType);
+        List<SubscriptionUpdateParams.Item> items = new ArrayList<>();
+        for (com.stripe.model.SubscriptionItem existing : current.getItems().getData()) {
+            String newPrice = unplaced.remove(usageTypeOf(existing.getPrice()));
+            if (newPrice != null) {
+                items.add(SubscriptionUpdateParams.Item.builder().setId(existing.getId()).setPrice(newPrice).build());
+            } else {
+                items.add(SubscriptionUpdateParams.Item.builder().setId(existing.getId()).setDeleted(true).build());
+            }
+        }
+        unplaced.forEach((usageType, priceId) -> {
+            SubscriptionUpdateParams.Item.Builder added = SubscriptionUpdateParams.Item.builder().setPrice(priceId);
+            if (!"metered".equals(usageType)) {
+                added.setQuantity(1L);
+            }
+            items.add(added.build());
+        });
+        return items;
+    }
+
+    /** Whether the subscription's items carry exactly these prices. */
+    private static boolean onPrices(com.stripe.model.Subscription current, java.util.Collection<String> priceIds) {
+        java.util.Set<String> live = new java.util.HashSet<>();
+        for (com.stripe.model.SubscriptionItem item : current.getItems().getData()) {
+            if (item.getPrice() == null) {
+                return false;
+            }
+            live.add(item.getPrice().getId());
+        }
+        return live.equals(new java.util.HashSet<>(priceIds));
+    }
+
+    private static String usageTypeOf(Price price) {
+        return price != null && price.getRecurring() != null && "metered".equals(price.getRecurring().getUsageType())
+                ? "metered" : "licensed";
     }
 
     @Override

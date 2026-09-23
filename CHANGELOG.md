@@ -17,6 +17,20 @@ tags; this file starts where the changelog does.
   then marked it paid in a new transaction that could not see it yet, so the
   webhook failed with `Invoice not found` and answered 400; it now marks the
   mirror it created in its own transaction.
+- **Upgrading between plans with a usage-priced feature no longer fails in
+  Stripe.** A plan with a usage-priced feature has a metered Stripe price, and
+  a paid one also has a licensed base price. A plan change put the plan's newest
+  price on the subscription's first item, so moving from a free plan (one
+  metered item) to a paid plan asked Stripe to turn a metered item into a
+  licensed one. Stripe refused ("You cannot change the usage type of the price
+  attached to your subscription item") and the upgrade answered 500, on
+  `STRIPE_DRIVEN` and `STRIPE_INTEGRATION`, for agent and tenant keys alike.
+  Each item now moves to the new plan's price of its own usage type, a price
+  with no matching item is added, and an item whose type the new plan lacks is
+  removed. The same applies to the non-charging plan-change sync and to
+  restoring the price after a dropped `send_invoice` upgrade. A retry of an
+  upgrade Stripe already applied reads the subscription's latest invoice
+  instead of repeating the update under the same idempotency key.
 
 ## 0.11.0 — 2026-09-22
 
