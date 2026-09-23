@@ -719,6 +719,7 @@ public class StripeWebhookImpl implements StripeWebhook {
             BigDecimal totalInvoiceAmount = netCharge.add(hasBasePrice ? basePriceAmount : BigDecimal.ZERO);
             var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), totalInvoiceAmount, InvoiceStatus.DUE,
                     periodStart, periodEnd);
+            invoiceService.markStripeOrigin(invoiceDto.getId(), accountId);
             stripeSyncService.saveStripeInvoice(stripeInvoice.getId(), invoiceDto.getId(), accountId);
 
             log.info("FULL_SYNC (accumulate): Mirrored Stripe invoice {} to Tanso invoice {} with total {} (base: {}, usage: {}, credit offset: {})",
@@ -867,6 +868,7 @@ public class StripeWebhookImpl implements StripeWebhook {
 
         var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount, InvoiceStatus.DUE,
                 periodStart, periodEnd);
+        invoiceService.markStripeOrigin(invoiceDto.getId(), accountId);
         stripeSyncService.saveStripeInvoice(stripeInvoice.getId(), invoiceDto.getId(), accountId);
 
         log.info("FULL_SYNC (accumulate backfill): Created mirror invoice {} from already-paid Stripe invoice {} with amount {}",

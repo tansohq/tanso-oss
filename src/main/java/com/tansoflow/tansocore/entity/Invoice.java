@@ -17,6 +17,7 @@
  */
 package com.tansoflow.tansocore.entity;
 
+import com.tansoflow.tansocore.model.billing.type.InvoiceSource;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -108,5 +109,11 @@ public class Invoice {
     @Size(max = 32)
     @Column(name = "type", length = 32)
     private String type;
+
+    // InvoiceSource. STRIPE marks a copy of an invoice Stripe raised, which Tanso's jobs must never recalculate.
+    @Size(max = 16)
+    @NotNull
+    @Column(name = "source", nullable = false, length = 16)
+    private String source = InvoiceSource.TANSO.name();
 
 }

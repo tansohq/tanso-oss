@@ -28,6 +28,7 @@ import com.tansoflow.tansocore.mapper.monetization.InvoiceMapper;
 import com.tansoflow.tansocore.model.billing.CreateInvoiceParams;
 import com.tansoflow.tansocore.model.billing.InvoiceDto;
 import com.tansoflow.tansocore.model.billing.InvoiceItemDto;
+import com.tansoflow.tansocore.model.billing.type.InvoiceSource;
 import com.tansoflow.tansocore.model.billing.type.InvoiceStatus;
 import com.tansoflow.tansocore.model.billing.type.InvoiceType;
 import com.tansoflow.tansocore.model.event.events.type.EventType;
@@ -819,6 +820,8 @@ public class InvoiceServiceImpl implements InvoiceService {
                                        Instant periodStart, Instant periodEnd,
                                        List<SyncLineItem> lineItems) {
         tansoInvoice.setAmount(amount);
+        // From here on the amount and lines are Stripe's, even when Tanso created this invoice.
+        tansoInvoice.setSource(InvoiceSource.STRIPE.name());
         if (periodStart != null) {
             tansoInvoice.setInvoicePeriodStart(periodStart);
         }
@@ -842,6 +845,17 @@ public class InvoiceServiceImpl implements InvoiceService {
                 tansoInvoice.getId(), lineItems.size(), amount);
     }
 
+    @Override
+    @Transactional
+    public void markStripeOrigin(String invoiceId, String accountId) {
+        Invoice invoice = invoiceRepository.findByIdAndAccount(UUID.fromString(invoiceId), UUID.fromString(accountId));
+        if (invoice == null) {
+            throw new IllegalArgumentException("Invoice not found with id: " + invoiceId);
+        }
+        invoice.setSource(InvoiceSource.STRIPE.name());
+        invoiceRepository.save(invoice);
+    }
+
     // Stripe is the source of truth for an invoice it raised. createNewInvoice resets the amount to the
     // subscription's current plan price plus Tanso's usage for the period, which stored a $30.00 upgrade
     // proration as 0.00 (the plan had not moved yet) or as 60.00 (the full price of the plan it moved to).
@@ -860,6 +874,7 @@ public class InvoiceServiceImpl implements InvoiceService {
         invoice.setType(InvoiceType.REGULAR.name());
         invoice.setInvoicePeriodStart(periodStart);
         invoice.setInvoicePeriodEnd(periodEnd);
+        invoice.setSource(InvoiceSource.STRIPE.name());
         Invoice saved = invoiceRepository.saveAndFlush(invoice);
 
         for (SyncLineItem lineItem : lineItems) {

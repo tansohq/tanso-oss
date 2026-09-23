@@ -1,0 +1,30 @@
+databaseChangeLog:
+  - changeSet:
+      id: "20260923-40"
+      author: tanso
+      comment: >
+        Record who computed an invoice. STRIPE marks a copy of an invoice Stripe raised; the invoice jobs
+        recalculate amounts and must never touch those. They were kept away only by the account's current
+        Stripe mode, and disconnecting Stripe resets the mode to NONE, so open copies were then recalculated
+        from the current plan. Backfill: an invoice linked to a Stripe invoice on an account whose mode is
+        still FULL_SYNC, STRIPE_INTEGRATION or STRIPE_DRIVEN is a Stripe copy. On an account that already
+        disconnected (now NONE) or moved to PAYMENT_PASS_THROUGH, a linked invoice cannot be told apart from a
+        pass-through invoice Tanso pushed to Stripe, so it stays TANSO and needs a manual update.
+      changes:
+        - addColumn:
+            tableName: invoices
+            columns:
+              - column:
+                  name: source
+                  type: VARCHAR(16)
+                  defaultValue: TANSO
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: >
+              UPDATE invoices i
+                 SET source = 'STRIPE'
+               WHERE EXISTS (SELECT 1 FROM stripe_invoices si WHERE si.invoice_id = i.invoice_id)
+                 AND EXISTS (SELECT 1 FROM account_settings acs
+                              WHERE acs.account_id = i.account_id
+                                AND acs.stripe_mode IN ('FULL_SYNC', 'STRIPE_INTEGRATION', 'STRIPE_DRIVEN'));

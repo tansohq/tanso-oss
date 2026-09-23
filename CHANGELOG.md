@@ -5,6 +5,38 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+### Fixed
+
+- **Disconnecting Stripe no longer lets Tanso rewrite the amounts of Stripe's
+  invoices.** On `STRIPE_DRIVEN` and `STRIPE_INTEGRATION` accounts Tanso
+  keeps a copy of each Stripe invoice at Stripe's amount. The pending and due
+  invoice jobs, which recalculate amounts from the current plan and usage,
+  skipped those copies only because of the account's Stripe mode, and
+  disconnecting resets the mode to `NONE`. Any open copy was then picked up
+  and its amount overwritten. Invoices now record who computed them in a new
+  `source` column (`TANSO` or `STRIPE`), and the jobs never select a
+  `STRIPE` invoice, whatever the account's mode. The mode check stays too, so
+  Tanso's own invoices on a Stripe-driven account are still left alone.
+  Every place that creates or overwrites an invoice from a Stripe invoice
+  sets `STRIPE`. `PAYMENT_PASS_THROUGH` invoices are Tanso's, so the jobs
+  still process them.
+- **Disconnecting leaves open Stripe copies as they are.** They keep their
+  status and amount, the jobs skip them, and nothing is voided in Stripe.
+  Settle them in Stripe or by hand.
+
+### Upgrading from 0.11.1
+
+- **A migration adds `invoices.source` and marks existing copies.** An
+  invoice linked to a Stripe invoice on an account whose mode is still
+  `FULL_SYNC`, `STRIPE_INTEGRATION` or `STRIPE_DRIVEN` becomes `STRIPE`.
+  This includes a Tanso invoice Stripe's first subscription invoice was
+  linked to, since its amount is synced from Stripe from then on.
+- **If an account already disconnected Stripe, or moved to
+  `PAYMENT_PASS_THROUGH`, its copies stay `TANSO`**, because a copy cannot be
+  told apart from a pass-through invoice Tanso sent to Stripe. The jobs can
+  still recalculate them. Mark them by hand, for example
+  `UPDATE invoices SET source = 'STRIPE' WHERE invoice_id IN (...)`.
+
 ## 0.11.1 — 2026-09-22
 
 Found by running 0.11.0 end to end against Stripe test mode. Upgrades on plans

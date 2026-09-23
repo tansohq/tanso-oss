@@ -48,10 +48,13 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
 
     List<Invoice> getInvoicesByStatus(String status);
 
+    // The invoices Tanso's jobs may recalculate. A Stripe copy (source STRIPE) is left out by its own column, not
+    // only by the account's mode: disconnecting Stripe resets the mode to NONE, and the copies must stay Stripe's.
     @Query("""
         SELECT i FROM Invoice i
         WHERE i.status = :status
           AND i.deletedAt IS NULL
+          AND i.source <> 'STRIPE'
           AND NOT EXISTS (
             SELECT 1 FROM AccountSetting acs
             WHERE acs.accounts.id = i.account.id
@@ -64,6 +67,7 @@ public interface InvoiceRepository extends JpaRepository<Invoice, UUID> {
         SELECT i FROM Invoice i
         WHERE i.status = :status
           AND i.deletedAt IS NULL
+          AND i.source <> 'STRIPE'
           AND NOT EXISTS (
             SELECT 1 FROM AccountSetting acs
             WHERE acs.accounts.id = i.account.id

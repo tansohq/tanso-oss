@@ -28,6 +28,7 @@ import com.tansoflow.tansocore.entity.Plan;
 import com.tansoflow.tansocore.entity.PlanFeatureRule;
 import com.tansoflow.tansocore.entity.Subscription;
 import com.tansoflow.tansocore.model.billing.CreateInvoiceParams;
+import com.tansoflow.tansocore.model.billing.type.InvoiceSource;
 import com.tansoflow.tansocore.model.billing.type.InvoiceStatus;
 import com.tansoflow.tansocore.model.billing.type.InvoiceType;
 import com.tansoflow.tansocore.repository.AccountSettingRepository;
@@ -1473,5 +1474,55 @@ class InvoiceServiceImplTest {
         assertEquals(InvoiceStatus.VOID.name(), due.getStatus());
         assertTrue(applicationEvents.stream(com.tansoflow.tansocore.model.event.service.InvoiceVoidedEvent.class)
                 .anyMatch(e -> e.invoiceId().equals(due.getId()) && e.accountId().equals(account.getId())));
+    }
+
+    // The invoice jobs leave out source STRIPE. The account's mode used to be the only guard, and disconnecting
+    // Stripe resets it to NONE.
+    @Test
+    void aCopyOfAStripeInvoiceIsRecordedAsStripeOrigin() {
+        Account account = new Account();
+        account.setId(UUID.randomUUID());
+        Customer customer = new Customer();
+        customer.setId(UUID.randomUUID());
+        customer.setAccount(account);
+        Subscription subscription = subscriptionOn(customer, account, "starter", new BigDecimal("30.00"), true);
+        when(invoiceRepository.saveAndFlush(any(Invoice.class))).thenAnswer(i -> {
+            Invoice saved = i.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            return saved;
+        });
+
+        invoiceService.createInvoiceFromStripe(subscription, LocalDate.now(ZoneOffset.UTC), new BigDecimal("29.99"),
+                InvoiceStatus.DUE, Instant.now(), Instant.now().plus(30, java.time.temporal.ChronoUnit.DAYS), List.of());
+
+        ArgumentCaptor<Invoice> saved = ArgumentCaptor.forClass(Invoice.class);
+        verify(invoiceRepository).saveAndFlush(saved.capture());
+        assertEquals(InvoiceSource.STRIPE.name(), saved.getValue().getSource());
+    }
+
+    // A Tanso invoice whose amount and lines are then overwritten from Stripe is Stripe's from then on.
+    @Test
+    void syncingAnInvoiceFromStripeMarksItStripeOrigin() {
+        Invoice tansoInvoice = new Invoice();
+        tansoInvoice.setId(UUID.randomUUID());
+        assertEquals(InvoiceSource.TANSO.name(), tansoInvoice.getSource());
+
+        invoiceService.syncInvoiceFromStripe(tansoInvoice, new BigDecimal("29.99"), null, null, List.of());
+
+        assertEquals(InvoiceSource.STRIPE.name(), tansoInvoice.getSource());
+        verify(invoiceRepository).save(tansoInvoice);
+    }
+
+    @Test
+    void markStripeOriginMarksTheAccountsInvoice() {
+        UUID accountId = UUID.randomUUID();
+        Invoice mirror = new Invoice();
+        mirror.setId(UUID.randomUUID());
+        when(invoiceRepository.findByIdAndAccount(mirror.getId(), accountId)).thenReturn(mirror);
+
+        invoiceService.markStripeOrigin(mirror.getId().toString(), accountId.toString());
+
+        assertEquals(InvoiceSource.STRIPE.name(), mirror.getSource());
+        verify(invoiceRepository).save(mirror);
     }
 }
