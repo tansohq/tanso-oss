@@ -66,7 +66,9 @@ public class AgentSignupResponse {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class AgentLimits {
         private Map<String, FeatureLimit> features;
+        // Null means no per-charge limit; written out like the other null fields, not dropped.
         @JsonProperty("spend_cap")
+        @JsonInclude(JsonInclude.Include.ALWAYS)
         private java.math.BigDecimal spendCap;
         private String currency;
     }

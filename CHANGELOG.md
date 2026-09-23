@@ -7,6 +7,10 @@ tags; this file starts where the changelog does.
 
 ### Fixed
 
+- **`limits.spend_cap` is written out when it is null.** The runbook says a
+  null `spend_cap` means no per-charge limit and that null fields are never
+  omitted, but the signup and status bodies dropped the field when the operator
+  had set no `agentMaxTopupAmount`. It now comes back as `"spend_cap": null`.
 - **Every 402 carries its error id in `error.detail`.** The runbook promises
   it, but the 402s built by the subscription, plan-change and credit-purchase
   endpoints (`complete_checkout`, `nominate_owner`, no payment processor)
