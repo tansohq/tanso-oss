@@ -24,6 +24,19 @@ class GateErrorTest {
         assertThat(error.getMessage()).isNotBlank();
     }
 
+    // The runbook promises every 402 carries the error id to quote to the operator; the ones built in controllers
+    // came back with detail null.
+    @Test
+    void everyPaymentGateCarriesAnErrorId() {
+        assertThat(GateError.paymentRequired("https://checkout.stripe.com/c/pay_1", null).getDetail())
+                .matches("errorId=[0-9a-f-]{36}");
+        assertThat(GateError.ownerEmailRequired("https://api.example.com/owner").getDetail())
+                .matches("errorId=[0-9a-f-]{36}");
+        assertThat(GateError.paymentRequiredNoProcessor().getDetail()).matches("errorId=[0-9a-f-]{36}");
+        assertThat(GateError.paymentRequired("u", null).getDetail())
+                .isNotEqualTo(GateError.paymentRequired("u", null).getDetail());
+    }
+
     @Test
     void paymentRequiredNoProcessorHasNoUrlAndNamesTheOperator() {
         GateError error = GateError.paymentRequiredNoProcessor();
