@@ -777,7 +777,8 @@ public class StripeWebhookImpl implements StripeWebhook {
      */
     @Transactional
     protected void handleFullSyncInvoicePaid(Invoice stripeInvoice, String accountId) {
-        if (!stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId())) {
+        boolean mirroredNow = !stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId());
+        if (mirroredNow) {
             // If the invoice is already paid/finalized (e.g. invoice.paid arrived before invoice.created),
             // and this is an accumulate-mode plan, skip draft manipulation — create the mirror directly
             // using Stripe's amountPaid to avoid StripeException on an already-finalized invoice.
@@ -800,8 +801,14 @@ public class StripeWebhookImpl implements StripeWebhook {
 
         String invoiceId = stripeInvoiceEntity.getInvoice().getId().toString();
         // markInvoiceAsPaid handles: sets PAID status, activates IN_ADVANCE subscriptions,
-        // processes entitlements, and grants credits.
-        invoiceService.markInvoiceAsPaid(invoiceId);
+        // processes entitlements, and grants credits. A copy made above is not committed yet, and
+        // markInvoiceAsPaid(String) locks the invoice in a new transaction that cannot see it: it threw "Invoice not
+        // found" and the webhook answered 400. That copy is marked paid in this transaction instead.
+        if (mirroredNow) {
+            invoiceService.markInvoiceAsPaid(stripeInvoiceEntity.getInvoice());
+        } else {
+            invoiceService.markInvoiceAsPaid(invoiceId);
+        }
 
         // A charge-first upgrade completes only on the invoice Stripe raised for it. Matching by subscription would
         // let any paid invoice, such as a renewal, move the plan while the proration is still unpaid.
