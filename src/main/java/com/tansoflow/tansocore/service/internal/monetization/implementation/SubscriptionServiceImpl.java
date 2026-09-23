@@ -116,6 +116,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     // ObjectProvider: StripeWebhookImpl itself depends on SubscriptionService
     private final org.springframework.beans.factory.ObjectProvider<com.tansoflow.tansocore.integration.stripe.StripeWebhook> stripeWebhookProvider;
     private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final com.tansoflow.tansocore.repository.CustomerRepository customerRepository;
 
     // Not @Transactional, like the other subscribe entry points: a saved-card subscribe charges the card, and money
     // must not move inside a transaction that can still roll back. The decision commits in its own transaction.
@@ -175,6 +176,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
             // No answer from Stripe, so it may have charged. The row stays PENDING: a retry reuses it and its
             // idempotency key, and gets Stripe's first answer.
             log.error("No answer from Stripe for the direct subscription of customer {} to plan {}; pending charge {} stays PENDING",
+                    toMake.customerId(), toMake.planId(), toMake.pendingChargeId(), e);
+            throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
+        } catch (com.stripe.exception.IdempotencyException e) {
+            // A concurrent subscribe reused this pending charge while the first call's request is still running at
+            // Stripe. That request owns the row; marking it FAILED would lose its spend record.
+            log.error("Stripe is still processing the direct subscription of customer {} to plan {} under pending charge {}; it stays PENDING",
                     toMake.customerId(), toMake.planId(), toMake.pendingChargeId(), e);
             throw new RuntimeException("Payment with the saved payment method failed: " + e.getMessage(), e);
         } catch (Exception e) {
@@ -280,6 +287,12 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
         // STRIPE_INTEGRATION and STRIPE_DRIVEN accounts: only one active subscription per customer (Stripe meters are customer-scoped)
         if (accountSetting != null && (accountSetting.getStripeMode().isStripeIntegration() || accountSetting.getStripeMode() == StripeMode.STRIPE_DRIVEN)) {
+            // Locked until this decision commits, before the active check and the pending-charge lookup below. A
+            // concurrent subscribe for the same customer waits, then finds this one's pending charge and reuses its
+            // idempotency key, or finds the subscription it created.
+            customerRepository.findByIdAndAccountIdForUpdate(customer.getId(), UUID.fromString(accountId))
+                    .orElseThrow(() -> new IllegalArgumentException("Customer " + customer.getId()
+                            + " not found in account " + accountId));
             long activeCount = subscriptionRepository.findSubscriptionsByCustomer_Id(customer.getId())
                     .stream().filter(Subscription::getIsActive).count();
             if (activeCount >= 1) {

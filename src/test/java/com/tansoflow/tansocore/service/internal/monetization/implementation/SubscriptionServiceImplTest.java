@@ -124,6 +124,9 @@ class SubscriptionServiceImplTest {
     private com.tansoflow.tansocore.repository.CheckoutSessionRepository checkoutSessionRepository;
 
     @Mock
+    private com.tansoflow.tansocore.repository.CustomerRepository customerRepository;
+
+    @Mock
     private com.tansoflow.tansocore.repository.StripeSubscriptionRepository stripeSubscriptionRepository;
 
     @Mock
@@ -381,6 +384,10 @@ class SubscriptionServiceImplTest {
         subscription.setBillingAnchorDay((short) 1);
         subscription.setCurrentPeriodStart(Instant.now().minus(30, ChronoUnit.DAYS));
         subscription.setCurrentPeriodEnd(Instant.now().minus(1, ChronoUnit.MINUTES));
+
+        // Stripe-billed subscribes lock the customer row first; the row exists in every test that gets there.
+        org.mockito.Mockito.lenient().when(customerRepository.findByIdAndAccountIdForUpdate(any(), any()))
+                .thenAnswer(i -> Optional.of(new Customer()));
 
         // A save assigns the id, as JPA does on persist; the charge-first upgrade keys Stripe on it.
         org.mockito.Mockito.lenient().when(subscriptionScheduledChangeRepository.save(any())).thenAnswer(i -> {
@@ -1829,6 +1836,36 @@ class SubscriptionServiceImplTest {
         org.assertj.core.api.Assertions.assertThat(savedCharges).singleElement()
                 .satisfies(row -> org.assertj.core.api.Assertions.assertThat(row.getStatus()).isEqualTo("FAILED"));
         verifyNoInteractions(stripeWebhookProvider);
+    }
+
+    // Two saved-card subscribes at once each found no pending charge, each opened one under its own idempotency key,
+    // and Stripe created and charged two subscriptions. The customer row is now locked before the lookup, so the
+    // second waits, finds the first one's pending charge, and asks Stripe under the same key.
+    @org.junit.jupiter.api.Test
+    void aConcurrentSavedCardSubscribeLocksTheCustomerThenReusesThePendingChargeAndItsKey() throws Exception {
+        Plan paid = savedCardSubscribeOnStripeIntegration();
+        com.tansoflow.tansocore.entity.CheckoutSession firstCallersCharge = new com.tansoflow.tansocore.entity.CheckoutSession();
+        firstCallersCharge.setId(UUID.randomUUID());
+        firstCallersCharge.setStatus("PENDING");
+        when(checkoutSessionRepository.findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                customer.getId(), paid.getId(), "DIRECT_SUBSCRIPTION", "PENDING")).thenReturn(Optional.of(firstCallersCharge));
+        when(stripeSyncService.createDirectSubscription(any(), any(), any(), any(), any()))
+                .thenThrow(new com.stripe.exception.IdempotencyException(
+                        "There is currently another in-progress request using this Stripe token", "req_2", null, 409));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> subscriptionService.subscribe(
+                customer, paid, account.getId().toString(), null));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(customerRepository, subscriptionRepository, checkoutSessionRepository);
+        inOrder.verify(customerRepository).findByIdAndAccountIdForUpdate(customer.getId(), account.getId());
+        inOrder.verify(subscriptionRepository).findSubscriptionsByCustomer_Id(customer.getId());
+        inOrder.verify(checkoutSessionRepository).findFirstByCustomerIdAndPlanIdAndPurposeAndStatusOrderByCreatedAtDesc(
+                customer.getId(), paid.getId(), "DIRECT_SUBSCRIPTION", "PENDING");
+        verify(stripeSyncService).createDirectSubscription(account.getId(), customer.getId(), paid.getId(), "pm_saved",
+                firstCallersCharge.getId());
+        // No second pending charge, and the first caller's is left PENDING for the request Stripe is still running.
+        org.assertj.core.api.Assertions.assertThat(savedCharges).isEmpty();
+        org.assertj.core.api.Assertions.assertThat(firstCallersCharge.getStatus()).isEqualTo("PENDING");
     }
 
     // A caller that wraps subscribe in its own transaction would put the charge back inside it.
