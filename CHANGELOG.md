@@ -5,6 +5,12 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+## 0.11.2 — 2026-09-23
+
+Disconnecting Stripe could let Tanso overwrite the amounts of the Stripe
+invoices it had copied. Invoices now record who computed them, and Tanso
+never recalculates Stripe's.
+
 ### Fixed
 
 - **Disconnecting Stripe no longer lets Tanso rewrite the amounts of Stripe's
