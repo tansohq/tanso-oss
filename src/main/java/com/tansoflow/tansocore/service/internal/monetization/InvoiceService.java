@@ -93,4 +93,12 @@ public interface InvoiceService {
     void syncInvoiceFromStripe(Invoice tansoInvoice, BigDecimal amount,
                                Instant periodStart, Instant periodEnd,
                                List<SyncLineItem> lineItems);
+
+    /**
+     * Records an invoice Stripe raised as Stripe computed it: its amount and its lines. Unlike createNewInvoice,
+     * nothing is recalculated from the plan or from Tanso's usage.
+     */
+    InvoiceDto createInvoiceFromStripe(Subscription subscription, LocalDate dueDate, BigDecimal amount,
+                                       InvoiceStatus status, Instant periodStart, Instant periodEnd,
+                                       List<SyncLineItem> lineItems);
 }
