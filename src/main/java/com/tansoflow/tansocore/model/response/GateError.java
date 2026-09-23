@@ -20,12 +20,16 @@ package com.tansoflow.tansocore.model.response;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+
+import java.util.UUID;
 
 /**
  * The gate envelope: an {@link Error} that also tells an agent which gate it
  * hit and what clears it. Every 402 and every access/limit 403 carries one.
  */
 @Getter
+@Slf4j
 @Schema(description = "Error with a machine-readable gate and the action that clears it")
 public class GateError extends Error {
 
@@ -51,18 +55,29 @@ public class GateError extends Error {
     }
 
     public static GateError paymentRequired(String checkoutUrl, String pollUrl) {
-        return new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "complete_checkout", checkoutUrl, pollUrl, null,
-                "Payment is required: hand url to a human to complete checkout, then poll for the outcome.");
+        return withErrorId(new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "complete_checkout", checkoutUrl, pollUrl, null,
+                "Payment is required: hand url to a human to complete checkout, then poll for the outcome."));
     }
 
     public static GateError ownerEmailRequired(String ownerUrl) {
-        return new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "nominate_owner", ownerUrl, null, null,
-                "Stripe needs an email to send the invoice to; PUT {\"email\": ...} to url, then retry this call.");
+        return withErrorId(new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "nominate_owner", ownerUrl, null, null,
+                "Stripe needs an email to send the invoice to; PUT {\"email\": ...} to url, then retry this call."));
     }
 
     public static GateError paymentRequiredNoProcessor() {
-        return new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "complete_checkout", null, null, null,
-                "Payment is required but no payment processor is connected to this instance; contact the operator.");
+        return withErrorId(new GateError(ErrorCode.PAYMENT_REQUIRED, "payment", "complete_checkout", null, null, null,
+                "Payment is required but no payment processor is connected to this instance; contact the operator."));
+    }
+
+    /**
+     * The 402s are answered by controllers, not the exception handler, so nothing gave them the error id every gate
+     * promises in detail. Logged, so the id an agent quotes can be found. The url is not logged: it is a payment page.
+     */
+    private static GateError withErrorId(GateError gate) {
+        String errorId = UUID.randomUUID().toString();
+        gate.setDetail("errorId=" + errorId);
+        log.info("Payment gate {} answered [errorId={}]", gate.getAction(), errorId);
+        return gate;
     }
 
     public static GateError budgetExceeded(Long retryAfterSeconds, String message) {
