@@ -1214,10 +1214,21 @@ public class StripeWebhookImpl implements StripeWebhook {
 
         // Map Stripe status to Tanso status
         InvoiceStatus tansoStatus = mapStripeInvoiceStatus(stripeInvoice.getStatus());
+        // An invoice Stripe has already collected is recorded DUE and then marked paid, so what paying does (claiming
+        // an agent customer, activating an in-advance subscription) happens. Stripe charges a saved card while it
+        // creates the invoice, so invoice.created often reports it paid; writing it straight to PAID skipped all of
+        // that, and invoice.paid then found it PAID and did nothing.
+        boolean alreadyPaid = tansoStatus == InvoiceStatus.PAID;
 
-        var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount, tansoStatus,
-                periodStart, periodEnd);
+        var invoiceDto = invoiceService.createNewInvoice(subscription, LocalDate.now(ZoneOffset.UTC), amount,
+                alreadyPaid ? InvoiceStatus.DUE : tansoStatus, periodStart, periodEnd);
         stripeSyncService.saveStripeInvoice(stripeInvoice.getId(), invoiceDto.getId(), accountId);
+        if (alreadyPaid) {
+            // The entity form joins this transaction; markInvoiceAsPaid(String) runs in a new one and cannot see the
+            // invoice created above until this one commits.
+            invoiceService.markInvoiceAsPaid(invoiceService.retrieveInvoiceByInvoiceIdAndAccount(
+                    invoiceDto.getId().toString(), accountId));
+        }
 
         log.info("STRIPE_DRIVEN: Mirrored Stripe invoice {} to Tanso invoice {} (amount={}, status={})",
                 stripeInvoice.getId(), invoiceDto.getId(), amount, tansoStatus);
@@ -1241,8 +1252,10 @@ public class StripeWebhookImpl implements StripeWebhook {
             return;
         }
 
-        // If not yet linked (race: invoice.paid arrived before invoice.created), create the mirror first
-        if (!stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId())) {
+        // If not yet linked (race: invoice.paid arrived before invoice.created), create the mirror first. A paid
+        // invoice is marked paid as it is mirrored, inside this transaction.
+        boolean mirroredNow = !stripeSyncService.stripeInvoiceLinked(stripeInvoice.getId());
+        if (mirroredNow) {
             handleStripeDrivenInvoiceCreated(stripeInvoice, accountId);
         }
 
@@ -1250,7 +1263,11 @@ public class StripeWebhookImpl implements StripeWebhook {
         var stripeInvoiceEntity = stripeSyncService.retrieveStripeInvoiceLinkedData(stripeInvoice.getId());
         if (stripeInvoiceEntity != null && stripeInvoiceEntity.getInvoice() != null) {
             String invoiceId = stripeInvoiceEntity.getInvoice().getId().toString();
-            invoiceService.markInvoiceAsPaid(invoiceId);
+            // markInvoiceAsPaid(String) locks the invoice in a new transaction, which cannot see a mirror created in
+            // this one: it threw "Invoice not found" and the webhook answered 400.
+            if (!mirroredNow) {
+                invoiceService.markInvoiceAsPaid(invoiceId);
+            }
             eventPublisher.publishEvent(new InvoicePaidEvent(UUID.fromString(accountId), UUID.fromString(invoiceId)));
         }
 
