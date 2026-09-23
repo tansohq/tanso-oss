@@ -48,7 +48,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -116,10 +115,10 @@ class StripeSyncServiceImplPlanChangeTest {
         when(subscriptionRepository.findSubscriptionByUuidAndAccountId(subscription.getId(), accountId)).thenReturn(subscription);
         when(stripeSubscriptionRepository.findStripeSubscriptionBySubscription(subscription)).thenReturn(bridge);
         org.mockito.Mockito.lenient().when(planService.retrievePlan(account, newPlan.getId())).thenReturn(newPlan);
-        org.mockito.Mockito.lenient().when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(oldPlan, account))
-                .thenReturn(Optional.of(oldPrice));
-        org.mockito.Mockito.lenient().when(stripePriceRepository.findFirstByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
-                .thenReturn(Optional.of(newPrice));
+        org.mockito.Mockito.lenient().when(stripePriceRepository.findAllByPlanAndAccountOrderByCreatedAtDesc(oldPlan, account))
+                .thenReturn(List.of(oldPrice));
+        org.mockito.Mockito.lenient().when(stripePriceRepository.findAllByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
+                .thenReturn(List.of(newPrice));
 
         SubscriptionItem item = new SubscriptionItem();
         item.setId("si_123");
@@ -301,6 +300,90 @@ class StripeSyncServiceImplPlanChangeTest {
         verify(stripeClient.v1().invoices()).voidInvoice("in_proration");
         verify(stripeClient.v1().subscriptions(), org.mockito.Mockito.never())
                 .update(any(String.class), any(SubscriptionUpdateParams.class));
+    }
+
+    private StripePrice stripePrice(String id) {
+        StripePrice price = new StripePrice();
+        price.setStripePriceExternalId(id);
+        return price;
+    }
+
+    private com.stripe.model.Price price(String id, String usageType) {
+        com.stripe.model.Price.Recurring recurring = new com.stripe.model.Price.Recurring();
+        recurring.setUsageType(usageType);
+        com.stripe.model.Price price = new com.stripe.model.Price();
+        price.setId(id);
+        price.setRecurring(recurring);
+        return price;
+    }
+
+    // A free plan with a usage-priced feature is one metered price; the paid plan adds a licensed base price, saved
+    // last. The upgrade used to put the newest price (the licensed one) on the first item, the metered one, which
+    // Stripe refuses: "You cannot change the usage type of the price attached to your subscription item".
+    @Test
+    void anUpgradeMovesEachItemToThePriceOfItsUsageTypeAndAddsTheBasePrice() throws Exception {
+        current.getItems().getData().getFirst().setPrice(price("price_free_metered", "metered"));
+        when(stripePriceRepository.findAllByPlanAndAccountOrderByCreatedAtDesc(newPlan, account))
+                .thenReturn(List.of(stripePrice("price_paid_base"), stripePrice("price_paid_metered")));
+        when(stripeClient.v1().prices().retrieve("price_paid_base")).thenReturn(price("price_paid_base", "licensed"));
+        when(stripeClient.v1().prices().retrieve("price_paid_metered")).thenReturn(price("price_paid_metered", "metered"));
+        when(stripeClient.v1().subscriptions().update(eq("sub_123"), any(SubscriptionUpdateParams.class), any(RequestOptions.class)))
+                .thenReturn(stripeReply(false, "paid", 3000L));
+
+        stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
+
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture(), any(RequestOptions.class));
+        List<SubscriptionUpdateParams.Item> items = params.getValue().getItems();
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).getId()).isEqualTo("si_123");
+        assertThat(items.get(0).getPrice()).isEqualTo("price_paid_metered");
+        assertThat(items.get(1).getId()).isNull();
+        assertThat(items.get(1).getPrice()).isEqualTo("price_paid_base");
+        assertThat(items.get(1).getQuantity()).isEqualTo(1L);
+    }
+
+    // Moving to a plan without a usage-priced feature drops the metered item instead of changing its usage type.
+    @Test
+    void aPlanChangeRemovesAnItemWhoseUsageTypeTheNewPlanDoesNotHave() throws Exception {
+        SubscriptionItem metered = new SubscriptionItem();
+        metered.setId("si_metered");
+        metered.setPrice(price("price_old_metered", "metered"));
+        SubscriptionItem base = new SubscriptionItem();
+        base.setId("si_base");
+        base.setPrice(price("price_old_base", "licensed"));
+        current.getItems().setData(List.of(metered, base));
+        when(stripeClient.v1().prices().retrieve("price_new")).thenReturn(price("price_new", "licensed"));
+
+        stripeSyncService.updateStripeSubscriptionPrice(subscription.getId(), accountId, newPlan.getId(), true);
+
+        ArgumentCaptor<SubscriptionUpdateParams> params = ArgumentCaptor.forClass(SubscriptionUpdateParams.class);
+        verify(stripeClient.v1().subscriptions()).update(eq("sub_123"), params.capture());
+        List<SubscriptionUpdateParams.Item> items = params.getValue().getItems();
+        assertThat(items).hasSize(2);
+        assertThat(items.get(0).getId()).isEqualTo("si_metered");
+        assertThat(items.get(0).getDeleted()).isTrue();
+        assertThat(items.get(1).getId()).isEqualTo("si_base");
+        assertThat(items.get(1).getPrice()).isEqualTo("price_new");
+    }
+
+    // A retry after Stripe applied the change and the reply was lost: the items now differ from the first call's,
+    // so sending the update again under the same idempotency key would be refused. The latest invoice is the answer.
+    @Test
+    void aRetryOfAnUpgradeStripeAlreadyAppliedReadsTheLatestInvoiceInsteadOfUpdatingAgain() throws Exception {
+        current.getItems().getData().getFirst().setPrice(price("price_new", "licensed"));
+        current.setLatestInvoice("in_proration");
+        when(stripeClient.v1().prices().retrieve("price_new")).thenReturn(price("price_new", "licensed"));
+        com.stripe.model.Invoice paid = stripeReply(false, "paid", 7450L).getLatestInvoiceObject();
+        when(stripeClient.v1().invoices().retrieve("in_proration")).thenReturn(paid);
+
+        StripeUpgradeCharge charge = stripeSyncService.chargeUpgradeBeforeApplying(subscription.getId(), accountId, newPlan.getId(), changeId);
+
+        verify(stripeClient.v1().subscriptions(), org.mockito.Mockito.never())
+                .update(any(String.class), any(SubscriptionUpdateParams.class), any(RequestOptions.class));
+        assertThat(charge.applied()).isTrue();
+        assertThat(charge.stripeInvoiceId()).isEqualTo("in_proration");
+        assertThat(charge.amountPaid()).isEqualByComparingTo(new BigDecimal("74.50"));
     }
 
     // The listener used to read subscription.getPlan(), which on STRIPE_INTEGRATION is still the old plan while the
