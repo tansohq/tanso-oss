@@ -5,6 +5,14 @@ tags; this file starts where the changelog does.
 
 ## Unreleased
 
+### Fixed
+
+- **Every 402 carries its error id in `error.detail`.** The runbook promises
+  it, but the 402s built by the subscription, plan-change and credit-purchase
+  endpoints (`complete_checkout`, `nominate_owner`, no payment processor)
+  answered `detail: null`, so an agent had nothing to quote to the operator.
+  They now carry `errorId=<uuid>`, and the id is logged.
+
 ## 0.11.0 — 2026-09-22
 
 The release where money moves safely. A review of 0.10.0 found places where an
