@@ -97,6 +97,10 @@
             "description": "Global AI model pricing reference"
         },
         {
+            "name": "Checkout Return",
+            "description": "Pages shown after Stripe Checkout, no authentication"
+        },
+        {
             "name": "Agent Discovery",
             "description": "llms.txt and agent manifest, no authentication"
         },
@@ -4973,6 +4977,59 @@
                                 "schema": {
                                     "type": "object",
                                     "additionalProperties": {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/public/checkout/complete": {
+            "get": {
+                "tags": [
+                    "Checkout Return"
+                ],
+                "summary": "Shown after a finished checkout",
+                "description": "kind=payment for a purchase, kind=setup (or anything else) for saved payment details.",
+                "operationId": "complete",
+                "parameters": [
+                    {
+                        "name": "kind",
+                        "in": "query",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/public/checkout/cancelled": {
+            "get": {
+                "tags": [
+                    "Checkout Return"
+                ],
+                "summary": "Shown when the human leaves checkout before finishing",
+                "operationId": "cancelled",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "content": {
+                            "*/*": {
+                                "schema": {
+                                    "type": "string"
                                 }
                             }
                         }
@@ -11813,6 +11870,42 @@
                     }
                 }
             },
+            "ApiResponsePlanChangeResponse": {
+                "type": "object",
+                "description": "Generic API response wrapper",
+                "properties": {
+                    "data": {
+                        "$ref": "#/components/schemas/PlanChangeResponse",
+                        "description": "Response data"
+                    },
+                    "error": {
+                        "$ref": "#/components/schemas/Error",
+                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
+                    },
+                    "meta": {
+                        "type": "array",
+                        "items": {}
+                    },
+                    "success": {
+                        "type": "boolean"
+                    }
+                }
+            },
+            "PlanChangeResponse": {
+                "type": "object",
+                "description": "An upgrade that waits on payment. The plan changes when the invoice at paymentUrl is paid.",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "Always payment_pending",
+                        "example": "payment_pending"
+                    },
+                    "paymentUrl": {
+                        "type": "string",
+                        "description": "Stripe's hosted invoice for the prorated charge"
+                    }
+                }
+            },
             "CostInput": {
                 "type": "object",
                 "description": "Structured cost input for model-aware cost tracking. Provides typed fields for AI model name, provider, and cost-relevant quantity.",
@@ -16572,42 +16665,6 @@
                         "items": {
                             "type": "string"
                         }
-                    }
-                }
-            },
-            "ApiResponsePlanChangeResponse": {
-                "type": "object",
-                "description": "Generic API response wrapper",
-                "properties": {
-                    "data": {
-                        "$ref": "#/components/schemas/PlanChangeResponse",
-                        "description": "Response data"
-                    },
-                    "error": {
-                        "$ref": "#/components/schemas/Error",
-                        "description": "Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after."
-                    },
-                    "meta": {
-                        "type": "array",
-                        "items": {}
-                    },
-                    "success": {
-                        "type": "boolean"
-                    }
-                }
-            },
-            "PlanChangeResponse": {
-                "type": "object",
-                "description": "An upgrade that waits on payment. The plan changes when the invoice at paymentUrl is paid.",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "description": "Always payment_pending",
-                        "example": "payment_pending"
-                    },
-                    "paymentUrl": {
-                        "type": "string",
-                        "description": "Stripe's hosted invoice for the prorated charge"
                     }
                 }
             }

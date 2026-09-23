@@ -114,7 +114,7 @@ export interface paths {
         get?: never;
         /**
          * Nominate an owner
-         * @description Records the principal's email on the account. Nothing is sent to it; paying is what claims the account.
+         * @description Records the principal's email on the account. Tanso sends nothing to it; Stripe may send receipts and invoices to it. Paying is what claims the account.
          */
         put: operations["setOwner"];
         post?: never;
@@ -1193,6 +1193,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/client/customers/{customerReferenceId}/spend-mandate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a new spend mandate
+         * @description Opens a Stripe page where the principal saves a card and approves max_amount per period, for a first mandate after signup or a higher one. Completing it replaces the customer's current mandate and claims the account. max_amount above the operator's agentMaxMandateAmount is a 400.
+         */
+        post: operations["requestSpendMandate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/client/customers/{customerReferenceId}/payment-methods/setup-intent": {
         parameters: {
             query?: never;
@@ -1643,6 +1663,43 @@ export interface paths {
          * @description The account's plans, features, credit weight table, and governance flags in the agent-serve pricing.json format. Raw JSON, not the ApiResponse envelope, so agents can validate it directly against the schema.
          */
         get: operations["getPricingCatalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/checkout/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shown after a finished checkout
+         * @description kind=payment for a purchase, kind=setup (or anything else) for saved payment details.
+         */
+        get: operations["complete"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/public/checkout/cancelled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Shown when the human leaves checkout before finishing */
+        get: operations["cancelled"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2409,6 +2466,46 @@ export interface paths {
          * @description Per-feature current-period usage with a linear end-of-period projection, and per-pool credit balances with average burn, projected depletion date, and the current credit price.
          */
         get: operations["getUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/usage/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Recorded usage over a window
+         * @description What the customer recorded between from and to, grouped by subscription, feature and event name, with an event count per group to reconcile against. Usage outlives the subscription that carried it, so a period stays readable after a plan change ended that subscription. Defaults to the last 90 days; the window is capped at 366 days.
+         */
+        get: operations["getUsageHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/client/customers/{customerReferenceId}/usage/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The events behind a usage total
+         * @description The individual events a customer recorded, newest first, so an aggregate can be checked against the records it was built from. Recorded usage is append-only: a correction is another event, so what comes back is what was written. Defaults to the last 90 days; the window is capped at 366 days and the page at 200.
+         */
+        get: operations["getRecordedEvents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3231,15 +3328,6 @@ export interface components {
             currency?: string;
             spend_cap?: number;
         };
-        AgentSpendMandate: {
-            /** @description none | pending | active | unavailable */
-            status?: string;
-            currency?: string;
-            period?: string;
-            /** @description Hand this to the principal. Saving a card here activates the mandate and claims the account. */
-            setup_url?: string;
-            max_amount?: number;
-        };
         AgentStatusResponse: {
             customerReferenceId?: string;
             status?: string;
@@ -3254,7 +3342,7 @@ export interface components {
             /** Format: date-time */
             claimed_at?: string;
             owner_email?: string;
-            spend_mandate?: components["schemas"]["AgentSpendMandate"];
+            spend_mandate?: components["schemas"]["SpendMandateStatus"];
         };
         /** @description Generic API response wrapper */
         ApiResponseAgentStatusResponse: {
@@ -3272,9 +3360,24 @@ export interface components {
         };
         Spend: {
             cap?: number;
+            /** @description What the calling key spent in the current window, off-session and on hosted pages */
             spent?: number;
             remaining?: number;
             currency?: string;
+            /** Format: date-time */
+            resets_at?: string;
+        };
+        SpendMandateStatus: {
+            /** @description none | pending | active | expired */
+            status?: string;
+            /** @description Off-session spend across all of the customer's keys in the current window. Hosted pages a human paid in person are not counted. */
+            spent?: number;
+            remaining?: number;
+            /** @description day | week | month */
+            period?: string;
+            currency?: string;
+            setup_url?: string;
+            max_amount?: number;
             /** Format: date-time */
             resets_at?: string;
         };
@@ -3307,12 +3410,12 @@ export interface components {
         AgentSignupRequest: {
             /**
              * Format: email
-             * @description Optional contact email of the agent's principal. Recorded as the owner; nothing is sent to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.
+             * @description Optional contact email of the agent's principal. Recorded as the owner; Tanso sends nothing to it, Stripe may send receipts and invoices to it. Can be set later via PUT /api/v1/client/customers/{ref}/owner.
              */
             email?: string;
             /** @description Optional display name for the customer record */
             name?: string;
-            /** @description Optional. Ask for a saved card up front so later purchases inside max_amount need no human. Only honoured when the operator enabled agentSpendMandateEnabled. */
+            /** @description Optional. Ask for a saved card up front so later purchases inside max_amount need no human. Only honored when the operator enabled agentSpendMandateEnabled. */
             spend_mandate?: components["schemas"]["SpendMandate"];
         };
         SpendMandate: {
@@ -3324,7 +3427,7 @@ export interface components {
         };
         AgentSignupResponse: {
             customerReferenceId?: string;
-            /** @description Customer-scoped API key. Returned exactly once — store it now. */
+            /** @description Customer-scoped API key. Returned exactly once; store it now. */
             apiKey?: string;
             apiKeyScopes?: string[];
             plan?: string;
@@ -3340,9 +3443,19 @@ export interface components {
              * @description When an unclaimed provisional account is closed. Null once claimed.
              */
             expires_at?: string;
+            /** @description Null unless the request asked for one */
             spend_mandate?: components["schemas"]["AgentSpendMandate"];
             status_url?: string;
             owner_url?: string;
+        };
+        AgentSpendMandate: {
+            /** @description pending | unavailable */
+            status?: string;
+            currency?: string;
+            period?: string;
+            /** @description Hand this to the principal. Saving a card here activates the mandate and claims the account. */
+            setup_url?: string;
+            max_amount?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseAgentSignupResponse: {
@@ -4706,6 +4819,25 @@ export interface components {
             /** @enum {string} */
             changeType?: "UPGRADE" | "DOWNGRADE";
         };
+        /** @description Generic API response wrapper */
+        ApiResponsePlanChangeResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["PlanChangeResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description An upgrade that waits on payment. The plan changes when the invoice at paymentUrl is paid. */
+        PlanChangeResponse: {
+            /**
+             * @description Always payment_pending
+             * @example payment_pending
+             */
+            status?: string;
+            /** @description Stripe's hosted invoice for the prorated charge */
+            paymentUrl?: string;
+        };
         /** @description Structured cost input for model-aware cost tracking. Provides typed fields for AI model name, provider, and cost-relevant quantity. */
         CostInput: {
             /**
@@ -5018,6 +5150,15 @@ export interface components {
             creditPools?: components["schemas"]["CreditPoolDto"][];
         };
         /** @description Generic API response wrapper */
+        ApiResponseAgentSpendMandate: {
+            /** @description Response data */
+            data?: components["schemas"]["AgentSpendMandate"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Generic API response wrapper */
         ApiResponseMapStringString: {
             /** @description Response data */
             data?: {
@@ -5163,6 +5304,7 @@ export interface components {
             agentSignupPerIpCap?: number;
             agentSpendMandateEnabled?: boolean;
             agentMaxTopupAmount?: number;
+            agentMaxMandateAmount?: number;
         };
         AccountSettingDto: {
             /** @enum {string} */
@@ -5185,6 +5327,7 @@ export interface components {
             agentSignupPerIpCap?: number;
             agentSpendMandateEnabled?: boolean;
             agentMaxTopupAmount?: number;
+            agentMaxMandateAmount?: number;
         };
         /** @description Generic API response wrapper */
         ApiResponseAccountSettingDto: {
@@ -6481,11 +6624,87 @@ export interface components {
         SubscriptionUsage: {
             subscriptionId?: string;
             planKey?: string;
+            /** @description active for a plan the customer is on now, ended for one they have left. Usage on an ended plan is kept so a period can still be audited after a mid-cycle change. */
+            status?: string;
+            /**
+             * Format: date-time
+             * @description When an ended subscription stopped. Null while it is active.
+             */
+            endedAt?: string;
             /** Format: date-time */
             currentPeriodStart?: string;
             /** Format: date-time */
             currentPeriodEnd?: string;
             features?: components["schemas"]["FeatureUsage"][];
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerUsageHistoryResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerUsageHistoryResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Recorded usage over an explicit window, grouped by subscription, feature and event name */
+        CustomerUsageHistoryResponse: {
+            customerReferenceId?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            usage?: components["schemas"]["RecordedUsage"][];
+        };
+        /** @description One group of recorded events */
+        RecordedUsage: {
+            /** @description The subscription the usage was recorded against. Null for usage recorded with no subscription. */
+            subscriptionId?: string;
+            /** @description The plan that subscription was on. Null when the subscription is unknown. */
+            planKey?: string;
+            featureKey?: string;
+            /** @description The name the client sent with the event, which may differ from the feature key */
+            eventName?: string;
+            usageUnits?: number;
+            /** Format: int64 */
+            events?: number;
+            /** Format: date-time */
+            firstOccurredAt?: string;
+            /** Format: date-time */
+            lastOccurredAt?: string;
+        };
+        /** @description Generic API response wrapper */
+        ApiResponseCustomerEventsResponse: {
+            /** @description Response data */
+            data?: components["schemas"]["CustomerEventsResponse"];
+            /** @description Set when success is false. On 402 and on access/limit 403 this is a GateError: code, message plus gate, action, url, poll, retry_after. */
+            error?: components["schemas"]["Error"];
+            meta?: unknown[];
+            success?: boolean;
+        };
+        /** @description Events a customer recorded, newest first */
+        CustomerEventsResponse: {
+            customerReferenceId?: string;
+            /** Format: date-time */
+            from?: string;
+            /** Format: date-time */
+            to?: string;
+            /** @description True when more events exist before this page's oldest entry; ask again with a higher offset */
+            hasMore?: boolean;
+            events?: components["schemas"]["RecordedEvent"][];
+        };
+        /** @description One recorded event, as it was written */
+        RecordedEvent: {
+            id?: string;
+            /** @description The key the client sent to make the write idempotent. Null when none was sent. */
+            eventIdempotencyKey?: string;
+            eventName?: string;
+            featureKey?: string;
+            /** @description The subscription the event was recorded against. Null when it carried none. */
+            subscriptionId?: string;
+            usageUnits?: number;
+            usageUnitType?: string;
+            /** Format: date-time */
+            occurredAt?: string;
         };
         /** @description Generic API response wrapper */
         ApiResponsePaginatedResponseClientCreditPoolDto: {
@@ -7385,6 +7604,13 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ApiResponseAgentSignupResponse"];
                 };
+            };
+            /** @description Invalid body: malformed email, spend_mandate without max_amount, or a currency other than the account's. error.code=validation_failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description No account has this slug, or the operator has not enabled the public catalog or agent signup. error.code=not_found. */
             404: {
@@ -9139,14 +9365,39 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successfully changed the plan or scheduled the change */
+            /** @description The plan changed, or the downgrade was scheduled. Where Stripe runs the billing, an upgrade that costs money answers 200 only after Stripe charged the prorated amount. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ApiResponseVoid"];
+                    "*/*": components["schemas"]["ApiResponsePlanChangeResponse"];
                 };
+            };
+            /** @description Tenant (sk_) keys on STRIPE_INTEGRATION: the upgrade was invoiced but not paid yet. data.status=payment_pending, data.paymentUrl=Stripe's hosted invoice. The plan changes when it is paid. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePlanChangeResponse"];
+                };
+            };
+            /** @description The upgrade costs money and the caller holds a customer key: the plan change waits on payment. error.code=payment_required, gate=payment, action=complete_checkout with the hosted invoice url, poll=the customer's status URL, retry_after=null. The plan swaps when the invoice is paid. Where Stripe runs the billing (STRIPE_DRIVEN, STRIPE_INTEGRATION) Stripe first charges the saved card; this is returned when that charge did not go through, or when Stripe sends the invoice by email instead of charging, and url is Stripe's hosted invoice. Also action=nominate_owner when Tanso needs an email to send an invoice to and no card is saved. Customer-scoped (ck_) keys only. */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponsePlanChangeResponse"];
+                };
+            };
+            /** @description The proration charge exceeds the account's spend cap or the calling key's budget: error.code=spend_cap_exceeded or budget_exceeded */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Subscription or plan not found */
             404: {
@@ -9290,6 +9541,32 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    requestSpendMandate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpendMandate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseAgentSpendMandate"];
+                };
             };
         };
     };
@@ -10216,6 +10493,48 @@ export interface operations {
             };
         };
     };
+    complete: {
+        parameters: {
+            query?: {
+                kind?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    cancelled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
     llmsTxt: {
         parameters: {
             query?: never;
@@ -10231,8 +10550,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/plain;charset=utf-8": string;
-                    "text/plain; charset=utf-8": string;
+                    "*/*": string;
                 };
             };
         };
@@ -11316,6 +11634,61 @@ export interface operations {
             };
         };
     };
+    getUsageHistory: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                featureKey?: string;
+                subscriptionId?: string;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerUsageHistoryResponse"];
+                };
+            };
+        };
+    };
+    getRecordedEvents: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+                featureKey?: string;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                customerReferenceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiResponseCustomerEventsResponse"];
+                };
+            };
+        };
+    };
     status: {
         parameters: {
             query?: never;
@@ -11678,8 +12051,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/markdown;charset=utf-8": string;
-                    "text/markdown; charset=utf-8": string;
+                    "*/*": string;
                 };
             };
         };
@@ -11699,7 +12071,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
+                    "*/*": {
                         [key: string]: unknown;
                     };
                 };
@@ -11721,7 +12093,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
+                    "*/*": {
                         [key: string]: unknown;
                     };
                 };
