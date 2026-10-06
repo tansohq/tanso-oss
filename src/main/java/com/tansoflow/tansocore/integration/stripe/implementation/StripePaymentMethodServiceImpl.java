@@ -22,6 +22,7 @@ import com.stripe.exception.CardException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.model.SetupIntent;
+import com.stripe.net.RequestOptions;
 import com.stripe.param.CustomerUpdateParams;
 import com.stripe.param.PaymentIntentCreateParams;
 import com.stripe.param.PaymentMethodAttachParams;
@@ -112,7 +113,7 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
     @Override
     public PaymentResult chargeOffSession(UUID accountId, UUID customerId, String paymentMethodId,
                                           BigDecimal amount, String currency, String description,
-                                          Map<String, String> metadata) throws StripeException {
+                                          Map<String, String> metadata, String idempotencyKey) throws StripeException {
         enforcePerChargeCap(accountId, amount);
         // Off-session means no human sees this charge, so it is bounded by the key's budget and by what the
         // principal approved.
@@ -132,9 +133,12 @@ public class StripePaymentMethodServiceImpl implements StripePaymentMethodServic
                 .setOffSession(true)
                 .setDescription(description);
         metadata.forEach(params::putMetadata);
+        RequestOptions requestOptions = RequestOptions.builder()
+                .setIdempotencyKey(idempotencyKey)
+                .build();
 
         try {
-            PaymentIntent intent = stripeClient.v1().paymentIntents().create(params.build());
+            PaymentIntent intent = stripeClient.v1().paymentIntents().create(params.build(), requestOptions);
             boolean succeeded = "succeeded".equals(intent.getStatus());
             if (succeeded) {
                 recordKeySpend(accountId, amount, intent.getId());

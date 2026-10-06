@@ -207,7 +207,7 @@ public class AgentCustomerTools {
             request.setCredits(BigDecimal.valueOf(credits));
             request.setPaymentMethodId(paymentMethodId);
             CreditPurchaseResult result = creditPurchaseService.purchase(
-                    request, requireRef(ctx, customerReferenceId), ctx.getAccountId());
+                    request, requireRef(ctx, customerReferenceId), ctx.getAccountId(), null);
             return objectMapper.writeValueAsString(result);
         } catch (org.springframework.security.access.AccessDeniedException e) {
             return forbidden(e);

@@ -45,10 +45,12 @@ public interface StripePaymentMethodService {
      * confirmed synchronously. Enforces the account's agent spend cap, the
      * calling key's budget and the customer's spend mandate before any money moves. Returns a failed result (never throws) for declines
      * and SCA challenges so the caller can fall back to hosted checkout.
+     * A non-null {@code idempotencyKey} is sent to Stripe, so a retry under the same key gets the first
+     * PaymentIntent back instead of a second charge.
      */
     PaymentResult chargeOffSession(UUID accountId, UUID customerId, String paymentMethodId,
                                    BigDecimal amount, String currency, String description,
-                                   java.util.Map<String, String> metadata) throws StripeException;
+                                   java.util.Map<String, String> metadata, String idempotencyKey) throws StripeException;
 
     record HostedCheckout(String url, String stripeSessionId) {
     }

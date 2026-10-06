@@ -31,6 +31,7 @@ import com.tansoflow.tansocore.model.api.external.StripeMode;
 import com.tansoflow.tansocore.repository.AccountSettingRepository;
 import com.tansoflow.tansocore.repository.CheckoutSessionRepository;
 import com.tansoflow.tansocore.repository.CreditPoolRepository;
+import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -53,6 +55,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -76,6 +80,8 @@ class CreditPurchaseServiceImplTest {
 
     @Mock
     private AccountSettingRepository accountSettingRepository;
+    @Mock
+    private CustomerRepository customerRepository;
 
     @InjectMocks
     private CreditPurchaseServiceImpl service;
@@ -116,6 +122,8 @@ class CreditPurchaseServiceImplTest {
                     if (session.getId() == null) session.setId(UUID.randomUUID());
                     return session;
                 });
+        lenient().when(customerRepository.findByIdAndAccountIdForUpdate(customer.getId(), accountId))
+                .thenReturn(Optional.of(customer));
     }
 
     private CreditPurchaseRequest request(BigDecimal credits, String pm) {
@@ -129,7 +137,7 @@ class CreditPurchaseServiceImplTest {
     @Test
     void successfulOffSessionChargeGrantsAtBookPrice() throws Exception {
         when(stripePaymentMethodService.chargeOffSession(eq(accountId), eq(customer.getId()), eq("pm_1"),
-                eq(new BigDecimal("10.00")), eq("USD"), anyString(), any()))
+                eq(new BigDecimal("10.00")), eq("USD"), anyString(), any(), isNull()))
                 .thenReturn(new StripePaymentMethodService.PaymentResult(true, "pi_123", null));
         CreditGrantDto grantDto = new CreditGrantDto();
         grantDto.setId(UUID.randomUUID().toString());
@@ -137,7 +145,7 @@ class CreditPurchaseServiceImplTest {
                 .thenReturn(grantDto);
 
         CreditPurchaseResult result = service.purchase(request(new BigDecimal("1000"), "pm_1"),
-                "cust-1", accountId.toString());
+                "cust-1", accountId.toString(), null);
 
         assertThat(result.isCompleted()).isTrue();
         assertThat(result.getAmountCharged()).isEqualByComparingTo("10.00");
@@ -157,13 +165,13 @@ class CreditPurchaseServiceImplTest {
                 .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout", "cs_123"));
 
         CreditPurchaseResult result = service.purchase(request(new BigDecimal("1000"), null),
-                "cust-1", accountId.toString());
+                "cust-1", accountId.toString(), null);
 
         assertThat(result.isCompleted()).isFalse();
         assertThat(result.getCheckoutUrl()).isEqualTo("https://checkout");
         assertThat(result.getCheckoutSessionId()).isNotNull();
         verify(creditService, never()).grantCredits(any(), anyString());
-        verify(stripePaymentMethodService, never()).chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any());
+        verify(stripePaymentMethodService, never()).chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any(), any());
 
         ArgumentCaptor<CheckoutSession> captor = ArgumentCaptor.forClass(CheckoutSession.class);
         verify(checkoutSessionRepository).save(captor.capture());
@@ -173,13 +181,13 @@ class CreditPurchaseServiceImplTest {
 
     @Test
     void declinedChargeFallsBackToHostedCheckout() throws Exception {
-        when(stripePaymentMethodService.chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any()))
+        when(stripePaymentMethodService.chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any(), any()))
                 .thenReturn(new StripePaymentMethodService.PaymentResult(false, "pi_dead", "card_declined"));
         when(stripePaymentMethodService.createTopupCheckoutSession(any(), any(), any(), anyString(), anyString(), any()))
                 .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout", "cs_456"));
 
         CreditPurchaseResult result = service.purchase(request(new BigDecimal("1000"), "pm_bad"),
-                "cust-1", accountId.toString());
+                "cust-1", accountId.toString(), null);
 
         assertThat(result.isCompleted()).isFalse();
         assertThat(result.getDeclineReason()).isNotNull();
@@ -189,7 +197,7 @@ class CreditPurchaseServiceImplTest {
     @Test
     void unpricedDenominationIsRejected() {
         when(creditPriceService.resolvePrice(eq(accountId), eq("credits"), any())).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString()))
+        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("No published price");
     }
@@ -199,13 +207,13 @@ class CreditPurchaseServiceImplTest {
         Customer other = new Customer();
         other.setId(UUID.randomUUID());
         pool.setCustomer(other);
-        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString()))
+        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), null))
                 .isInstanceOf(com.tansoflow.tansocore.model.exception.ResourceNotFoundException.class);
     }
 
     @Test
     void tinyPurchasesBelowPaymentMinimumAreRejected() {
-        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("10"), "pm_1"), "cust-1", accountId.toString()))
+        assertThatThrownBy(() -> service.purchase(request(new BigDecimal("10"), "pm_1"), "cust-1", accountId.toString(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("0.50");
     }
@@ -227,7 +235,7 @@ class CreditPurchaseServiceImplTest {
         request.setDenomination("credits");
         request.setCredits(new BigDecimal("1000"));
 
-        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString());
+        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString(), null);
 
         assertThat(result.isCompleted()).isFalse();
         assertThat(result.getCheckoutUrl()).isEqualTo("https://checkout");
@@ -248,7 +256,7 @@ class CreditPurchaseServiceImplTest {
         CreditPurchaseRequest request = new CreditPurchaseRequest();
         request.setCredits(new BigDecimal("1000"));
 
-        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString());
+        CreditPurchaseResult result = service.purchase(request, "cust-1", accountId.toString(), null);
 
         assertThat(result.getCheckoutUrl()).isEqualTo("https://checkout");
         verify(creditPoolRepository, never()).saveAndFlush(any());
@@ -262,7 +270,7 @@ class CreditPurchaseServiceImplTest {
         CreditPurchaseRequest request = new CreditPurchaseRequest();
         request.setCredits(new BigDecimal("1000"));
 
-        assertThatThrownBy(() -> service.purchase(request, "cust-1", accountId.toString()))
+        assertThatThrownBy(() -> service.purchase(request, "cust-1", accountId.toString(), null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("denomination");
     }
@@ -272,12 +280,61 @@ class CreditPurchaseServiceImplTest {
         settings.setStripeMode(StripeMode.NONE);
 
         CreditPurchaseResult result = service.purchase(request(new BigDecimal("1000"), null),
-                "cust-1", accountId.toString());
+                "cust-1", accountId.toString(), null);
 
         assertThat(result.isCompleted()).isFalse();
         assertThat(result.getCheckoutUrl()).isNull();
         assertThat(result.getDeclineReason()).contains("payment processor");
         verify(stripePaymentMethodService, never()).createTopupCheckoutSession(any(), any(), any(), anyString(), anyString(), any());
         verify(creditService, never()).grantCredits(any(), anyString());
+    }
+
+    @Test
+    void theCustomerRowIsLockedBeforeTheOffSessionChargeSoTwoPurchasesCannotBothPassTheMandate() throws Exception {
+        when(stripePaymentMethodService.chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any(), any()))
+                .thenReturn(new StripePaymentMethodService.PaymentResult(true, "pi_123", null));
+        CreditGrantDto grantDto = new CreditGrantDto();
+        grantDto.setId(UUID.randomUUID().toString());
+        when(creditService.grantCredits(any(CreditGrantRequest.class), eq(accountId.toString()))).thenReturn(grantDto);
+
+        service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), null);
+
+        InOrder order = inOrder(customerRepository, stripePaymentMethodService);
+        order.verify(customerRepository).findByIdAndAccountIdForUpdate(customer.getId(), accountId);
+        order.verify(stripePaymentMethodService).chargeOffSession(any(), any(), anyString(), any(), anyString(),
+                anyString(), any(), any());
+    }
+
+    @Test
+    void aRetryWithTheSameIdempotencyKeySendsStripeTheSameKey() throws Exception {
+        when(stripePaymentMethodService.chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any(), any()))
+                .thenReturn(new StripePaymentMethodService.PaymentResult(true, "pi_123", null));
+        CreditGrantDto grantDto = new CreditGrantDto();
+        grantDto.setId(UUID.randomUUID().toString());
+        when(creditService.grantCredits(any(CreditGrantRequest.class), eq(accountId.toString()))).thenReturn(grantDto);
+
+        service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), "retry-1");
+        service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), "retry-1");
+        service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), "other");
+
+        ArgumentCaptor<String> keys = ArgumentCaptor.forClass(String.class);
+        verify(stripePaymentMethodService, org.mockito.Mockito.times(3)).chargeOffSession(any(), any(), anyString(),
+                any(), anyString(), anyString(), any(), keys.capture());
+        assertThat(keys.getAllValues().get(0)).isNotNull().startsWith("tanso-credit-purchase-");
+        assertThat(keys.getAllValues().get(1)).isEqualTo(keys.getAllValues().get(0));
+        assertThat(keys.getAllValues().get(2)).isNotEqualTo(keys.getAllValues().get(0));
+    }
+
+    @Test
+    void withoutAnIdempotencyKeyStripeGetsNone() throws Exception {
+        when(stripePaymentMethodService.chargeOffSession(any(), any(), anyString(), any(), anyString(), anyString(), any(), isNull()))
+                .thenReturn(new StripePaymentMethodService.PaymentResult(false, null, "card_declined"));
+        when(stripePaymentMethodService.createTopupCheckoutSession(any(), any(), any(), anyString(), anyString(), any()))
+                .thenReturn(new StripePaymentMethodService.HostedCheckout("https://checkout", "cs_1"));
+
+        service.purchase(request(new BigDecimal("1000"), "pm_1"), "cust-1", accountId.toString(), null);
+
+        verify(stripePaymentMethodService).chargeOffSession(any(), any(), anyString(), any(), anyString(),
+                anyString(), any(), isNull());
     }
 }

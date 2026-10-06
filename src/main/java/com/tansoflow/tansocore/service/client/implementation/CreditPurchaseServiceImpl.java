@@ -32,6 +32,7 @@ import com.tansoflow.tansocore.entity.AccountSetting;
 import com.tansoflow.tansocore.repository.AccountSettingRepository;
 import com.tansoflow.tansocore.repository.CheckoutSessionRepository;
 import com.tansoflow.tansocore.repository.CreditPoolRepository;
+import com.tansoflow.tansocore.repository.CustomerRepository;
 import com.tansoflow.tansocore.service.internal.account.CustomerService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditPriceService;
 import com.tansoflow.tansocore.service.internal.monetization.CreditService;
@@ -43,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -61,11 +63,12 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
     private final StripePaymentMethodService stripePaymentMethodService;
     private final CheckoutSessionRepository checkoutSessionRepository;
     private final AccountSettingRepository accountSettingRepository;
+    private final CustomerRepository customerRepository;
 
     @Override
     @Transactional
     public CreditPurchaseResult purchase(CreditPurchaseRequest request, String customerReferenceId,
-                                         String accountId) {
+                                         String accountId, String idempotencyKey) {
         UUID accountUuid = UUID.fromString(accountId);
         Customer customer = customerService
                 .retrieveCustomerByExternalClientCustomerIdAndAccount(customerReferenceId, accountId);
@@ -116,10 +119,24 @@ public class CreditPurchaseServiceImpl implements CreditPurchaseService {
                     .build();
         }
 
+        // Held until this purchase commits. The mandate check reads the period's recorded spend and the charge
+        // records more, so a second purchase for the same customer must wait here and read this one's spend, or
+        // both pass against the same total and together go over the mandate.
+        customerRepository.findByIdAndAccountIdForUpdate(customer.getId(), accountUuid)
+                .orElseThrow(() -> new ResourceNotFoundException("Customer not found: " + customer.getId()));
+
+        // A retry under the same Idempotency-Key gets Stripe's first PaymentIntent back (for 24 hours) instead of
+        // a second charge. The request filter replays finished responses, but a retry after a 5xx, or one that
+        // arrives while the first is still running, runs this method again. Hashed because the header can be up
+        // to 255 characters, which is Stripe's own limit.
+        String stripeIdempotencyKey = idempotencyKey == null ? null : "tanso-credit-purchase-"
+                + UUID.nameUUIDFromBytes((customer.getId() + ":" + idempotencyKey).getBytes(StandardCharsets.UTF_8));
+
         try {
             if (paymentMethod != null) {
                 StripePaymentMethodService.PaymentResult charge = stripePaymentMethodService.chargeOffSession(
-                        accountUuid, customer.getId(), paymentMethod, amount, price.currency(), description, metadata);
+                        accountUuid, customer.getId(), paymentMethod, amount, price.currency(), description, metadata,
+                        stripeIdempotencyKey);
                 if (charge.succeeded()) {
                     CreditGrantDto grant = grantPurchasedCredits(request, pool, price.pricePerCredit(),
                             price.currency(), accountId, "pi_" + charge.paymentIntentId());
