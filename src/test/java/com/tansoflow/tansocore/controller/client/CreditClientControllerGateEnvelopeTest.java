@@ -64,7 +64,7 @@ class CreditClientControllerGateEnvelopeTest {
 
     @Test
     void checkoutFallbackOn402CarriesThePaymentGate() {
-        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId))).thenReturn(CreditPurchaseResult.builder()
+        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId), any())).thenReturn(CreditPurchaseResult.builder()
                 .completed(false)
                 .credits(new BigDecimal("100"))
                 .checkoutUrl("https://checkout.stripe.com/c/pay_xyz")
@@ -91,7 +91,7 @@ class CreditClientControllerGateEnvelopeTest {
 
     @Test
     void noProcessorOn402HasNullUrlAndNamesTheOperator() {
-        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId))).thenReturn(CreditPurchaseResult.builder()
+        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId), any())).thenReturn(CreditPurchaseResult.builder()
                 .completed(false)
                 .declineReason("This instance has no payment processor configured")
                 .build());
@@ -112,7 +112,7 @@ class CreditClientControllerGateEnvelopeTest {
 
     @Test
     void completedPurchaseKeeps201WithoutAnError() {
-        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId))).thenReturn(CreditPurchaseResult.builder()
+        when(creditPurchaseService.purchase(any(), eq("agent_1"), eq(accountId), any())).thenReturn(CreditPurchaseResult.builder()
                 .completed(true)
                 .credits(new BigDecimal("100"))
                 .grantId(UUID.randomUUID().toString())

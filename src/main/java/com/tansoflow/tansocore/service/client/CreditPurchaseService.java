@@ -27,6 +27,8 @@ public interface CreditPurchaseService {
      * (supplied or on file): off-session charge, grant on success. Without
      * one, or when the charge is declined: hosted-checkout fallback — the
      * result carries checkoutUrl + checkoutSessionId and completed=false.
+     * {@code idempotencyKey} is the caller's Idempotency-Key header, or null.
      */
-    CreditPurchaseResult purchase(CreditPurchaseRequest request, String customerReferenceId, String accountId);
+    CreditPurchaseResult purchase(CreditPurchaseRequest request, String customerReferenceId, String accountId,
+                                  String idempotencyKey);
 }

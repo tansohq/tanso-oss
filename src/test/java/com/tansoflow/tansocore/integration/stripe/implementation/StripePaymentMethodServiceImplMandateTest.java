@@ -17,7 +17,13 @@
  */
 package com.tansoflow.tansocore.integration.stripe.implementation;
 
+import com.stripe.StripeClient;
+import com.stripe.model.PaymentIntent;
+import com.stripe.net.RequestOptions;
+import com.stripe.param.PaymentIntentCreateParams;
 import com.tansoflow.tansocore.entity.AccountSetting;
+import com.tansoflow.tansocore.entity.Customer;
+import com.tansoflow.tansocore.entity.StripeCustomer;
 import com.tansoflow.tansocore.integration.stripe.StripeClientFactory;
 import com.tansoflow.tansocore.integration.stripe.StripeSyncService;
 import com.tansoflow.tansocore.model.apikey.type.SpendKind;
@@ -31,6 +37,8 @@ import com.tansoflow.tansocore.service.internal.account.KeyBudgetService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -89,7 +97,7 @@ class StripePaymentMethodServiceImplMandateTest {
                 .when(keyBudgetService).assertWithinMandate(customerId, new BigDecimal("60"));
 
         assertThatThrownBy(() -> service.chargeOffSession(accountId, customerId, "pm_1", new BigDecimal("60"),
-                "usd", "top-up", Map.of()))
+                "usd", "top-up", Map.of(), null))
                 .isInstanceOf(SpendMandateExceededException.class);
         verifyNoInteractions(stripeClientFactory);
     }
@@ -101,7 +109,7 @@ class StripePaymentMethodServiceImplMandateTest {
                 .when(keyBudgetService).assertWithinBudget(any(), any(), any());
 
         assertThatThrownBy(() -> service.chargeOffSession(accountId, customerId, "pm_1", new BigDecimal("60"),
-                "usd", "top-up", Map.of()))
+                "usd", "top-up", Map.of(), null))
                 .isInstanceOf(BudgetExceededException.class);
         verifyNoInteractions(stripeClientFactory);
     }
@@ -143,5 +151,29 @@ class StripePaymentMethodServiceImplMandateTest {
         assertThat(StripePaymentMethodServiceImpl.mandateNotice("  ", new BigDecimal("50"), "usd", "week"))
                 .isEqualTo("You're saving this card so your agent can use it without asking you, up to 50.00 USD"
                         + " per week. Anything above that comes back to you for approval.");
+    }
+
+    @Test
+    void theOffSessionPaymentIntentCarriesTheCallersIdempotencyKey() throws Exception {
+        StripeClient stripeClient = org.mockito.Mockito.mock(StripeClient.class, Answers.RETURNS_DEEP_STUBS);
+        when(stripeClientFactory.forAccount(accountId)).thenReturn(stripeClient);
+        Customer customer = new Customer();
+        customer.setId(customerId);
+        when(customerService.validateAndRetrieveCustomer(customerId.toString(), accountId.toString())).thenReturn(customer);
+        StripeCustomer stripeCustomer = new StripeCustomer();
+        stripeCustomer.setStripeCustomerExternalId("cus_1");
+        when(stripeCustomerRepository.findByCustomer(customer)).thenReturn(stripeCustomer);
+        PaymentIntent intent = new PaymentIntent();
+        intent.setId("pi_1");
+        intent.setStatus("succeeded");
+        when(stripeClient.v1().paymentIntents().create(any(PaymentIntentCreateParams.class), any(RequestOptions.class)))
+                .thenReturn(intent);
+
+        service.chargeOffSession(accountId, customerId, "pm_1", new BigDecimal("10"), "usd", "top-up", Map.of(),
+                "tanso-credit-purchase-abc");
+
+        ArgumentCaptor<RequestOptions> options = ArgumentCaptor.forClass(RequestOptions.class);
+        verify(stripeClient.v1().paymentIntents()).create(any(PaymentIntentCreateParams.class), options.capture());
+        assertThat(options.getValue().getIdempotencyKey()).isEqualTo("tanso-credit-purchase-abc");
     }
 }

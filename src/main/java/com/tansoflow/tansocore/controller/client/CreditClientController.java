@@ -224,7 +224,8 @@ public class CreditClientController {
         }
 
         com.tansoflow.tansocore.model.credit.CreditPurchaseResult result =
-                creditPurchaseService.purchase(request, customerReferenceId, userContext.getAccountId());
+                creditPurchaseService.purchase(request, customerReferenceId, userContext.getAccountId(),
+                        httpRequest.getHeader(com.tansoflow.tansocore.filter.IdempotencyFilter.HEADER));
         org.springframework.http.HttpStatus status = result.isCompleted()
                 ? org.springframework.http.HttpStatus.CREATED
                 : org.springframework.http.HttpStatus.PAYMENT_REQUIRED;
